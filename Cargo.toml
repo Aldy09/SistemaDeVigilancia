@@ -1,5 +1,5 @@
 [package]
-name = "message-broker"
+name = "rust-x"
 version = "0.1.0"
 edition = "2021"
 
