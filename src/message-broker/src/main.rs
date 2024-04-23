@@ -1,6 +1,5 @@
 // Importa las bibliotecas necesarias
 use log::{info, warn, error};
-use env_logger;
 
 fn main() {
     // Configura el sistema de registro
