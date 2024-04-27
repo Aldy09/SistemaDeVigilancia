@@ -9,7 +9,7 @@ fn main() {
     warn!("Esto es una advertencia.");
     error!("Esto es un error crítico.");
 
-    let broker_addr = "127.0.0.1:1883".parse().expect("Dirección no válida");
+    let broker_addr = "127.0.0.1:9090".parse().expect("Dirección no válida");
     connect_to_broker(&broker_addr, "rust-client", Some("sistema-monitoreo"), Some("rustx123"));
 
 }
