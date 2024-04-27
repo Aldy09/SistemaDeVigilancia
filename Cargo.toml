@@ -8,3 +8,11 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 env_logger = "0.9"
+
+[[bin]]
+name = "message-broker-client"
+path = "src/message-broker-client.rs"
+
+[[bin]]
+name = "message-broker-server"
+path = "src/message-broker-server.rs"
