@@ -1,14 +1,13 @@
-//struct para manejar los flags de subscribe mqtt
+//pub struct para manejar los flags de subscribe mqtt
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SubscribeFlags {
     pub qos: u8,
 }
 
 impl SubscribeFlags {
     pub fn new(qos: u8) -> Self {
-        SubscribeFlags {
-            qos,
-        }
+        SubscribeFlags { qos }
     }
     /// Convierte los flags de subscribe en un byte
     pub fn to_flags_byte(&self) -> u8 {

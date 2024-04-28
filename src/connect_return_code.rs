@@ -1,5 +1,6 @@
 #[derive(Debug)]
-enum ConnectReturnCode {
+#[allow(dead_code)]
+pub enum ConnectReturnCode {
     ConnectionAccepted = 0x00,
     ProtocolError = 0x01,
     IdentifierRejected = 0x02,

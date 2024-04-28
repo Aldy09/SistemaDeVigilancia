@@ -1,5 +1,6 @@
 #[derive(Debug)]
-struct ConnectFlags {
+#[allow(dead_code)]
+pub struct ConnectFlags {
     clean_session: bool,
     will_flag: bool,
     will_qos: u8,
@@ -7,9 +8,16 @@ struct ConnectFlags {
     user_name_flag: bool,
     password_flag: bool,
 }
-
+#[allow(dead_code)]
 impl ConnectFlags {
-    fn new(clean_session: bool, will_flag: bool, will_qos: u8, will_retain: bool, user_name_flag: bool, password_flag: bool) -> Self {
+    pub fn new(
+        clean_session: bool,
+        will_flag: bool,
+        will_qos: u8,
+        will_retain: bool,
+        user_name_flag: bool,
+        password_flag: bool,
+    ) -> Self {
         ConnectFlags {
             clean_session,
             will_flag,
@@ -31,16 +39,16 @@ impl ConnectFlags {
             flags_byte |= 0b0000_0100;
             flags_byte |= (self.will_qos << 3) & 0b0001_1000;
             if self.will_retain {
-                flags_byte |= 0b0010_0000; 
+                flags_byte |= 0b0010_0000;
             }
         }
 
         if self.user_name_flag {
-            flags_byte |= 0b1000_0000; 
+            flags_byte |= 0b1000_0000;
         }
 
         if self.password_flag {
-            flags_byte |= 0b0100_0000; 
+            flags_byte |= 0b0100_0000;
         }
 
         flags_byte
