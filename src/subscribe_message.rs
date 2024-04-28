@@ -1,13 +1,16 @@
 //#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SubscribeMessage {
-    pub packet_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
-    pub flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
-    pub packet_identifier: u16,
-    pub topic_filters: Vec<(String, u8)>, // (topic, qos)
+    packet_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
+    flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
+    packet_identifier: u16,
+    topic_filters: Vec<(String, u8)>, // (topic, qos)
 }
 
 impl SubscribeMessage {
+    pub fn new(packet_id: u16, topics: Vec<(String,u8)>) -> Self {
+        SubscribeMessage { packet_type: 8, flags: 2, packet_identifier: packet_id, topic_filters: topics }
+    }
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut msg_bytes = vec![];
         msg_bytes.extend(self.packet_type.to_be_bytes());
@@ -29,5 +32,21 @@ impl SubscribeMessage {
         //msg_bytes.extend(self.topic_filters.to_be_bytes());
 
         msg_bytes
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::subscribe_message::SubscribeMessage;
+
+    #[test]
+    fn test_1_subscribe_msg_se_crea_con_tipo_y_flag_adecuados() {
+        let packet_id: u16 = 1;
+        let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+        let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
+
+        // Estos valores siempre son 8 y 2 respectivamente, para este tipo de mensaje
+        assert_eq!(subscribe_msg.packet_type, 8);
+        assert_eq!(subscribe_msg.flags, 2);
     }
 }

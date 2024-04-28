@@ -41,9 +41,10 @@ fn main() {
     // Construyo subscribe
     let packet_id: u16 = 1;
     let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
-    let subscribe_msg = SubscribeMessage{ packet_type: 8, flags: 2, packet_identifier: packet_id, topic_filters: topics_to_subscribe };
+    let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
     let subs_bytes = subscribe_msg.to_bytes();
     println!("Enviando mensaje {:?}", subscribe_msg);
+
     
 
 }
