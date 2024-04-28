@@ -14,7 +14,10 @@ fn main() {
     let connect_msg = ConnectMessage::new("rust-client", true, 10, Some("sistema-monitoreo"), Some("rustx123"));
     let mqtt_client = MQTTClient::new();
 
-    mqtt_client.unwrap().connect_to_broker(&broker_addr, &connect_msg);
+    match MQTTClient::connect_to_broker(&broker_addr, &connect_msg) {
+        Ok(_) => info!("Conectado al broker MQTT."),
+        Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
+    }
 
 }
 
