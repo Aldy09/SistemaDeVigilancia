@@ -1,5 +1,5 @@
 use log::{info, error};
-use config::{Config, File};
+use config::{Config, File,FileFormat};
 
 use rustx::mqtt_client::MQTTClient;
 use rustx::connect_message::ConnectMessage;
@@ -11,8 +11,8 @@ fn main() {
     info!("Leyendo Archivo de Configuración");
     let mut config = Config::default();
     config
-        .merge(File::with_name("mesage_broker_client_config.properties"))
-        .unwrap();
+    .merge(File::new("message_broker_client_config.properties", FileFormat::Toml))
+    .unwrap();
 
     let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);

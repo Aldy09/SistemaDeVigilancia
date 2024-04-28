@@ -1,7 +1,7 @@
 use log::{info};
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write};
-use config::{Config, File};
+use config::{Config, File,FileFormat};
 
 
 fn handle_client(mut stream: TcpStream) {
@@ -28,8 +28,8 @@ fn main() {
     info!("Leyendo archivo de configuración.");
     let mut config = Config::default();
     config
-        .merge(File::with_name("message_broker_server.config"))
-        .unwrap();
+    .merge(File::new("message_broker_server_config.properties", FileFormat::Toml))
+    .unwrap();
 
     let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);
