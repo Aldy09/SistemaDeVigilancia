@@ -32,7 +32,7 @@ fn main() {
     .unwrap();
 
     let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);
+    let port = config.get::<u16>("port").unwrap_or(9090);
     let listener = TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
 
     for stream in listener.incoming() {

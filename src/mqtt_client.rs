@@ -31,3 +31,8 @@ impl MQTTClient {
         Ok(())
     }
 }
+impl Default for MQTTClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}

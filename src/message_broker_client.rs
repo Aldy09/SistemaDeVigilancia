@@ -15,7 +15,7 @@ fn main() {
     .unwrap();
 
     let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);
+    let port = config.get::<u16>("port").unwrap_or(9090);
     let broker_addr = format!("{}:{}", ip, port).parse().expect("Dirección no válida");
     let connect_msg = ConnectMessage::new("rust-client", true, 10, Some("sistema-monitoreo"), Some("rustx123"));
 
