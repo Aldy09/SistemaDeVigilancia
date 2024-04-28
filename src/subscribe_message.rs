@@ -1,5 +1,5 @@
-//implement struct SubscribeMessage para mqtt
-struct SubscribeMessage {
+//implement pub struct SubscribeMessage para mqtt
+pub struct SubscribeMessage {
     packet_type: u8,//para subscribe siempre es 8(por protocolo mqtt)
     flags: u8, //para subscribe siempre es 2(por protocolo mqtt) 
     packet_identifier: u16, 

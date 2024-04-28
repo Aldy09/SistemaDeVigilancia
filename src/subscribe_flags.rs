@@ -1,4 +1,4 @@
-//struct para manejar los flags de subscribe mqtt
+//pub struct para manejar los flags de subscribe mqtt
 #[derive(Debug)]
 pub struct SubscribeFlags {
     pub qos: u8,

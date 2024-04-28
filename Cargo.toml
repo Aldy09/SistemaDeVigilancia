@@ -1,5 +1,5 @@
 [package]
-name = "rust-x"
+name = "rustx"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,9 +10,9 @@ log = "0.4"
 env_logger = "0.9"
 
 [[bin]]
-name = "message-broker-client"
-path = "src/message-broker-client.rs"
+name = "message_broker_client"
+path = "src/message_broker_client.rs"
 
 [[bin]]
-name = "message-broker-server"
-path = "src/message-broker-server.rs"
+name = "message_broker_server"
+path = "src/message_broker_server.rs"

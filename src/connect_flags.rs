@@ -1,5 +1,5 @@
 #[derive(Debug)]
-struct ConnectFlags {
+pub struct ConnectFlags {
     clean_session: bool,
     will_flag: bool,
     will_qos: u8,
@@ -9,7 +9,7 @@ struct ConnectFlags {
 }
 
 impl ConnectFlags {
-    fn new(clean_session: bool, will_flag: bool, will_qos: u8, will_retain: bool, user_name_flag: bool, password_flag: bool) -> Self {
+    pub fn new(clean_session: bool, will_flag: bool, will_qos: u8, will_retain: bool, user_name_flag: bool, password_flag: bool) -> Self {
         ConnectFlags {
             clean_session,
             will_flag,

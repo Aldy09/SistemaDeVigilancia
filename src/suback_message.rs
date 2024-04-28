@@ -1,5 +1,7 @@
+use crate::subscribe_return_code::SubscribeReturnCode;
+
 #[derive(Debug)]
-struct SubackMessage {
+pub struct SubackMessage {
     packet_identifier: u16,
     return_codes: Vec<SubscribeReturnCode>,
 }

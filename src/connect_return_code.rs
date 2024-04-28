@@ -1,5 +1,5 @@
 #[derive(Debug)]
-enum ConnectReturnCode {
+pub enum ConnectReturnCode {
     ConnectionAccepted = 0x00,
     ProtocolError = 0x01,
     IdentifierRejected = 0x02,

@@ -1,5 +1,6 @@
+use crate::connect_return_code::ConnectReturnCode;
 #[derive(Debug)]
-struct ConnackMessage {
+pub struct ConnackMessage {
     session_present: bool,
     return_code: ConnectReturnCode,
 }
