@@ -6,4 +6,3 @@ pub struct SubAckMessage {
     packet_identifier: u16,
     return_codes: Vec<SubscribeReturnCode>,
 }
-

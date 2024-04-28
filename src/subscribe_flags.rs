@@ -7,9 +7,7 @@ pub struct SubscribeFlags {
 
 impl SubscribeFlags {
     pub fn new(qos: u8) -> Self {
-        SubscribeFlags {
-            qos,
-        }
+        SubscribeFlags { qos }
     }
     /// Convierte los flags de subscribe en un byte
     pub fn to_flags_byte(&self) -> u8 {

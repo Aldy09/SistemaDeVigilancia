@@ -9,7 +9,13 @@ pub struct ConnectMessage<'a> {
 }
 
 impl<'a> ConnectMessage<'a> {
-    pub fn new(client_id: &'a str, clean_session: bool, keep_alive: u16, username: Option<&'a str>, password: Option<&'a str>) -> Self {
+    pub fn new(
+        client_id: &'a str,
+        clean_session: bool,
+        keep_alive: u16,
+        username: Option<&'a str>,
+        password: Option<&'a str>,
+    ) -> Self {
         Self {
             client_id,
             clean_session,
