@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ConnectFlags {
     clean_session: bool,
     will_flag: bool,
@@ -7,7 +8,7 @@ pub struct ConnectFlags {
     user_name_flag: bool,
     password_flag: bool,
 }
-
+#[allow(dead_code)]
 impl ConnectFlags {
     pub fn new(clean_session: bool, will_flag: bool, will_qos: u8, will_retain: bool, user_name_flag: bool, password_flag: bool) -> Self {
         ConnectFlags {

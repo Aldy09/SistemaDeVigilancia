@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ConnectMessage<'a> {
     client_id: &'a str,
     clean_session: bool,

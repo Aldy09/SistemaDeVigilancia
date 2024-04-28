@@ -1,4 +1,6 @@
-use log::{info, warn, error};
+use log::{info, error};
+use config::{Config, File};
+
 use rustx::mqtt_client::MQTTClient;
 use rustx::connect_message::ConnectMessage;
 
@@ -6,13 +8,16 @@ use rustx::connect_message::ConnectMessage;
 fn main() {
     env_logger::init();
 
-    info!("Este es un mensaje de información.");
-    warn!("Esto es una advertencia.");
-    error!("Esto es un error crítico.");
+    info!("Leyendo Archivo de Configuración");
+    let mut config = Config::default();
+    config
+        .merge(File::with_name("mesage_broker_client_config.properties"))
+        .unwrap();
 
-    let broker_addr = "127.0.0.1:9090".parse().expect("Dirección no válida");
+    let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);
+    let broker_addr = format!("{}:{}", ip, port).parse().expect("Dirección no válida");
     let connect_msg = ConnectMessage::new("rust-client", true, 10, Some("sistema-monitoreo"), Some("rustx123"));
-    let mqtt_client = MQTTClient::new();
 
     match MQTTClient::connect_to_broker(&broker_addr, &connect_msg) {
         Ok(_) => info!("Conectado al broker MQTT."),

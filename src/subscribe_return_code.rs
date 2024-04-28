@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum SubscribeReturnCode {
     QoS0 = 0x00,
     QoS1 = 0x01,

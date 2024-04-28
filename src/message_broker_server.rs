@@ -1,6 +1,8 @@
-use log::{info, warn, error};
+use log::{info};
 use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write};
+use config::{Config, File};
+
 
 fn handle_client(mut stream: TcpStream) {
     let mut buf = [0; 1024];
@@ -23,11 +25,15 @@ fn handle_client(mut stream: TcpStream) {
 fn main() {
     env_logger::init();
 
-    info!("Este es un mensaje de información.");
-    warn!("Esto es una advertencia.");
-    error!("Esto es un error crítico.");
+    info!("Leyendo archivo de configuración.");
+    let mut config = Config::default();
+    config
+        .merge(File::with_name("message_broker_server.config"))
+        .unwrap();
 
-    let listener = TcpListener::bind("127.0.0.1:9090").expect("Error al enlazar el puerto");
+    let ip = config.get::<String>("ip").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = config.get::<u16>("port").unwrap_or_else(|_| 9090);
+    let listener = TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
 
     for stream in listener.incoming() {
         match stream {

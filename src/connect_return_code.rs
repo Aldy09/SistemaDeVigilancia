@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ConnectReturnCode {
     ConnectionAccepted = 0x00,
     ProtocolError = 0x01,

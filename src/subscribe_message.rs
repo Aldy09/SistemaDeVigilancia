@@ -1,4 +1,4 @@
-//implement pub struct SubscribeMessage para mqtt
+#[allow(dead_code)]
 pub struct SubscribeMessage {
     packet_type: u8,//para subscribe siempre es 8(por protocolo mqtt)
     flags: u8, //para subscribe siempre es 2(por protocolo mqtt) 

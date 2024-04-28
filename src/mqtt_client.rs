@@ -3,7 +3,7 @@ use std::io::{self,Read, Write};
 use std::net::{TcpStream, SocketAddr};
 
 
-
+#[allow(dead_code)]
 pub struct MQTTClient {
 
 
