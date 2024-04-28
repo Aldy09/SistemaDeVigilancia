@@ -3,7 +3,7 @@ use log::{error, info};
 
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
-use rustx::subscribe_message::SubscribeMessage;
+use rustx::subscribe_message::{SubscribeMessage, subs_msg_from_bytes};
 
 fn main() {
     env_logger::init();
@@ -44,6 +44,8 @@ fn main() {
     let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
     let subs_bytes = subscribe_msg.to_bytes();
     println!("Enviando mensaje {:?}", subscribe_msg);
+
+    let msg_reconstruido = subs_msg_from_bytes(subs_bytes);
 
     
 
