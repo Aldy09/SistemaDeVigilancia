@@ -3,6 +3,7 @@ use log::{error, info};
 
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
+use rustx::subscribe_message::SubscribeMessage;
 
 fn main() {
     env_logger::init();
@@ -35,4 +36,14 @@ fn main() {
         Ok(_) => info!("Conectado al broker MQTT."),
         Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
     }
+
+
+    // Construyo subscribe
+    let packet_id: u16 = 1;
+    let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+    let subscribe_msg = SubscribeMessage{ packet_type: 8, flags: 2, packet_identifier: packet_id, topic_filters: topics_to_subscribe };
+    let subs_bytes = subscribe_msg.to_bytes();
+    println!("Enviando mensaje {:?}", subscribe_msg);
+    
+
 }
