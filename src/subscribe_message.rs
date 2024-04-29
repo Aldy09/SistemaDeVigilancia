@@ -79,10 +79,10 @@ pub fn subs_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
         topics.push(elemento);
     }
     
-    let struct_interpretado = SubscribeMessage{ packet_type: tipo, flags: flags, packet_identifier: packet_id, topic_filters: topics };
+    let struct_interpretado = SubscribeMessage{ packet_type: tipo, flags, packet_identifier: packet_id, topic_filters: topics };
     println!("Creo struct interpretado desde bytes: {:?}", struct_interpretado);
 
-    return Ok(struct_interpretado);
+    Ok(struct_interpretado)
 }
 
 #[cfg(test)]
