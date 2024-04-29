@@ -1,4 +1,4 @@
-use std::{mem::size_of, io::{Error, ErrorKind}};
+use std::{mem::size_of, io::{Error, ErrorKind}, str::from_utf8};
 
 //#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -30,6 +30,7 @@ impl SubscribeMessage {
             
             let topic_str_len = topic.0.len() as u16;
             msg_bytes.extend(topic_str_len.to_be_bytes());
+            msg_bytes.extend(topic.0.as_bytes());
             msg_bytes.extend(topic.1.to_be_bytes());
         }
         
@@ -48,25 +49,15 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     let tipo = (&mgs_bytes[0..size_of_u8])[0];
     // Leo u8 flags
     let flags = (&mgs_bytes[size_of_u8..2*size_of_u8])[0];
-    //let mut bytes_a_convertir = (&mgs_bytes[size_of_u8..2*size_of_u8])[0];
-    //let probando = bytes_a_convertir[0];
-    //let aux: [u8; 1] = bytes_a_convertir.0;
-    //let flags = (&mgs_bytes[size_of_u8..2*size_of_u8])[0];
+    let mut idx = 2*size_of_u8;
+
     println!("Leí tipo: {:?}, y flags: {:?}", tipo, flags);
-    let mut idx = 2*size_of_u8; // tenía un bug acáaaaaaa, al fin jaj.
     
     // Leo u16 packet_id
     let size_of_u16 = size_of::<u16>();
-    //
-    println!("Viene el u16, mis bytes son: {:?}", &mgs_bytes[idx..]);
-    let p_id = &mgs_bytes[idx..idx+size_of_u16];
-    let a = p_id[0];
-    println!("El primer byte que leo de lo del u16 es: {:?}", a);
-    //
     //let packet_id = &mgs_bytes[idx..idx+size_of_u16];
     let packet_id = u16::from_be_bytes(mgs_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?); // forma 1
     //let packet_id = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2
-    //let packet_id = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]);
     idx+=size_of_u16;
 
     // Leo en u16 la longitud del vector de topics
@@ -85,12 +76,17 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
         let elem_string_len = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2        
         idx += size_of_u16;
         // Leo la string, de tam variable "elem_string_len"
-
+        let string_leida = from_utf8(&mgs_bytes[idx..idx+(elem_string_len as usize)]).unwrap();
+        idx += elem_string_len as usize;
         // Leo el u8
-        let elem_qos = &mgs_bytes[idx..idx+size_of_u8];
+        let elem_qos = (&mgs_bytes[idx..idx+size_of_u8])[0];
         idx+=size_of_u8;
     //}
+    let elemento = (String::from(string_leida), elem_qos);
+    let topics = vec![elemento];
     
+    let struct_interpretado = SubscribeMessage{ packet_type: tipo, flags: flags, packet_identifier: packet_id, topic_filters: topics };
+    println!("Creo struct interpretado desde bytes: {:?}", struct_interpretado);
 
 
 
@@ -99,8 +95,10 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     //let packet_id: u16 = 1;
     let string_hardcodeada = String::from("topic1");
     println!("len de la string hardoceada: {}, string: {:?}", string_hardcodeada.len(), string_hardcodeada);
-    let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
-    return Ok(SubscribeMessage::new(packet_id, topics_to_subscribe)); // [] aux
+    //let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+    //return Ok(SubscribeMessage::new(packet_id, topics)); // [] aux
+    
+    return Ok(struct_interpretado);
 }
 
 #[cfg(test)]
