@@ -39,24 +39,24 @@ impl SubscribeMessage {
 
 /// Recibe bytes, y los interpreta.
 /// Devuelve un struct SubscribeMessage con los valores recibidos e interpretados.
-pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
+pub fn subs_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
     let size_of_u8 = size_of::<u8>();
     // Leo u8 type
-    //let tipo = &mgs_bytes[0..size_of_u8];
-    let tipo = (&mgs_bytes[0..size_of_u8])[0];
+    //let tipo = &msg_bytes[0..size_of_u8];
+    let tipo = (&msg_bytes[0..size_of_u8])[0];
     // Leo u8 flags
-    let flags = (&mgs_bytes[size_of_u8..2*size_of_u8])[0];
+    let flags = (&msg_bytes[size_of_u8..2*size_of_u8])[0];
     let mut idx = 2*size_of_u8;
 
     // Leo u16 packet_id
     let size_of_u16 = size_of::<u16>();
-    //let packet_id = &mgs_bytes[idx..idx+size_of_u16];
-    let packet_id = u16::from_be_bytes(mgs_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?); // forma 1
-    //let packet_id = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2
+    //let packet_id = &msg_bytes[idx..idx+size_of_u16];
+    let packet_id = u16::from_be_bytes(msg_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?); // forma 1
+    //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
     idx+=size_of_u16;
 
     // Leo en u16 la longitud del vector de topics
-    let topics_vec_len = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2
+    let topics_vec_len = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
     idx+=size_of_u16;
 
     // Leo cada elemento del vector: primero la len de la string en u16
@@ -64,14 +64,14 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     let mut topics: Vec<(String, u8)> = vec![];
     for _ in 0..topics_vec_len {
         // Leo la string len
-        //let elem_string_len = &mgs_bytes[idx..idx+size_of_u16];
-        let elem_string_len = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2        
+        //let elem_string_len = &msg_bytes[idx..idx+size_of_u16];
+        let elem_string_len = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2        
         idx += size_of_u16;
         // Leo la string, de tam "elem_string_len"
-        let string_leida = from_utf8(&mgs_bytes[idx..idx+(elem_string_len as usize)]).unwrap();
+        let string_leida = from_utf8(&msg_bytes[idx..idx+(elem_string_len as usize)]).unwrap();
         idx += elem_string_len as usize;
         // Leo el u8
-        let elem_qos = (&mgs_bytes[idx..idx+size_of_u8])[0];
+        let elem_qos = (&msg_bytes[idx..idx+size_of_u8])[0];
         idx+=size_of_u8;
 
         // Terminé de leer, agrego el elemento leído al vector de topics
