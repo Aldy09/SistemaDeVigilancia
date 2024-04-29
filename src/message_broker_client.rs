@@ -45,7 +45,8 @@ fn main() {
     let subs_bytes = subscribe_msg.to_bytes();
     println!("Enviando mensaje {:?}", subscribe_msg);
 
-    let msg_reconstruido = subs_msg_from_bytes(subs_bytes);
+    let _msg_reconstruido = subs_msg_from_bytes(subs_bytes);
+    // enviarlo, etc.
 
     
 

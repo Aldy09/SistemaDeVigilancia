@@ -1,6 +1,5 @@
 use std::{mem::size_of, io::{Error, ErrorKind}, str::from_utf8};
 
-//#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub struct SubscribeMessage {
     packet_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
@@ -34,9 +33,6 @@ impl SubscribeMessage {
             msg_bytes.extend(topic.1.to_be_bytes());
         }
         
-        //msg_bytes.extend(self.topic_filters.to_be_bytes());
-
-        println!("Bytes generados: {:?}", msg_bytes);
         msg_bytes
     }
 }
@@ -44,7 +40,6 @@ impl SubscribeMessage {
 /// Recibe bytes, y los interpreta.
 /// Devuelve un struct SubscribeMessage con los valores recibidos e interpretados.
 pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
-    println!("Leyendo, bytes: {:?}", mgs_bytes);
     let size_of_u8 = size_of::<u8>();
     // Leo u8 type
     //let tipo = &mgs_bytes[0..size_of_u8];
@@ -53,8 +48,6 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     let flags = (&mgs_bytes[size_of_u8..2*size_of_u8])[0];
     let mut idx = 2*size_of_u8;
 
-    println!("Leí tipo: {:?}, y flags: {:?}", tipo, flags);
-    
     // Leo u16 packet_id
     let size_of_u16 = size_of::<u16>();
     //let packet_id = &mgs_bytes[idx..idx+size_of_u16];
@@ -63,11 +56,8 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     idx+=size_of_u16;
 
     // Leo en u16 la longitud del vector de topics
-    println!("Viendo dos bytes para u16: {:?}, packet_id: {:?}", [mgs_bytes[idx], mgs_bytes[idx+size_of_u8]], packet_id);
     let topics_vec_len = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2
     idx+=size_of_u16;
-
-    println!("Leí packet_id: {:?}, y topics_vec_len: {:?}", packet_id, topics_vec_len);
 
     // Leo cada elemento del vector: primero la len de la string en u16
     // y luego el elemento, que será una tupla (String, u8)
@@ -126,7 +116,7 @@ mod test {
     }
 
     #[test]
-    fn test_3_subscribe_msg_s() {
+    fn test_3_subscribe_msg_se_pasa_a_bytes_e_interpreta_correctamente_con_varios_topics() {
         let packet_id: u16 = 1;
         let mut topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
         topics_to_subscribe.push((String::from("topic2"),0)); // agrego más topics al vector
