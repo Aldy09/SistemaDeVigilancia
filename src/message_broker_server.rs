@@ -9,7 +9,7 @@ fn handle_client(mut stream: TcpStream) {
 
     let username = "sistema-monitoreo";
     let password = "rutx123";
-    let is_authentic = buf
+    let is_authentic: bool = buf
         .windows(username.len() + password.len() + 2)
         .any(|slice| slice == [username.as_bytes(), password.as_bytes(), &[0x00]].concat());
 
@@ -42,16 +42,25 @@ fn main() {
     let listener =
         TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
 
+    let mut handles = vec![];
+
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                std::thread::spawn(|| {
+                let handle = std::thread::spawn(|| {
                     handle_client(stream);
                 });
+                handles.push(handle);
             }
             Err(e) => {
                 println!("Error al aceptar la conexión: {}", e);
             }
+        }
+    }
+
+    for handle in handles {
+        if let Err(e) = handle.join() {
+            eprintln!("Error al esperar el hilo: {:?}", e);
         }
     }
 }
