@@ -41,6 +41,8 @@ impl SubscribeMessage {
     }
 }
 
+/// Recibe bytes, y los interpreta.
+/// Devuelve un struct SubscribeMessage con los valores recibidos e interpretados.
 pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
     println!("Leyendo, bytes: {:?}", mgs_bytes);
     let size_of_u8 = size_of::<u8>();
@@ -69,35 +71,27 @@ pub fn subs_msg_from_bytes(mgs_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
 
     // Leo cada elemento del vector: primero la len de la string en u16
     // y luego el elemento, que será una tupla (String, u8)
-    //for  va acá
-    //for _ in 0..topics_vec_len {
+    let mut topics: Vec<(String, u8)> = vec![];
+    for _ in 0..topics_vec_len {
         // Leo la string len
         //let elem_string_len = &mgs_bytes[idx..idx+size_of_u16];
         let elem_string_len = u16::from_be_bytes([mgs_bytes[idx], mgs_bytes[idx+size_of_u8]]); // forma 2        
         idx += size_of_u16;
-        // Leo la string, de tam variable "elem_string_len"
+        // Leo la string, de tam "elem_string_len"
         let string_leida = from_utf8(&mgs_bytes[idx..idx+(elem_string_len as usize)]).unwrap();
         idx += elem_string_len as usize;
         // Leo el u8
         let elem_qos = (&mgs_bytes[idx..idx+size_of_u8])[0];
         idx+=size_of_u8;
-    //}
-    let elemento = (String::from(string_leida), elem_qos);
-    let topics = vec![elemento];
+
+        // Terminé de leer, agrego el elemento leído al vector de topics
+        let elemento = (String::from(string_leida), elem_qos);
+        topics.push(elemento);
+    }
     
     let struct_interpretado = SubscribeMessage{ packet_type: tipo, flags: flags, packet_identifier: packet_id, topic_filters: topics };
     println!("Creo struct interpretado desde bytes: {:?}", struct_interpretado);
 
-
-
-
-    // Aux probando, para que compile
-    //let packet_id: u16 = 1;
-    let string_hardcodeada = String::from("topic1");
-    println!("len de la string hardoceada: {}, string: {:?}", string_hardcodeada.len(), string_hardcodeada);
-    //let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
-    //return Ok(SubscribeMessage::new(packet_id, topics)); // [] aux
-    
     return Ok(struct_interpretado);
 }
 
@@ -119,9 +113,24 @@ mod test {
     }
 
     #[test]
-    fn test_2_subscribe_msg_s() {
+    fn test_2_subscribe_msg_se_pasa_a_bytes_y_se_interpreta_correctamente() {
         let packet_id: u16 = 1;
         let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+        let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
+
+        let bytes_msg = subscribe_msg.to_bytes();
+        
+
+        let msg_reconstruido = subs_msg_from_bytes(bytes_msg);
+        assert_eq!(msg_reconstruido.unwrap(), subscribe_msg);
+    }
+
+    #[test]
+    fn test_3_subscribe_msg_s() {
+        let packet_id: u16 = 1;
+        let mut topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+        topics_to_subscribe.push((String::from("topic2"),0)); // agrego más topics al vector
+        topics_to_subscribe.push((String::from("topic3"),1));
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
 
         let bytes_msg = subscribe_msg.to_bytes();
