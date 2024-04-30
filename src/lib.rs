@@ -9,3 +9,4 @@ pub mod subscribe_flags;
 pub mod subscribe_message;
 pub mod subscribe_return_code;
 pub mod publish_message;
+pub mod publish_flags;

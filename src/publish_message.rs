@@ -1,22 +1,6 @@
 use std::{io::{Error, ErrorKind}, mem::size_of, str::from_utf8};
 
-
-
-#[derive(Debug, PartialEq)]
-pub struct PublishFlags {
-
-}
-impl PublishFlags {
-    pub fn new() -> Self {
-
-        PublishFlags {  }
-    }
-}
-impl PublishFlags {
-    fn to_bytes(&self) -> Vec<u8> { // [] ver
-        vec![0] // probando, para que compile
-    }
-}
+use crate::publish_flags::PublishFlags;
 
 #[derive(Debug, PartialEq)]
 pub struct PublishMessage {
@@ -54,17 +38,18 @@ impl PublishMessage {
         println!("Mando byte de flags: {:?} y remaining len: {}", byte_de_flags, remaining_len);
         println!("Mando self: {:?}", self);
 
-        msg_bytes.extend((self.topic_name.len() as u16).to_be_bytes()); // [] .len() dvlve usize
+        msg_bytes.extend((self.topic_name.len() as u16).to_be_bytes());
         msg_bytes.extend(self.topic_name.as_bytes());
         msg_bytes.extend(self.packet_identifier.to_be_bytes());
-        msg_bytes.extend((self.properties.len() as u8).to_be_bytes()); // []
-        msg_bytes.extend(&self.payload); // []
+        msg_bytes.extend((self.properties.len() as u8).to_be_bytes());
+        msg_bytes.extend(&self.payload);
 
         msg_bytes
     }
 
     /// Devuelve la remaining_length tal como se la especifica por el protocolo, para ser enviada.
-    /// Esta longitud es utilizada al leer un SubscribeMessage para calcular la longitud del payload.
+    /// Esta longitud es utilizada al convertir a bytes un SubscribeMessage con el formato adecuado.
+    /// Posteriormente, ese resultado se utiliza al leer los bytes para calcular la longitud del payload.
     fn remaining_length(&self) -> u8 {
         let var_len = self.variable_header_length();
         let mut rem_len = var_len;
@@ -86,57 +71,44 @@ impl PublishMessage {
         let size_of_u8 = size_of::<u8>();
         let mut idx = 0;
         // Leo byte de flags
-        let flags_byte = (&msg_bytes[0..size_of_u8])[0];
+        let _flags_byte = (&msg_bytes[0..size_of_u8])[0]; // []
         idx += size_of_u8;
         // Leo byte de remaining_len
         let remaining_len = (&msg_bytes[idx..idx+size_of_u8])[0];
         idx += size_of_u8;
-        println!("Leí byte de flags: {:?}, y byte de rem_len: {:?}", flags_byte, remaining_len);
         // Leo u16 de topic_name.len()
         let size_of_u16 = size_of::<u16>();
         let topic_name_len = u16::from_be_bytes(msg_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes publ msg."))?); // forma 1
-        println!("Leo len de la string: {:?}", topic_name_len);
-        idx += size_of_u16; // [] faltaba esto <-- !!!
+        idx += size_of_u16;
         // Leo la string topic_name, usando la len leída
         let topic_name = from_utf8(&msg_bytes[idx..idx+(topic_name_len as usize)]).map_err(|_| Error::new(ErrorKind::Other, "Error leyendo string en publ msg."))?;
         idx += topic_name_len as usize;
-        println!("Leo string: {:?}", topic_name);
         // Leo u16 packet_identifier
         let packet_identifier = u16::from_be_bytes(msg_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes publ msg."))?); // forma 1
         idx += size_of_u16;
         // Leo un u8 properties.len()
         let properties_len = (&msg_bytes[idx..idx+size_of_u8])[0];
+        if properties_len != 0 {
+            return Err(std::io::Error::new(ErrorKind::Other, ""));
+        }
         idx += size_of_u8;
         // Calculo len, del payload que debo leer
         let flags_aux = PublishFlags{}; // [] aux, mientras no esé implementado el struct de flags
         let msg_sin_payload_aux = PublishMessage::new_interno(flags_aux, String::from(topic_name), packet_identifier);
-        //let payload_len = payload_length(&msg_sin_payload_aux);
         let payload_len = payload_length(&msg_sin_payload_aux, remaining_len);
-        // Tengo que leer payload_len bytes
-        // dije que mi atributo guarda bytes []
-        let mut payload = &msg_bytes[idx..idx+payload_len as usize];//.to_vec();
+        // Tengo que leer payload_len bytes, mi atributo guarda bytes
+        let payload = &msg_bytes[idx..idx+payload_len as usize];
     
-    
-        // Probando. Salvo flags y payload, lo demás es leído de verdad.
-        let flags_aux = PublishFlags{};
-        let payload_aux: &[u8] = &vec![];
+        let flags_aux = PublishFlags{}; // [] Aux. Un flags hardcodeado, temporalmente.
+
         let string = String::from(topic_name);
         let struct_interpretado = PublishMessage::new(flags_aux, string, packet_identifier, payload);
-        
-        //let struct_interpretado = PublishMessage::new(flags_aux, string, packet_identifier, a);
-        
-    
-        println!("hola!");
-        
-        //Ok(struct_interpretado)
         Ok(struct_interpretado)
-        //Ok(PublishMessage::new(flags_aux, string, packet_identifier, a))
     }
 }
 
 /// Calcula y devuelve la longitud del payload, necesaria para poder leerlo.
-fn payload_length(msg: &PublishMessage, remaining_length: u8) -> u8 {//) -> u8 {
-    //msg.remaining_length() - msg.variable_header_length()
+fn payload_length(msg: &PublishMessage, remaining_length: u8) -> u8 {
     remaining_length - msg.variable_header_length()
 }
 
@@ -146,34 +118,17 @@ fn payload_length(msg: &PublishMessage, remaining_length: u8) -> u8 {//) -> u8 {
 mod test {
     use crate::publish_message::{PublishMessage, PublishFlags};
 
-    //use super::pub_msg_from_bytes;
-
     #[test]
-    fn test_1_publish_msg_se_crea(){
+    fn test_1_publish_msg_se_pasa_a_bytes_y_se_interpreta_correctamente(){
 
-        let flags = PublishFlags::new();//PublishFlags{};
-        //let flags_hardcodeadas: u8 = 0x00;
-        let topic = String::from("topic1");
-        let _msg = PublishMessage::new(flags, topic, 1, "hola".as_bytes() );
-
-        // Probando que compile  
-
-    }
-
-    #[test]
-    fn test_2_publish_msg_se_crea(){
-
-        let flags = PublishFlags::new();//PublishFlags{};
-        //let flags_hardcodeadas: u8 = 0x00;
+        let flags = PublishFlags::new();
         let topic = String::from("topic1");
         let msg = PublishMessage::new(flags, topic, 1, "hola".as_bytes() );
 
         let bytes_msg = msg.to_bytes();
 
-        let msg_recontruido = PublishMessage::pub_msg_from_bytes(bytes_msg);
+        let msg_reconstruido = PublishMessage::pub_msg_from_bytes(bytes_msg);
 
-        assert_eq!(msg_recontruido.unwrap(), msg);
-        
-
+        assert_eq!(msg_reconstruido.unwrap(), msg);
     }
 }
