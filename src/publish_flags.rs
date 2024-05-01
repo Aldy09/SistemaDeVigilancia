@@ -95,17 +95,26 @@ mod test {
     #[test]
     fn test_3_publish_flags_se_pasa_a_bytes_y_se_interpreta_correctamente() {
         let flags = PublishFlags::new(0, 2, 1).unwrap();
-        //let byte_esperado: u8 = 0b0011_0101;
 
         let byte_de_flags = flags.to_flags_byte();
 
         let flags_reconstruido = PublishFlags::from_flags_byte(&byte_de_flags);
 
-        println!("Flags orig: {:?}", flags);
-        println!("Flags rec: {:?}", flags_reconstruido);
-
         assert!(flags_reconstruido.is_ok());
         assert_eq!(flags_reconstruido.unwrap(), flags);
+    }
+
+    #[test]
+    fn test_4_byte_de_flags_ilegal_da_error() {
+        // Es malformado si el tipo no es 3, ie si los 4 bits más significativos no son '0111'
+        let byte_de_flags_malformado_a: u8 = 0b1010_0000;
+        let byte_de_flags_malformado_b: u8 = 0b0010_0000;
+
+        let flags_reconstruido_a = PublishFlags::from_flags_byte(&byte_de_flags_malformado_a);
+        let flags_reconstruido_b = PublishFlags::from_flags_byte(&byte_de_flags_malformado_b);
+
+        assert!(flags_reconstruido_a.is_err());
+        assert!(flags_reconstruido_b.is_err());
     }
 
     
