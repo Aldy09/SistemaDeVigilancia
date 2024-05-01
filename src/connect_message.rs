@@ -38,10 +38,6 @@ pub struct ConnectMessage<'a> {
     payload: Payload<'a>,
 }
 
-pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
-}
-
 impl <'a> ConnectMessage<'a> {
     pub fn new(
         message_type: u8,
@@ -98,12 +94,8 @@ impl <'a> ConnectMessage<'a> {
 
         (variable_header_length + payload_length) as u8
     }
-}
-impl<'a> ToBytes for ConnectMessage<'a> {
 
-    
-
-    fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
         // Fixed Header
@@ -135,6 +127,7 @@ impl<'a> ToBytes for ConnectMessage<'a> {
         bytes
     }
 }
+
 impl ConnectFlags {
     fn to_byte(&self) -> u8 {
         let mut byte = 0;
