@@ -93,13 +93,13 @@ impl PublishMessage {
         }
         idx += size_of_u8;
         // Calculo len, del payload que debo leer
-        let flags_aux = PublishFlags::new(0,0,0); // [] aux, mientras no esé implementado el struct de flags
+        let flags_aux = PublishFlags::new(0,0,0)?; // [] aux, mientras no esé implementado el struct de flags
         let msg_sin_payload_aux = PublishMessage::new_interno(flags_aux, String::from(topic_name), packet_identifier);
         let payload_len = payload_length(&msg_sin_payload_aux, remaining_len);
         // Tengo que leer payload_len bytes, mi atributo guarda bytes
         let payload = &msg_bytes[idx..idx+payload_len as usize];
     
-        let flags_aux = PublishFlags::new(0,0,0); // [] Aux. Un flags hardcodeado, temporalmente.
+        let flags_aux = PublishFlags::new(0,0,0)?; // [] Aux. Un flags hardcodeado, temporalmente.
 
         let string = String::from(topic_name);
         let struct_interpretado = PublishMessage::new(flags_aux, string, packet_identifier, payload);
@@ -121,7 +121,7 @@ mod test {
     #[test]
     fn test_1_publish_msg_se_pasa_a_bytes_y_se_interpreta_correctamente(){
 
-        let flags = PublishFlags::new(0,0,0);
+        let flags = PublishFlags::new(0,0,0).unwrap();
         let topic = String::from("topic1");
         let msg = PublishMessage::new(flags, topic, 1, "hola".as_bytes() );
 
