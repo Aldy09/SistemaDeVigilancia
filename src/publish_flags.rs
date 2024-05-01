@@ -1,6 +1,5 @@
 use std::io::{Error, ErrorKind};
 
-// Archivo en construcción, actualmente con lo necesario para que compile y funcione.
 #[derive(Debug, PartialEq)]
 /// Flags para el mensaje Publish.
 /// Los flags son:
@@ -9,7 +8,6 @@ use std::io::{Error, ErrorKind};
 ///  - qos level = {00, 01, 10} _ 2 bits _ el 11 está prohibido.
 ///  - retain = 0 o 1 _ 1 bit.
 pub struct PublishFlags {
-    //byte_de_flags: u8,
     dup: u8,
     qos: u8,
     retain: u8,
@@ -45,21 +43,17 @@ impl PublishFlags {
 
         let retain = byte_de_flags & 0b0000_0001;
         let mut qos = byte_de_flags & 0b0000_0110;
-        qos = qos >> 1; // para eliminar el bit de la derecha, y quedarme solo con dos bits.
+        qos >>= 1; // para eliminar el bit de la derecha, y quedarme solo con dos bits.
         let mut dup = byte_de_flags & 0b0000_1000;
-        dup = dup >> 3;
+        dup >>= 3;
         let mut tipo = byte_de_flags & 0b1111_0000;
-        tipo = tipo >> 4;
-
-        println!("byte: {:?}", byte_de_flags);
-        println!("leído retain: {}, qos: {}, dup: {}, tipo: {} ",retain, qos, dup, tipo);
+        tipo >>= 4;
 
         if tipo != 3 {
             return Err(Error::new(ErrorKind::Other, "Flags para publish leídos con tipo inválido."));
         }
         
         Ok(PublishFlags{dup, qos, retain})
-
     }
 }
 

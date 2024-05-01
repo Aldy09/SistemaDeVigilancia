@@ -55,11 +55,6 @@ impl PublishMessage {
     /// Devuelve la longitud de la sección `Variable header` del struct `PublishMessage`.
     /// Es una función auxiliar para calcular diversas longitudes necesarias para el pasaje a y de bytes.
     fn variable_header_length(&self) -> u8 {
-        /*let mut var_len = 1; // 1 byte de topic_name.len()
-        var_len += self.topic_name.len(); // n bytes del valor de topic_name.len()
-        var_len += 2; // 2 bytes de packet_identifier;
-        var_len += self.properties.len(); // m bytes de len del vector
-        var_len as u8*/
         PublishMessage::variable_header_length_for_values(&self.topic_name, &self.properties)
     }
 
@@ -75,7 +70,6 @@ impl PublishMessage {
 
     /// Calcula y devuelve la longitud del payload, necesaria para poder leerlo.
     fn payload_length(topic_name: String, properties: Vec<(u8, u8)>, remaining_length: u8) -> u8 {
-        //remaining_length - msg.variable_header_length()
         remaining_length - PublishMessage::variable_header_length_for_values(&topic_name, &properties)
     }
 
@@ -106,20 +100,10 @@ impl PublishMessage {
         }
         idx += size_of_u8;
         // Calculo len, del payload que debo leer
-        //let flags_aux = PublishFlags::new(0,0,0)?; // [] aux, mientras no esé implementado el struct de flags
-
         let flags_creadas = PublishFlags::from_flags_byte(&flags_byte)?;
-        //let msg_sin_payload_aux = PublishMessage::new_interno(flags_creadas, String::from(topic_name), packet_identifier);
-
-        //
-
-        //let msg_sin_payload_aux = PublishMessage::new_interno(flags_creadas, String::from(topic_name), packet_identifier);
         let payload_len = PublishMessage::payload_length(String::from(topic_name), properties, remaining_len);
-        
         // Tengo que leer payload_len bytes, mi atributo guarda bytes
         let payload = &msg_bytes[idx..idx+payload_len as usize];
-    
-        //let flags_aux = PublishFlags::new(0,0,0)?; // [] Aux. Un flags hardcodeado, temporalmente.
 
         let string = String::from(topic_name);
         let struct_interpretado = PublishMessage::new(flags_creadas, string, packet_identifier, payload);
