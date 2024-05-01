@@ -42,8 +42,52 @@ pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
-impl<'a> ToBytes for ConnectMessage<'a> {
+impl <'a> ConnectMessage<'a> {
+    pub fn new(
+        message_type: u8,
+        client_id: &'a str,
+        will_topic: Option<&'a str>,
+        will_message: Option<&'a str>,
+        username: Option<&'a str>,
+        password: Option<&'a str>,
+    ) -> Self {
+        let fixed_header = FixedHeader {
+            message_type,
+            remaining_length: 0, // Se actualizará más tarde
+        };
 
+        let variable_header = VariableHeader {
+            protocol_name: [77, 81, 84, 84], // "MQTT" en ASCII
+            protocol_level: 4, // MQTT 3.1.1
+            connect_flags: ConnectFlags {
+                username_flag: username.is_some(),
+                password_flag: password.is_some(),
+                will_retain: false,
+                will_qos: 0,
+                will_flag: will_topic.is_some() && will_message.is_some(),
+                clean_session: true,
+                reserved: false,
+            },
+        };
+
+        let payload = Payload {
+            client_id,
+            will_topic,
+            will_message,
+            username,
+            password,
+        };
+
+        let mut connect_message = ConnectMessage {
+            fixed_header,
+            variable_header,
+            payload,
+        };
+
+        connect_message.fixed_header.remaining_length = connect_message.calculate_remaining_length();
+
+        connect_message
+    }
     fn calculate_remaining_length(&self) -> u8 {
         let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT", 1 byte for level, 1 byte for connect flags
         let payload_length = self.payload.client_id.len()
@@ -54,6 +98,10 @@ impl<'a> ToBytes for ConnectMessage<'a> {
 
         (variable_header_length + payload_length) as u8
     }
+}
+impl<'a> ToBytes for ConnectMessage<'a> {
+
+    
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
