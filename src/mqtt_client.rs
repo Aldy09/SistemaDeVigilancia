@@ -9,7 +9,7 @@ impl MQTTClient {
     pub fn new() -> MQTTClient {
         MQTTClient {}
     }
-    pub fn connect_to_broker(addr: &SocketAddr, connect_msg: &ConnectMessage) -> io::Result<()> {
+    pub fn connect_to_broker(addr: &SocketAddr, connect_msg: &mut ConnectMessage) -> io::Result<()> {
         // Intenta conectar al servidor MQTT
         let mut stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
