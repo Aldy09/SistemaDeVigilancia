@@ -55,22 +55,22 @@ impl PublishMessage {
     /// Devuelve la longitud de la sección `Variable header` del struct `PublishMessage`.
     /// Es una función auxiliar para calcular diversas longitudes necesarias para el pasaje a y de bytes.
     fn variable_header_length(&self) -> u8 {
-        PublishMessage::variable_header_length_for_values(&self.topic_name, &self.properties)
+        PublishMessage::variable_header_length_for_values(self.topic_name.len() as u16, self.properties.len() as u8)
     }
 
     /// Devuelve la longitud de la sección `Variable header` del struct `PublishMessage`.
     /// Es una función auxiliar para calcular diversas longitudes necesarias para el pasaje a y de bytes.
-    fn variable_header_length_for_values(topic_name: &String, properties: &Vec<(u8, u8)>) -> u8 {
+    fn variable_header_length_for_values(topic_name_len: u16, properties_len: u8) -> u8 {
         let mut var_len = 1; // 1 byte de topic_name.len()
-        var_len += topic_name.len(); // n bytes del valor de topic_name.len()
+        var_len += topic_name_len as u8; // n bytes del valor de topic_name.len()
         var_len += 2; // 2 bytes de packet_identifier;
-        var_len += properties.len(); // m bytes de len del vector
-        var_len as u8
+        var_len += properties_len; // m bytes de len del vector
+        var_len
     }
 
     /// Calcula y devuelve la longitud del payload, necesaria para poder leerlo.
     fn payload_length(topic_name: String, properties: Vec<(u8, u8)>, remaining_length: u8) -> u8 {
-        remaining_length - PublishMessage::variable_header_length_for_values(&topic_name, &properties)
+        remaining_length - PublishMessage::variable_header_length_for_values(topic_name.len() as u16, properties.len() as u8)
     }
 
     pub fn pub_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<PublishMessage, Error> {
