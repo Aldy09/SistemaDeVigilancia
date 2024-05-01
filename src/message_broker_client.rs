@@ -24,15 +24,16 @@ fn main() {
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
-    let connect_msg = ConnectMessage::new(
+    let mut connect_msg = ConnectMessage::new(
+        0x04,
         "rust-client",
-        true,
-        10,
+        None, // will_topic
+        None, // will_message
         Some("sistema-monitoreo"),
         Some("rustx123"),
     );
-
-    match MQTTClient::connect_to_broker(&broker_addr, &connect_msg) {
+   
+    match MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg) {
         Ok(_) => info!("Conectado al broker MQTT."),
         Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
     }

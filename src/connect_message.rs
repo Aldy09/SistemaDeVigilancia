@@ -11,7 +11,9 @@ pub struct VariableHeader {
     connect_flags: ConnectFlags, // byte 7
 }
 
+
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ConnectFlags {
     username_flag: bool, // bit 7
     password_flag: bool, // bit 6
@@ -95,7 +97,7 @@ impl <'a> ConnectMessage<'a> {
         (variable_header_length + payload_length) as u8
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&mut self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
         // Fixed Header
