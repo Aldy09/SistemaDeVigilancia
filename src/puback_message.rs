@@ -1,5 +1,6 @@
+use std::{io::{Error, ErrorKind}, mem::size_of};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct PubAckMessage {
     // rem len, calculable
     // Property len, pero string reason property es omitible.
@@ -30,7 +31,7 @@ impl PubAckMessage {
         let rem_len: u8 = self.remaining_length();
         msg_bytes.extend(rem_len.to_be_bytes());
         
-        // Variable header: packet_id
+        // Variable header: packet_id y reason code
         msg_bytes.extend(self.packet_id.to_be_bytes());
         if self.puback_reason_code != 0 {
             msg_bytes.extend(self.puback_reason_code.to_be_bytes());
@@ -50,7 +51,31 @@ impl PubAckMessage {
         rem_len
     }
 
-    //msg_from_bytes
+    pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<PubAckMessage, Error> {
+        let size_of_u8 = size_of::<u8>();
+        let mut idx = 0;
+        // Leo byte de flags
+        let flags_byte = (&msg_bytes[0..size_of_u8])[0];
+        idx += size_of_u8;
+        // Extraigo el tipo, del flags_byte
+        let mut tipo: u8 = flags_byte & 0b1111_0000;
+        tipo >>= 4;
+        
+        // Leo byte de remaining_len
+        let remaining_len = (&msg_bytes[idx..idx+size_of_u8])[0];
+        idx += size_of_u8;
+        // Leo u16 de packet_id
+        let size_of_u16 = size_of::<u16>();
+        let packet_id = u16::from_be_bytes(msg_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes puback msg."))?); // forma 1
+        idx += size_of_u16;
+        // Leo, si corresponde, u8 de reason code
+        let mut puback_reason_code: u8 = 0;
+        if remaining_len == 3 {
+            puback_reason_code = (&msg_bytes[0..size_of_u8])[0];
+        }
+        
+        Ok(PubAckMessage{ tipo, packet_id, puback_reason_code })
+    }
     
 }
 
@@ -71,11 +96,14 @@ mod test{
         assert_eq!(msg.remaining_length(), 3);
     }
 
-    /*#[test]
-    fn test_2_puback_msg_aux_viendo_que_no_se_rompe(){
+    #[test]
+    fn test_2_puback_msg_se_pasa_a_bytes_y_reconstruye_correctamente(){
         let msg = PubAckMessage::new(1,0);
 
-        msg.to_bytes(); // ok 
-        //assert_eq!(msg.remaining_length(), 2);
-    }*/
+        let msg_bytes = msg.to_bytes();
+
+        let msg_reconstruido = PubAckMessage::msg_from_bytes(msg_bytes);
+
+        assert_eq!(msg_reconstruido.unwrap(), msg);
+    }
 }
