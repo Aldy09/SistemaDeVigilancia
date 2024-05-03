@@ -21,6 +21,10 @@ fn handle_client(mut stream: TcpStream) {
     stream
         .write_all(&connack_response)
         .expect("Error al enviar CONNACK");
+
+    // 
+    stream.read(&mut buf).unwrap(); // Aux probando []
+    println!("DESDE SERVER, LEO: {:?}", buf); // (veo manualmente que sí me llegó el struct), en construcción
 }
 
 fn main() {

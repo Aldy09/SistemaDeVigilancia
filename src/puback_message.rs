@@ -1,6 +1,6 @@
 use std::{io::{Error, ErrorKind}, mem::size_of};
 #[derive(Debug, PartialEq)]
-struct PubAckMessage {
+pub struct PubAckMessage {
     // Fixed header
     tipo: u8, // siempre vale 4; y son 4 bits al enviarlo, los restantes son ceros.
     // Variable header

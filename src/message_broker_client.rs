@@ -33,8 +33,21 @@ fn main() {
         Some("rustx123"),
     );
    
-    match MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg) {
-        Ok(_) => info!("Conectado al broker MQTT."),
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
+    match mqtt_client_res {
+        Ok(mut mqtt_client) => {
+            info!("Conectado al broker MQTT.");
+
+            // probando publish
+            let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
+            match res {
+                Ok(_) => println!("Hecho un publish exitosamente"),
+                Err(e) => {
+                    error!("Error al hacer el publish {:?}", e);
+                    println!("------------------------------------");
+                },
+            }
+        },
         Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
     }
 
