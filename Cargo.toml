@@ -9,6 +9,9 @@ edition = "2021"
 log = "0.4"
 env_logger = "0.9"
 config = "0.11.0"
+staticmap = "0.4.2"
+image = "0.23"
+glium = "0.31"
 
 [[bin]]
 name = "message_broker_client"
@@ -17,3 +20,7 @@ path = "src/message_broker_client.rs"
 [[bin]]
 name = "message_broker_server"
 path = "src/message_broker_server.rs"
+
+[[bin]]
+name = "sistema_monitoreo"
+path = "src/sistema_monitoreo.rs"
