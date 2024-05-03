@@ -1,5 +1,4 @@
 use std::{io::{Error, ErrorKind}, mem::size_of};
-#[allow(dead_code)] // para que clippy no se enoje
 #[derive(Debug, PartialEq)]
 struct PubAckMessage {
     // Fixed header
@@ -10,10 +9,12 @@ struct PubAckMessage {
     // El PubAck no lleva payload.
 }
 
+#[allow(dead_code)] // para que clippy no se enoje
 impl PubAckMessage {
     fn new(packet_id: u16, puback_reason_code: u8) -> Self {
         PubAckMessage { tipo: 4, packet_id, puback_reason_code }
     }
+
 
     pub fn to_bytes(&self) -> Vec<u8> {
 
