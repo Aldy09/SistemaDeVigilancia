@@ -1,37 +1,5 @@
-#[derive(Debug)]
-pub struct FixedHeader {
-    message_type: u8, // byte 1
-    remaining_length: u8, // byte 2
-}
+use crate::{connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_message_payload::Payload, connect_variable_header::VariableHeader};
 
-#[derive(Debug)]
-pub struct VariableHeader {
-    protocol_name: [u8; 4], // bytes 1-4
-    protocol_level: u8, // byte 6
-    connect_flags: ConnectFlags, // byte 7
-}
-
-
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct ConnectFlags {
-    username_flag: bool, // bit 7
-    password_flag: bool, // bit 6
-    will_retain: bool, // bit 5
-    will_qos: u8, // bits 3-4
-    will_flag: bool, // bit 2
-    clean_session: bool, // bit 1
-    reserved: bool, // bit 0
-}
-
-#[derive(Debug)]
-pub struct Payload<'a> {
-    client_id: &'a str,
-    will_topic: Option<&'a str>,
-    will_message: Option<&'a str>,
-    username: Option<&'a str>,
-    password: Option<&'a str>,
-}
 
 #[derive(Debug)]
 pub struct ConnectMessage<'a> {
@@ -86,6 +54,7 @@ impl <'a> ConnectMessage<'a> {
 
         connect_message
     }
+    
     fn calculate_remaining_length(&self) -> u8 {
         let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT", 1 byte for level, 1 byte for connect flags
         let payload_length = self.payload.client_id.len()
@@ -127,28 +96,5 @@ impl <'a> ConnectMessage<'a> {
         }
 
         bytes
-    }
-}
-
-impl ConnectFlags {
-    fn to_byte(&self) -> u8 {
-        let mut byte = 0;
-        if self.username_flag {
-            byte |= 0x80;
-        }
-        if self.password_flag {
-            byte |= 0x40;
-        }
-        if self.will_retain {
-            byte |= 0x20;
-        }
-        byte |= (self.will_qos & 0x03) << 3;
-        if self.will_flag {
-            byte |= 0x04;
-        }
-        if self.clean_session {
-            byte |= 0x02;
-        }
-        byte
     }
 }

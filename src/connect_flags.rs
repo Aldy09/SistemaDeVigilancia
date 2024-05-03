@@ -1,13 +1,15 @@
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct ConnectFlags {
-    clean_session: bool,
-    will_flag: bool,
-    will_qos: u8,
-    will_retain: bool,
-    user_name_flag: bool,
-    password_flag: bool,
+    pub username_flag: bool, // bit 7
+    pub password_flag: bool, // bit 6
+    pub will_retain: bool, // bit 5
+    pub will_qos: u8, // bits 3-4
+    pub will_flag: bool, // bit 2
+    pub clean_session: bool, // bit 1
+    pub reserved: bool, // bit 0
 }
+
 #[allow(dead_code)]
 impl ConnectFlags {
     pub fn new(
@@ -15,16 +17,18 @@ impl ConnectFlags {
         will_flag: bool,
         will_qos: u8,
         will_retain: bool,
-        user_name_flag: bool,
+        username_flag: bool,
         password_flag: bool,
+        reserved: bool,
     ) -> Self {
         ConnectFlags {
+            username_flag,
             clean_session,
             will_flag,
             will_qos,
             will_retain,
-            user_name_flag,
             password_flag,
+            reserved,
         }
     }
 
@@ -43,7 +47,7 @@ impl ConnectFlags {
             }
         }
 
-        if self.user_name_flag {
+        if self.username_flag {
             flags_byte |= 0b1000_0000;
         }
 
@@ -52,5 +56,28 @@ impl ConnectFlags {
         }
 
         flags_byte
+    }
+}
+
+impl ConnectFlags {
+    pub fn to_byte(&self) -> u8 {
+        let mut byte = 0;
+        if self.username_flag {
+            byte |= 0x80;
+        }
+        if self.password_flag {
+            byte |= 0x40;
+        }
+        if self.will_retain {
+            byte |= 0x20;
+        }
+        byte |= (self.will_qos & 0x03) << 3;
+        if self.will_flag {
+            byte |= 0x04;
+        }
+        if self.clean_session {
+            byte |= 0x02;
+        }
+        byte
     }
 }
