@@ -1,15 +1,12 @@
 use std::{io::{Error, ErrorKind}, mem::size_of};
-
+#[allow(dead_code)] // para que clippy no se enoje
 #[derive(Debug, PartialEq)]
 struct PubAckMessage {
-    // rem len, calculable
-    // Property len, pero string reason property es omitible.
     // Fixed header
     tipo: u8, // siempre vale 4; y son 4 bits al enviarlo, los restantes son ceros.
     // Variable header
     packet_id: u16,
-    puback_reason_code: u8, // if al decodear, rem len = 2, es este campo = 0x00 éxito.
-    // Si no usamos properties, la rem len debería ser siempre 2, xq el variable header es fijo en realidad.
+    puback_reason_code: u8,
     // El PubAck no lleva payload.
 }
 
@@ -67,7 +64,6 @@ impl PubAckMessage {
         // Leo u16 de packet_id
         let size_of_u16 = size_of::<u16>();
         let packet_id = u16::from_be_bytes(msg_bytes[idx..idx+size_of_u16].try_into().map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes puback msg."))?); // forma 1
-        idx += size_of_u16;
         // Leo, si corresponde, u8 de reason code
         let mut puback_reason_code: u8 = 0;
         if remaining_len == 3 {
