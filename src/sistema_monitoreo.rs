@@ -1,30 +1,27 @@
-use reqwest;
+extern crate reqwest;
+extern crate image;
+
 use std::fs::File;
-use std::io::copy;
+use std::io::BufWriter;
+use image::io::Reader as ImageReader;
+use image::ImageFormat;
+use std::io::Write;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Define las coordenadas del centro del mapa
-    let lat = -25.363;
-    let lng = 131.044;
+fn main() {
+    // URL del mapa estático de Yandex Maps
+    let map_url = "http://static-maps.yandex.ru/1.x/?lang=en-US&ll=32.810152,39.889847&size=450,450&z=10&l=map&pt=32.810152,39.889847,pm2rdl1~32.870152,39.869847,pm2rdl99";
 
-    // Define el nivel de zoom
-    let zoom = 10;
+    // Realizar la solicitud GET para obtener la imagen del mapa
+    let response = reqwest::blocking::get(map_url).unwrap();
+    let image_bytes = response.bytes().unwrap();
 
-    // Define el tamaño del mapa
-    let width = 800;
-    let height = 600;
+    // Guardar la imagen en un archivo temporal (opcional)
+    let temp_file = "mapa_temp.png";
+    let output_file = File::create(temp_file).unwrap();
+    let mut writer = BufWriter::new(output_file);
+    writer.write_all(&image_bytes).unwrap();
 
-    // Define tu clave de API de Mapbox
-    let api_key = "tu_clave_de_api";
-
-    // Genera la URL de la API de mapas estáticos de Mapbox
-    let url = format!("https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/{},{},{},{}x{}?access_token={}", lng, lat, zoom, width, height, api_key);
-
-    // Descarga la imagen del mapa
-    let response = reqwest::get(&url).await?;
-    let mut out = File::create("map.png")?;
-    copy(&mut response.bytes().await?.as_ref(), &mut out)?;
-
-    Ok(())
+    // Mostrar la imagen por pantalla utilizando la biblioteca image
+    let img = ImageReader::open(temp_file).unwrap().decode().unwrap();
+    img.show().unwrap();
 }
