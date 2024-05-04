@@ -3,9 +3,10 @@ extern crate image;
 
 use std::fs::File;
 use std::io::BufWriter;
-use image::io::Reader as ImageReader;
-use image::ImageFormat;
 use std::io::Write;
+
+use image::GenericImageView;
+use minifb::{Window, WindowOptions};
 
 fn main() {
     // URL del mapa estático de Yandex Maps
@@ -22,6 +23,27 @@ fn main() {
     writer.write_all(&image_bytes).unwrap();
 
     // Mostrar la imagen por pantalla utilizando la biblioteca image
-    let img = ImageReader::open(temp_file).unwrap().decode().unwrap();
-    img.show().unwrap();
+    //let img = ImageReader::open(temp_file).unwrap().decode().unwrap();
+    //img.show().unwrap();
+
+    let img = image::open(temp_file).unwrap();
+    let img_dimensions = img.dimensions();
+    let img_buffer_u8 = img.to_rgba8().into_raw();
+
+    // Convertir el buffer de u8 a u32
+    let img_buffer_u32: Vec<u32> = img_buffer_u8.chunks(4).map(|b| u32::from_ne_bytes([b[0], b[1], b[2], b[3]])).collect();
+
+    let mut window = Window::new(
+        "Visualizador de imágenes",
+        img_dimensions.0 as usize,
+        img_dimensions.1 as usize,
+        WindowOptions::default(),
+    ).unwrap_or_else(|e| {
+        panic!("{}", e);
+    });
+
+    while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
+        window.update_with_buffer(&img_buffer_u32, img_dimensions.0 as usize, img_dimensions.1 as usize).unwrap();
+}
+    
 }
