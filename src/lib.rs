@@ -13,4 +13,4 @@ pub mod publish_flags;
 pub mod puback_message;
 pub mod connect_variable_header;
 pub mod connect_fixed_header;
-pub mod connect_message_payload;
+pub mod connect_payload;
