@@ -1,13 +1,14 @@
 #[derive(Debug)]
 #[allow(dead_code)]
+#[derive(PartialEq)]
 pub struct ConnectFlags {
     pub username_flag: bool, // bit 7
     pub password_flag: bool, // bit 6
-    pub will_retain: bool, // bit 5
-    pub will_qos: u8, // bits 3-4
-    pub will_flag: bool, // bit 2
+    pub will_retain: bool,   // bit 5
+    pub will_qos: u8,        // bits 3-4
+    pub will_flag: bool,     // bit 2
     pub clean_session: bool, // bit 1
-    pub reserved: bool, // bit 0
+    pub reserved: bool,      // bit 0
 }
 
 #[allow(dead_code)]
@@ -79,5 +80,17 @@ impl ConnectFlags {
             byte |= 0x02;
         }
         byte
+    }
+
+    pub fn from_byte(byte: u8) -> ConnectFlags {
+        ConnectFlags {
+            username_flag: (byte & 0x80) != 0,
+            password_flag: (byte & 0x40) != 0,
+            will_retain: (byte & 0x20) != 0,
+            will_qos: (byte & 0x18) >> 3,
+            will_flag: (byte & 0x04) != 0,
+            clean_session: (byte & 0x02) != 0,
+            reserved: (byte & 0x01) != 0,
+        }
     }
 }
