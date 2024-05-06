@@ -4,6 +4,7 @@ use log::{error, info};
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use rustx::subscribe_message::{SubscribeMessage, subs_msg_from_bytes};
+// Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 
 fn main() {
     env_logger::init();

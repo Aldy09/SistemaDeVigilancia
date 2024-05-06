@@ -1,7 +1,7 @@
 use config::{Config, File, FileFormat};
 use log::info;
 use rustx::connect_message::ConnectMessage;
-use rustx::fixed_header::{FixedHeader, self};
+use rustx::fixed_header::FixedHeader;
 use rustx::puback_message::PubAckMessage;
 use rustx::publish_message::PublishMessage;
 use std::io::{Read, Write, Error};
@@ -12,7 +12,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
-    let res = stream.read(&mut fixed_header_buf)?;
+    let _res = stream.read(&mut fixed_header_buf)?;
     
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());

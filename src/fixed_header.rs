@@ -4,7 +4,7 @@
 /// El byte 2 contiene la `remaining_length` que es la longitud de la porción restante del mensaje.
 #[derive(Debug, PartialEq)]
 pub struct FixedHeader {
-    message_type: u8,     // byte 1
+    message_type_byte: u8,     // byte 1, el tipo está en los 4 MSBits.
     remaining_length: u8, // byte 2
 }
 
@@ -18,11 +18,11 @@ impl FixedHeader {
         let tipo = u8::from_be_bytes([msg_bytes[0]]);
         let rem_len = u8::from_be_bytes([msg_bytes[1]]);
 
-        Self { message_type: tipo, remaining_length: rem_len }
+        Self { message_type_byte: tipo, remaining_length: rem_len }
     }
 
     pub fn get_tipo(&self) -> u8 {
-        self.message_type >> 4
+        self.message_type_byte >> 4
     }
 
     pub const fn get_rem_len(&self) -> usize {

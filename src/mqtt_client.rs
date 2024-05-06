@@ -4,6 +4,7 @@ use crate::publish_message::PublishMessage;
 use crate::puback_message::PubAckMessage;
 use std::io::{self, Read, Write, Error};
 use std::net::{SocketAddr, TcpStream};
+// Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 
 #[allow(dead_code)]
 /// MQTTClient es instanciado por cada cliente que desee utilizar el protocolo.
@@ -15,13 +16,6 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
-    /*pub fn new() -> MQTTClient {
-        MQTTClient { stream: None }
-    }
-    fn new_para_debug() -> MQTTClient {
-
-        MQTTClient { stream: None }
-    }*/
     pub fn connect_to_broker(addr: &SocketAddr, connect_msg: &mut ConnectMessage) -> Result<Self, Error>{//io::Result<()> {
         // Intenta conectar al servidor MQTT
         let mut stream = TcpStream::connect(addr)
@@ -41,7 +35,6 @@ impl MQTTClient {
 
         println!("Respuesta del servidor: {:?}", &connack_response);
 
-        //Ok(())
         Ok(MQTTClient { stream })
     }
 
