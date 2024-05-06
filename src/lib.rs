@@ -1,4 +1,7 @@
 pub mod connack_message;
+pub mod connack_fixed_header;
+pub mod connack_session_present;
+pub mod connack_variable_header;
 pub mod connect_flags;
 pub mod connect_message;
 pub mod connect_return_code;
