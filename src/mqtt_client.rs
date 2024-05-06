@@ -49,6 +49,7 @@ impl MQTTClient {
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el payload a enviar, y el topic al cual enviarlo.
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
+        println!("-----------------");
         // Construyo publish
         // Creo un pub msg
         let flags = PublishFlags::new(0,0,0)?;
@@ -58,6 +59,7 @@ impl MQTTClient {
         let bytes_msg = pub_msg.to_bytes();
         //if let Some(mut s) = self.stream {
         //s.write_all(&bytes_msg)?;
+        println!("   Mensaje publish en bytes a enviar: {:?}", bytes_msg);
         self.stream.write_all(&bytes_msg)?;
 
         //let max_buff_size: usize = PubAckMessage::max_posible_msg_size();
@@ -72,6 +74,7 @@ impl MQTTClient {
                 println!("Lo leído hasta dar error, fue: {:?}", bytes_rta_leida);
             },
         }
+        println!("-----------------");
 
         let puback_msg = PubAckMessage::msg_from_bytes(bytes_rta_leida.to_vec())?; // []
         println!("RECIBO ESTE PUB ACK MSG: {:?}", puback_msg);
@@ -79,7 +82,7 @@ impl MQTTClient {
 
         
         let _msg_reconstruido = PublishMessage::pub_msg_from_bytes(bytes_msg);
-
+        println!("-----------------");
         Ok(())
     }
 

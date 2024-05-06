@@ -61,10 +61,11 @@ impl PublishMessage {
     /// Devuelve la longitud de la sección `Variable header` del struct `PublishMessage`.
     /// Es una función auxiliar para calcular diversas longitudes necesarias para el pasaje a y de bytes.
     fn variable_header_length_for_values(topic_name_len: u16, properties_len: u8) -> u8 {
-        let mut var_len = 1; // 1 byte de topic_name.len()
+        let mut var_len = 2;//1; // 1 byte de topic_name.len()
         var_len += topic_name_len as u8; // n bytes del valor de topic_name.len()
         var_len += 2; // 2 bytes de packet_identifier;
         var_len += properties_len; // m bytes de len del vector
+        var_len += 1; // []
         var_len
     }
 
@@ -108,6 +109,9 @@ impl PublishMessage {
         let string = String::from(topic_name);
         let struct_interpretado = PublishMessage::new(flags_creadas, string, packet_identifier, payload);
         Ok(struct_interpretado)
+    }
+    pub fn get_packet_id(&self) -> u16 {
+        self.packet_identifier
     }
 }
 

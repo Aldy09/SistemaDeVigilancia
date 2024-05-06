@@ -39,7 +39,7 @@ fn main() {
         Ok(mut mqtt_client) => {
             info!("Conectado al broker MQTT.");
 
-            // probando publish
+            // publish
             let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
             match res {
                 Ok(_) => println!("Hecho un publish exitosamente"),
