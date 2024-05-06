@@ -3,7 +3,7 @@ use log::{error, info};
 
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
-use rustx::subscribe_message::{SubscribeMessage, subs_msg_from_bytes};
+use rustx::subscribe_message::{subs_msg_from_bytes, SubscribeMessage};
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 
 fn main() {
@@ -34,12 +34,11 @@ fn main() {
         Some("sistema-monitoreo"),
         Some("rustx123"),
     );
-   
+
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
     match mqtt_client_res {
         Ok(mut mqtt_client) => {
             info!("Conectado al broker MQTT.");
-
             // publish
             let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
             match res {
@@ -47,23 +46,19 @@ fn main() {
                 Err(e) => {
                     error!("Error al hacer el publish {:?}", e);
                     println!("------------------------------------");
-                },
+                }
             }
-        },
+        }
         Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
     }
 
-
     // Construyo subscribe
     let packet_id: u16 = 1;
-    let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"),1)];
+    let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"), 1)];
     let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
     let subs_bytes = subscribe_msg.to_bytes();
     println!("Enviando mensaje {:?}", subscribe_msg);
 
     let _msg_reconstruido = subs_msg_from_bytes(subs_bytes);
     // enviarlo, etc.
-
-    
-
 }
