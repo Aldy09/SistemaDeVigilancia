@@ -11,3 +11,6 @@ pub mod subscribe_return_code;
 pub mod publish_message;
 pub mod publish_flags;
 pub mod puback_message;
+pub mod connect_variable_header;
+pub mod connect_fixed_header;
+pub mod connect_payload;
