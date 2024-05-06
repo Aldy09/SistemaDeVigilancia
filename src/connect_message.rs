@@ -61,11 +61,16 @@ impl<'a> ConnectMessage<'a> {
     fn calculate_remaining_length(&self) -> u8 {
         let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT", 1 byte for level, 1 byte for connect flags
         let length_string_u8 = 1;
-        let payload_length = length_string_u8 + self.payload.client_id.len() 
-            + length_string_u8 + self.payload.will_topic.map_or(0, |s| s.len()) 
-            + length_string_u8 + self.payload.will_message.map_or(0, |s| s.len())
-            + length_string_u8 +  self.payload.username.map_or(0, |s| s.len())
-            + length_string_u8 + self.payload.password.map_or(0, |s| s.len());
+        let payload_length = length_string_u8
+            + self.payload.client_id.len()
+            + length_string_u8
+            + self.payload.will_topic.map_or(0, |s| s.len())
+            + length_string_u8
+            + self.payload.will_message.map_or(0, |s| s.len())
+            + length_string_u8
+            + self.payload.username.map_or(0, |s| s.len())
+            + length_string_u8
+            + self.payload.password.map_or(0, |s| s.len());
 
         (variable_header_length + payload_length) as u8
     }
@@ -112,7 +117,7 @@ impl<'a> ConnectMessage<'a> {
             message_type: bytes[0],
             remaining_length: bytes[1],
         };
-                                                                        
+
         let variable_header = VariableHeader {
             protocol_name: [bytes[2], bytes[3], bytes[4], bytes[5]],
             protocol_level: bytes[6],
@@ -139,25 +144,33 @@ impl<'a> ConnectMessage<'a> {
         }
     }
 
-    pub fn process_payload(flags: &ConnectFlags, bytes_payload: &'a[u8]) -> Payload<'a> {
+    pub fn process_payload(flags: &ConnectFlags, bytes_payload: &'a [u8]) -> Payload<'a> {
         let mut payload_start_index: usize = 0;
 
         // Extraer el client_id
         let client_id_length = bytes_payload[payload_start_index] as usize;
-        let client_id = std::str::from_utf8(&bytes_payload[payload_start_index + 1..payload_start_index + 1 + client_id_length])
-            .unwrap();
+        let client_id = std::str::from_utf8(
+            &bytes_payload[payload_start_index + 1..payload_start_index + 1 + client_id_length],
+        )
+        .unwrap();
         payload_start_index += 1 + client_id_length;
 
         // Extraer el will_topic y will_message si los flags lo indican
         let (will_topic, will_message) = if flags.will_flag {
             let will_topic_length = bytes_payload[payload_start_index] as usize;
-            let will_topic =
-                std::str::from_utf8(&bytes_payload[payload_start_index + 1..payload_start_index + 1 + will_topic_length]).unwrap();
+            let will_topic = std::str::from_utf8(
+                &bytes_payload
+                    [payload_start_index + 1..payload_start_index + 1 + will_topic_length],
+            )
+            .unwrap();
             payload_start_index += 1 + will_topic_length;
 
             let will_message_length = bytes_payload[payload_start_index] as usize;
-            let will_message =
-                std::str::from_utf8(&bytes_payload[payload_start_index + 1..payload_start_index + 1 + will_message_length]).unwrap();
+            let will_message = std::str::from_utf8(
+                &bytes_payload
+                    [payload_start_index + 1..payload_start_index + 1 + will_message_length],
+            )
+            .unwrap();
             payload_start_index += 1 + will_message_length;
 
             (Some(will_topic), Some(will_message))
@@ -168,8 +181,10 @@ impl<'a> ConnectMessage<'a> {
         // Extraer el username si los flags lo indican
         let username = if flags.username_flag {
             let username_length = bytes_payload[payload_start_index] as usize;
-            let username = std::str::from_utf8(&bytes_payload[payload_start_index + 1..payload_start_index + 1 + username_length])
-                .unwrap();
+            let username = std::str::from_utf8(
+                &bytes_payload[payload_start_index + 1..payload_start_index + 1 + username_length],
+            )
+            .unwrap();
             payload_start_index += 1 + username_length;
 
             Some(username)
@@ -180,8 +195,10 @@ impl<'a> ConnectMessage<'a> {
         // Extraer el password si los flags lo indican
         let password = if flags.password_flag {
             let password_length = bytes_payload[payload_start_index] as usize;
-            let password = std::str::from_utf8(&bytes_payload[payload_start_index + 1..payload_start_index + 1 + password_length])
-                .unwrap();
+            let password = std::str::from_utf8(
+                &bytes_payload[payload_start_index + 1..payload_start_index + 1 + password_length],
+            )
+            .unwrap();
 
             Some(password)
         } else {

@@ -1,8 +1,9 @@
 use crate::connect_message::ConnectMessage;
+use crate::mqtt_client::io::ErrorKind;
+use crate::puback_message::PubAckMessage;
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
-use crate::puback_message::PubAckMessage;
-use std::io::{self, Read, Write, Error};
+use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 
@@ -16,7 +17,20 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
-    pub fn connect_to_broker(addr: &SocketAddr, connect_msg: &mut ConnectMessage) -> Result<Self, Error>{//io::Result<()> {
+    /*
+    pub fn new(addr: &SocketAddr) -> io::Result<Self> {
+        let stream = TcpStream::connect(addr)?;
+        Ok(MQTTClient {
+            stream,
+        })
+    }
+    */
+
+    pub fn connect_to_broker(
+        addr: &SocketAddr,
+        connect_msg: &mut ConnectMessage,
+    ) -> Result<Self, Error> {
+        //io::Result<()> {
         // Intenta conectar al servidor MQTT
         let mut stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
@@ -45,10 +59,14 @@ impl MQTTClient {
         println!("-----------------");
         // Construyo publish
         // Creo un pub msg
-        let flags = PublishFlags::new(0,0,0)?;
-        let string = String::from(topic);
-        let pub_msg = PublishMessage::new(flags, string, 1, payload); //"hola".as_bytes() );
-
+        let flags = PublishFlags::new(0, 1, 0)?;
+        //let string = String::from(topic);
+        //let pub_msg = PublishMessage::new(flags, string, 1, payload); //"hola".as_bytes() );
+        let result = PublishMessage::new(3, flags, topic, Some(1), payload);
+        let pub_msg = match result {
+            Ok(msg) => msg,
+            Err(e) => return Err(Error::new(ErrorKind::Other, e)),
+        };
         let bytes_msg = pub_msg.to_bytes();
         //if let Some(mut s) = self.stream {
         //s.write_all(&bytes_msg)?;
@@ -61,11 +79,11 @@ impl MQTTClient {
         match cant_leida {
             Ok(u) => {
                 println!("READ correcto en mqtt_publish, usize: {}", u);
-            },
+            }
             Err(e) => {
                 println!("ERROR al leer: {:?}", e);
                 println!("Lo leído hasta dar error, fue: {:?}", bytes_rta_leida);
-            },
+            }
         }
         println!("-----------------");
 
@@ -73,13 +91,10 @@ impl MQTTClient {
         println!("RECIBO ESTE PUB ACK MSG: {:?}", puback_msg);
         //}
 
-        
-        let _msg_reconstruido = PublishMessage::pub_msg_from_bytes(bytes_msg);
+        let _msg_reconstruido = PublishMessage::from_bytes(bytes_msg);
         println!("-----------------");
         Ok(())
     }
-
-
 }
 
 /*
@@ -97,4 +112,5 @@ mod test {
                                 // y xq hay stream socket involucrado (y no está levantado el server, es un unit test).
                                 // ToDo: hay que ver cómo testear esto con un archivo y mocks.
     }
-}*/
+}
+*/
