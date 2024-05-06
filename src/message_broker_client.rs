@@ -25,7 +25,8 @@ fn main() {
         .parse()
         .expect("Dirección no válida");
     let mut connect_msg = ConnectMessage::new(
-        0x04,
+        0x01 << 4, // Me fijé y el fixed header no estaba shifteado, el message type tiene que quedar en los 4 bits más signifs del primer byte (toDo: arreglarlo para el futuro)
+        // toDo: obs: además, al propio new podría agregarlo, no? para no tener yo que acordarme qué tipo es cada mensaje.
         "rust-client",
         None, // will_topic
         None, // will_message

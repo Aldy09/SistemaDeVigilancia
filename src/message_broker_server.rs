@@ -10,7 +10,7 @@ fn handle_client(mut stream: TcpStream) {
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
-    let res = stream.read_exact(&mut fixed_header_buf);
+    let res = stream.read(&mut fixed_header_buf);
     match res {
         Ok(_) => {
             // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
@@ -19,16 +19,19 @@ fn handle_client(mut stream: TcpStream) {
             println!("Recibo msj con tipo: {}, bytes de fixed header leidos: {:?}", tipo, fixed_header);
             match tipo {
                 1 => { // Es tipo Connect, acá procesar el connect y dar connack
+                    println!("Recibo mensaje tipo Connect");
                     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
                     let msg_rem_len: usize = fixed_header.get_rem_len();
                     let mut rem_buf = vec![0; msg_rem_len];
-                    let _res = stream.read_exact(&mut rem_buf).expect("Error al leer mensaje");
+                    let _res = stream.read(&mut rem_buf).expect("Error al leer mensaje");
 
                     // Ahora junto las dos partes leídas, para obt mi msg original
                     let mut buf = fixed_header_buf.to_vec();
                     buf.extend(rem_buf);
                     // Entonces tengo el mensaje completo
                     let connect_msg = ConnectMessage::from_bytes(&buf);
+                    println!("   Mensaje connect completo recibido: {:?}", connect_msg);
+
 
 
                     let username = "sistema-monitoreo";

@@ -12,7 +12,7 @@ pub struct ConnectMessage<'a> {
 
 impl<'a> ConnectMessage<'a> {
     pub fn new(
-        message_type: u8,
+        message_type: u8, // Siempre vale 1.
         client_id: &'a str,
         will_topic: Option<&'a str>,
         will_message: Option<&'a str>,
