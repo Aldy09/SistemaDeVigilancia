@@ -1,6 +1,6 @@
 use std::{io::{Error, ErrorKind}, mem::size_of};
 #[derive(Debug, PartialEq)]
-struct PubAckMessage {
+pub struct PubAckMessage {
     // Fixed header
     tipo: u8, // siempre vale 4; y son 4 bits al enviarlo, los restantes son ceros.
     // Variable header
@@ -11,7 +11,7 @@ struct PubAckMessage {
 
 #[allow(dead_code)] // para que clippy no se enoje
 impl PubAckMessage {
-    fn new(packet_id: u16, puback_reason_code: u8) -> Self {
+    pub fn new(packet_id: u16, puback_reason_code: u8) -> Self {
         PubAckMessage { tipo: 4, packet_id, puback_reason_code }
     }
 
@@ -73,7 +73,12 @@ impl PubAckMessage {
         
         Ok(PubAckMessage{ tipo, packet_id, puback_reason_code })
     }
-    
+
+    pub fn get_reason_code(&self) -> u8 {
+        self.puback_reason_code
+    }
+
+
 }
 
 #[cfg(test)]

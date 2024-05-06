@@ -4,6 +4,7 @@ use log::{error, info};
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use rustx::subscribe_message::{SubscribeMessage, subs_msg_from_bytes};
+// Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 
 fn main() {
     env_logger::init();
@@ -25,7 +26,8 @@ fn main() {
         .parse()
         .expect("Dirección no válida");
     let mut connect_msg = ConnectMessage::new(
-        0x04,
+        0x01 << 4, // Me fijé y el fixed header no estaba shifteado, el message type tiene que quedar en los 4 bits más signifs del primer byte (toDo: arreglarlo para el futuro)
+        // toDo: obs: además, al propio new podría agregarlo, no? para no tener yo que acordarme qué tipo es cada mensaje.
         "rust-client",
         None, // will_topic
         None, // will_message
@@ -33,8 +35,21 @@ fn main() {
         Some("rustx123"),
     );
    
-    match MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg) {
-        Ok(_) => info!("Conectado al broker MQTT."),
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
+    match mqtt_client_res {
+        Ok(mut mqtt_client) => {
+            info!("Conectado al broker MQTT.");
+
+            // publish
+            let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
+            match res {
+                Ok(_) => println!("Hecho un publish exitosamente"),
+                Err(e) => {
+                    error!("Error al hacer el publish {:?}", e);
+                    println!("------------------------------------");
+                },
+            }
+        },
         Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
     }
 
