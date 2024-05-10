@@ -24,6 +24,8 @@ pub struct Payload {
 }
 
 impl UnsubscribeMessage {
+    
+    // Crea un nuevo mensaje UNSUBSCRIBE
     pub fn new(packet_identifier: u16, topics: Vec<String>) -> UnsubscribeMessage {
         let variable_header = VariableHeader { packet_identifier };
 
@@ -46,6 +48,7 @@ impl UnsubscribeMessage {
         unsubscribe_message
     }
 
+    // Calcula el tamaño del remaining = variable header + payload
     pub fn calculate_remaining_length(&self) -> usize {
         let packet_identifier_length = 2;
         //let topics_length = self.payload.topics.iter().map(|topic| topic.len() + self.payload.topics.len()).sum::<usize>();
@@ -120,13 +123,14 @@ impl UnsubscribeMessage {
     }
 }
 
-//testea que el mensaje se pueda convertir a bytes y de bytes a mensaje
+
+
 #[cfg(test)]
 mod test {
 
     use super::*;
 
-    //testea que si no hay suficientes bytes para un mensaje válido, retorne un error
+    //Testea que si no hay suficientes bytes para un mensaje válido, retorne un error
     #[test]
     fn test_unsubscribe_message_from_bytes_error() {
         let bytes = vec![0b1010_0010];
@@ -172,20 +176,20 @@ mod test {
             0x10,        // Remaining Length
             0x00,
             0x0B, // Packet Identifier
-            0x06,
+            0x06, //Topic 1
             0x74,
             0x6F,
             0x70,
             0x69,
             0x63,
-            0x31, // Topic1
-            0x06,
+            0x31, 
+            0x06, // Topic2
             0x74,
             0x6F,
             0x70,
             0x69,
             0x63,
-            0x32, // Topic2
+            0x32, 
         ];
         let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
         assert_eq!(unsubscribe_message.fixed_header.message_type, 0b1010);
