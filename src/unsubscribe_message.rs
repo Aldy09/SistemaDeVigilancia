@@ -24,7 +24,7 @@ pub struct Payload {
 }
 
 impl UnsubscribeMessage {
-    pub fn new(packet_identifier: u16, topics: Vec<String>){
+    pub fn new(packet_identifier: u16, topics: Vec<String>)-> UnsubscribeMessage{
         let variable_header = VariableHeader {
             packet_identifier,
         };
@@ -35,7 +35,7 @@ impl UnsubscribeMessage {
 
         let fixed_header = FixedHeader {
             message_type: 0b1010,
-            reserved: 0010,
+            reserved: 0b0010,
             remaining_length: 0,
         };
 
@@ -51,8 +51,9 @@ impl UnsubscribeMessage {
 
     pub fn calculate_remaining_length(&self) -> usize {
         let packet_identifier_length = 2;
-        let topics_length = self.payload.topics.iter().map(|topic| topic.len() + self.payload.topics.len).sum::<usize>();
-        packet_identifier_length + topics_length;
+        //let topics_length = self.payload.topics.iter().map(|topic| topic.len() + self.payload.topics.len()).sum::<usize>();
+        let topics_length = self.payload.topics.iter().map(|topic| 1 + topic.len()).sum::<usize>();
+        packet_identifier_length + topics_length
     }
 
     pub fn to_bytes(&mut self) -> Vec<u8> {
@@ -62,7 +63,7 @@ impl UnsubscribeMessage {
         let combined = (self.fixed_header.message_type << 4) | self.fixed_header.reserved;
         bytes.push(combined);
         self.fixed_header.remaining_length = self.calculate_remaining_length();
-        bytes.push(self.fixed_header.remaining_length);
+        bytes.push(self.fixed_header.remaining_length as u8);
 
         // Variable Header
         bytes.push((self.variable_header.packet_identifier >> 8) as u8); // MSB
@@ -108,7 +109,7 @@ impl UnsubscribeMessage {
             fixed_header: FixedHeader {
                 message_type,
                 reserved,
-                remaining_length,
+                remaining_length: remaining_length as usize,
             },
             variable_header: VariableHeader {
                 packet_identifier,
@@ -118,4 +119,72 @@ impl UnsubscribeMessage {
             },
         })
     }
+}
+
+//testea que el mensaje se pueda convertir a bytes y de bytes a mensaje
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    //testea que si no hay suficientes bytes para un mensaje válido, retorne un error
+    #[test]
+    fn test_unsubscribe_message_from_bytes_error() {
+        let bytes = vec![0b1010_0010];
+        let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes);
+        assert!(unsubscribe_message.is_err());
+    }
+
+    //Testea que el mensaje se pueda convertir a bytes
+    #[test]
+    fn test_unsubscribe_message_to_bytes() {
+        let packet_identifier = 10;
+        let topics = vec!["topic1".to_string(), "topic2".to_string()];
+        let mut unsubscribe_message = UnsubscribeMessage::new(packet_identifier, topics);
+        let bytes = unsubscribe_message.to_bytes();
+        let expected_bytes = vec![
+            0b1010_0010, // Fixed Header 10 y 2 de reserved
+            0x10, // Remaining Length 16 = 2(packet_identifier) + ((1 + 6) + (1 + 6)):topic1 y topic2
+            0x00, 0x0A, // Packet Identifier
+            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x31, // Topic1 0x06 es el largo de la palabra,0x74 es la t, 0x6F es la o, 0x70 es la p, 0x69 es la i, 0x63 es la c, 0x31 es el 1
+            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x32, // Topic2
+        ];
+        assert_eq!(bytes, expected_bytes);
+    }
+
+    //Testea que el mensaje se pueda convertir de bytes a mensaje
+    #[test]
+    fn test_unsubscribe_message_from_bytes() {
+        let bytes = vec![
+            0b1010_0010, // Fixed Header
+            0x10, // Remaining Length
+            0x00, 0x0B, // Packet Identifier 
+            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x31, // Topic1
+            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x32, // Topic2
+        ];
+        let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
+        assert_eq!(unsubscribe_message.fixed_header.message_type, 0b1010);
+        assert_eq!(unsubscribe_message.fixed_header.reserved, 0b0010);
+        assert_eq!(unsubscribe_message.fixed_header.remaining_length, 0x10);
+        assert_eq!(unsubscribe_message.variable_header.packet_identifier, 11);
+        assert_eq!(unsubscribe_message.payload.topics, vec!["topic1".to_string(), "topic2".to_string()]);
+    }
+
+    //testea de que el mensaje se pueda convertir a bytes y de bytes a mensaje
+    #[test]
+    fn test_unsubscribe_message_to_bytes_and_back() {
+        let packet_identifier = 12;
+        let topics = vec!["topic1".to_string(), "topic2".to_string()];
+        let mut unsubscribe_message = UnsubscribeMessage::new(packet_identifier, topics);
+
+        let bytes = unsubscribe_message.to_bytes();
+
+        let new_unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
+        assert_eq!(unsubscribe_message.fixed_header.message_type, new_unsubscribe_message.fixed_header.message_type);
+        assert_eq!(unsubscribe_message.fixed_header.reserved, new_unsubscribe_message.fixed_header.reserved);
+        assert_eq!(unsubscribe_message.fixed_header.remaining_length, new_unsubscribe_message.fixed_header.remaining_length);
+        assert_eq!(unsubscribe_message.variable_header.packet_identifier, new_unsubscribe_message.variable_header.packet_identifier);
+        assert_eq!(unsubscribe_message.payload.topics, new_unsubscribe_message.payload.topics);
+    }
+    
 }

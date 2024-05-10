@@ -21,3 +21,4 @@ pub mod suback_message;
 pub mod subscribe_flags;
 pub mod subscribe_message;
 pub mod subscribe_return_code; // Es igual que el connect_fixed_header, no lo quise sacar de allá, hice un arch nuevo para evitar conflictos de git con otras ramas.
+pub mod unsubscribe_message;
