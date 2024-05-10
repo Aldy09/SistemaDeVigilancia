@@ -9,7 +9,7 @@ pub struct UnsubscribeMessage {
 #[derive(Debug)]
 pub struct FixedHeader {
     message_type: u8,
-    reserved: u8, 
+    reserved: u8,
     remaining_length: usize,
 }
 
@@ -24,14 +24,10 @@ pub struct Payload {
 }
 
 impl UnsubscribeMessage {
-    pub fn new(packet_identifier: u16, topics: Vec<String>)-> UnsubscribeMessage{
-        let variable_header = VariableHeader {
-            packet_identifier,
-        };
+    pub fn new(packet_identifier: u16, topics: Vec<String>) -> UnsubscribeMessage {
+        let variable_header = VariableHeader { packet_identifier };
 
-        let payload = Payload {
-            topics,
-        };
+        let payload = Payload { topics };
 
         let fixed_header = FixedHeader {
             message_type: 0b1010,
@@ -45,14 +41,20 @@ impl UnsubscribeMessage {
             payload,
         };
 
-        unsubscribe_message.fixed_header.remaining_length = unsubscribe_message.calculate_remaining_length();
+        unsubscribe_message.fixed_header.remaining_length =
+            unsubscribe_message.calculate_remaining_length();
         unsubscribe_message
     }
 
     pub fn calculate_remaining_length(&self) -> usize {
         let packet_identifier_length = 2;
         //let topics_length = self.payload.topics.iter().map(|topic| topic.len() + self.payload.topics.len()).sum::<usize>();
-        let topics_length = self.payload.topics.iter().map(|topic| 1 + topic.len()).sum::<usize>();
+        let topics_length = self
+            .payload
+            .topics
+            .iter()
+            .map(|topic| 1 + topic.len())
+            .sum::<usize>();
         packet_identifier_length + topics_length
     }
 
@@ -100,7 +102,8 @@ impl UnsubscribeMessage {
         let mut index = 4;
         while index < bytes.len() {
             let topic_length = bytes[index] as usize;
-            let topic = String::from_utf8(bytes[index + 1..index + 1 + topic_length].to_vec()).unwrap();
+            let topic =
+                String::from_utf8(bytes[index + 1..index + 1 + topic_length].to_vec()).unwrap();
             topics.push(topic);
             index += 1 + topic_length;
         }
@@ -111,12 +114,8 @@ impl UnsubscribeMessage {
                 reserved,
                 remaining_length: remaining_length as usize,
             },
-            variable_header: VariableHeader {
-                packet_identifier,
-            },
-            payload: Payload {
-                topics,
-            },
+            variable_header: VariableHeader { packet_identifier },
+            payload: Payload { topics },
         })
     }
 }
@@ -145,9 +144,22 @@ mod test {
         let expected_bytes = vec![
             0b1010_0010, // Fixed Header 10 y 2 de reserved
             0x10, // Remaining Length 16 = 2(packet_identifier) + ((1 + 6) + (1 + 6)):topic1 y topic2
-            0x00, 0x0A, // Packet Identifier
-            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x31, // Topic1 0x06 es el largo de la palabra,0x74 es la t, 0x6F es la o, 0x70 es la p, 0x69 es la i, 0x63 es la c, 0x31 es el 1
-            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x32, // Topic2
+            0x00,
+            0x0A, // Packet Identifier
+            0x06,
+            0x74,
+            0x6F,
+            0x70,
+            0x69,
+            0x63,
+            0x31, // Topic1 0x06 es el largo de la palabra,0x74 es la t, 0x6F es la o, 0x70 es la p, 0x69 es la i, 0x63 es la c, 0x31 es el 1
+            0x06,
+            0x74,
+            0x6F,
+            0x70,
+            0x69,
+            0x63,
+            0x32, // Topic2
         ];
         assert_eq!(bytes, expected_bytes);
     }
@@ -157,17 +169,33 @@ mod test {
     fn test_unsubscribe_message_from_bytes() {
         let bytes = vec![
             0b1010_0010, // Fixed Header
-            0x10, // Remaining Length
-            0x00, 0x0B, // Packet Identifier 
-            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x31, // Topic1
-            0x06, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x32, // Topic2
+            0x10,        // Remaining Length
+            0x00,
+            0x0B, // Packet Identifier
+            0x06,
+            0x74,
+            0x6F,
+            0x70,
+            0x69,
+            0x63,
+            0x31, // Topic1
+            0x06,
+            0x74,
+            0x6F,
+            0x70,
+            0x69,
+            0x63,
+            0x32, // Topic2
         ];
         let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
         assert_eq!(unsubscribe_message.fixed_header.message_type, 0b1010);
         assert_eq!(unsubscribe_message.fixed_header.reserved, 0b0010);
         assert_eq!(unsubscribe_message.fixed_header.remaining_length, 0x10);
         assert_eq!(unsubscribe_message.variable_header.packet_identifier, 11);
-        assert_eq!(unsubscribe_message.payload.topics, vec!["topic1".to_string(), "topic2".to_string()]);
+        assert_eq!(
+            unsubscribe_message.payload.topics,
+            vec!["topic1".to_string(), "topic2".to_string()]
+        );
     }
 
     //testea de que el mensaje se pueda convertir a bytes y de bytes a mensaje
@@ -180,11 +208,25 @@ mod test {
         let bytes = unsubscribe_message.to_bytes();
 
         let new_unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
-        assert_eq!(unsubscribe_message.fixed_header.message_type, new_unsubscribe_message.fixed_header.message_type);
-        assert_eq!(unsubscribe_message.fixed_header.reserved, new_unsubscribe_message.fixed_header.reserved);
-        assert_eq!(unsubscribe_message.fixed_header.remaining_length, new_unsubscribe_message.fixed_header.remaining_length);
-        assert_eq!(unsubscribe_message.variable_header.packet_identifier, new_unsubscribe_message.variable_header.packet_identifier);
-        assert_eq!(unsubscribe_message.payload.topics, new_unsubscribe_message.payload.topics);
+        assert_eq!(
+            unsubscribe_message.fixed_header.message_type,
+            new_unsubscribe_message.fixed_header.message_type
+        );
+        assert_eq!(
+            unsubscribe_message.fixed_header.reserved,
+            new_unsubscribe_message.fixed_header.reserved
+        );
+        assert_eq!(
+            unsubscribe_message.fixed_header.remaining_length,
+            new_unsubscribe_message.fixed_header.remaining_length
+        );
+        assert_eq!(
+            unsubscribe_message.variable_header.packet_identifier,
+            new_unsubscribe_message.variable_header.packet_identifier
+        );
+        assert_eq!(
+            unsubscribe_message.payload.topics,
+            new_unsubscribe_message.payload.topics
+        );
     }
-    
 }
