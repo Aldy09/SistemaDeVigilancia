@@ -1,47 +1,122 @@
+extern crate gio;
 extern crate gtk;
+
+use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Button, Entry};
+
+fn main() {
+    let application = gtk::Application::new(
+        Some("fi.uba.sistemamonitoreo"),
+        gio::ApplicationFlags::FLAGS_NONE,
+    )
+    .expect("Fallo en iniciar la aplicacion");
+
+    application.connect_activate(build_ui);
+
+    application.run(&[]);
+}
 
 fn build_ui(application: &gtk::Application) {
-    // Crea una ventana
-    let window = ApplicationWindow::new(application);
-    window.set_title("Formulario GTK en Rust");
-    window.set_default_size(400, 200);
+    let window = gtk::ApplicationWindow::new(application);
+    window.set_title("Sistema de Monitoreo");
+    window.set_default_size(800, 600);
 
-    // Crea una caja vertical para organizar los elementos
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    window.add(&vbox);
+    let menubar = gtk::MenuBar::new();
 
-    // Crea una entrada de texto
-    let entry = Entry::new();
-    entry.set_text("Ingrese su nombre");
-    vbox.add(&entry);
+    let menu_incidents = gtk::Menu::new();
+    let item_add = gtk::MenuItem::with_label("Alta de Incidente");
+    let item_edit = gtk::MenuItem::with_label("Modificación de Incidente");
+    let item_delete = gtk::MenuItem::with_label("Baja de Incidente");
 
-    // Crea un botón
-    let button = Button::with_label("Enviar");
-    vbox.add(&button);
+    menu_incidents.append(&item_add);
+    menu_incidents.append(&item_edit);
+    menu_incidents.append(&item_delete);
 
-    // Conecta el evento "clicked" del botón
-    button.connect_clicked(move |_| {
-        println!("Texto ingresado: {}", entry.text());
-        entry.set_text(""); // Limpia la entrada después de presionar el botón
+    item_add.connect_activate(move |_| {
+        show_add_form();
     });
 
-    // Muestra todos los elementos
+    item_edit.connect_activate(|_| {
+        println!("Modificación de Incidente");
+    });
+
+    item_delete.connect_activate(|_| {
+        println!("Baja de Incidente");
+    });
+
+    let item_quit = gtk::MenuItem::with_label("Salir");
+    item_quit.connect_activate(|_| {
+        gtk::main_quit();
+    });
+
+    let menu_app = gtk::Menu::new();
+    menu_app.append(&item_quit);
+
+    let item_incidents = gtk::MenuItem::with_label("Incidentes");
+    let item_exit = gtk::MenuItem::with_label("Salir");
+
+    item_incidents.set_submenu(Some(&menu_incidents));
+    item_exit.connect_activate(|_| {
+        gtk::main_quit();
+    });
+
+    menubar.append(&item_incidents);
+    menubar.append(&item_exit);
+
+    let layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    layout.pack_start(&menubar, false, false, 0);
+
+    // Create an image widget and load the map image
+    let map_image = gtk::Image::from_file("mapa_temp.png");
+    layout.pack_start(&map_image, true, true, 0); // Add image to layout
+
+    window.add(&layout);
+
     window.show_all();
 }
 
-fn main() {
-    // Inicializa la aplicación GTK
-    let application = Application::builder()
-        .application_id("com.example.myapp")
-        .build();
+fn show_add_form() {
+    let dialog = gtk::Dialog::with_buttons(
+        Some("Alta de Incidente"),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            ("Ok", gtk::ResponseType::Ok),
+            ("Cancel", gtk::ResponseType::Cancel),
+        ],
+    );
 
-    // Conecta la función build_ui al evento "activate" de la aplicación
-    application.connect_activate(|app| {
-        build_ui(app);
+    let content_area = dialog.get_content_area();
+    content_area.set_spacing(5);
+
+    let name_label = gtk::Label::new(Some("Nombre del Incidente:"));
+    let name_entry = gtk::Entry::new();
+    content_area.add(&name_label);
+    content_area.add(&name_entry);
+
+    let x_label = gtk::Label::new(Some("Coordenada X:"));
+    let x_entry = gtk::Entry::new();
+    content_area.add(&x_label);
+    content_area.add(&x_entry);
+
+    let y_label = gtk::Label::new(Some("Coordenada Y:"));
+    let y_entry = gtk::Entry::new();
+    content_area.add(&y_label);
+    content_area.add(&y_entry);
+
+    dialog.show_all();
+
+    dialog.connect_response(move |dialog, response_type| {
+        if response_type == gtk::ResponseType::Ok {
+            let name = name_entry.get_text().to_string();
+            let x_coord = x_entry.get_text().to_string();
+            let y_coord = y_entry.get_text().to_string();
+
+            println!("Nombre del Incidente: {}", name);
+            println!("Coordenada X: {}", x_coord);
+            println!("Coordenada Y: {}", y_coord);
+        }
+
+        dialog.close();
     });
-
-    // Ejecuta la aplicación
-    application.run();
 }
