@@ -191,7 +191,7 @@ mod test {
             0x63,
             0x32, 
         ];
-        
+
         let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
         assert_eq!(unsubscribe_message.fixed_header.message_type, 0b1010);
         assert_eq!(unsubscribe_message.fixed_header.reserved, 0b0010);
@@ -213,6 +213,7 @@ mod test {
         let bytes = unsubscribe_message.to_bytes();
 
         let new_unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
+        
         assert_eq!(
             unsubscribe_message.fixed_header.message_type,
             new_unsubscribe_message.fixed_header.message_type
