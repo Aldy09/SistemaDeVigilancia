@@ -1,17 +1,13 @@
 use std::{
     io::{Error, ErrorKind},
-    mem::size_of,
-    str::from_utf8,
-};
+    mem::size_of};
 
 use crate::subscribe_return_code::SubscribeReturnCode;
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct SubAckMessage {
-    // Fixed header
-    message_type: u8, // siempre 9; 4 bits más sifgnificativos del primer byte
-    reserved_flags: u8, // 4 bits menos significativos del primer byte
+    message_type: u8, // Fixed header: 4 bits más sifgnificativos del primer byte, siempre 9
+    reserved_flags: u8, // fixed header: 4 bits menos significativos del primer byte, 0
     packet_identifier: u16, // Variable header: 2 bytes
     return_codes: Vec<SubscribeReturnCode>, // Payload: 2 bytes cada uno, corresponde a cada topic_filter recibido.
 }
@@ -28,13 +24,13 @@ impl SubAckMessage {
     fn remaining_length(&self) -> u8 {
         // Calculo la rem_len
         let mut rem_len: u8 = 2; // 2 bytes de packet identifier
-        for (_return_code) in &self.return_codes {
+        for _return_code in &self.return_codes {
             rem_len += 2; // 2 bytes para enviar la longitud de cada return_code
         }
         rem_len
     }
 
-    /// Pasa un struct SubscribeMessage a bytes, usando big endian.
+    /// Pasa un struct SubAckMessage a bytes, usando big endian.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut msg_bytes = vec![];
         // Envío el primer byte, sus 4 bits superiores y 4 bits inferiores
@@ -84,14 +80,14 @@ pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
     // Payload. Leo cada elemento del vector
     // Siendo que mqtt no envía la longitud del vector, utilizamos la remaining length
     let mut rem_len_leida: u8 = 2;
-    let mut ret_codes: Vec<(String, u8)> = vec![];
+    let mut ret_codes: Vec<SubscribeReturnCode> = vec![];
     while rem_len_leida < rem_len {
         // Leo el u16
         let ret_code = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
         idx += size_of_u16;
 
         // Terminé de leer, agrego el elemento leído al vector de topics
-        let elemento = (ret_code as SubscribeReturnCode); // 
+        let elemento = SubscribeReturnCode::from_u16(ret_code)?;
         ret_codes.push(elemento);
         // Avanzo la rem_len_leida para saber cuándo termino de leer todos los elementos
         rem_len_leida += 2;
@@ -111,3 +107,45 @@ pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
     Ok(struct_interpretado)
 }
 
+#[cfg(test)]
+mod test {
+    use crate::{suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
+
+    use super::msg_from_bytes;
+
+    #[test]
+    fn test_1_suback_msg_se_crea_con_tipo_y_flag_adecuados() {
+        let packet_id: u16 = 1;
+        let return_codes = vec![SubscribeReturnCode::QoS1];
+        let suback_msg = SubAckMessage::new(packet_id, return_codes);
+
+        // Estos valores siempre son 9 y 0 respectivamente, para este tipo de mensaje
+        assert_eq!(suback_msg.message_type, 9);
+        assert_eq!(suback_msg.reserved_flags, 0);
+    }
+
+    #[test]
+    fn test_2_suback_msg_se_pasa_a_bytes_y_se_interpreta_correctamente() {
+        let packet_id: u16 = 1;
+        let return_codes = vec![SubscribeReturnCode::QoS1];
+        let suback_msg = SubAckMessage::new(packet_id, return_codes);
+
+        let bytes_msg = suback_msg.to_bytes();
+
+        let msg_reconstruido = msg_from_bytes(bytes_msg);
+        assert_eq!(msg_reconstruido.unwrap(), suback_msg);
+    }
+
+    #[test]
+    fn test_3_suback_msg_se_pasa_a_bytes_e_interpreta_correctamente_con_varios_ret_codes() {
+        let packet_id: u16 = 1;
+        let mut return_codes = vec![SubscribeReturnCode::QoS1];
+        return_codes.push(SubscribeReturnCode::QoS1); // agrego más topics al vector
+        let suback_msg = SubAckMessage::new(packet_id, return_codes);
+
+        let bytes_msg = suback_msg.to_bytes();
+
+        let msg_reconstruido = msg_from_bytes(bytes_msg);
+        assert_eq!(msg_reconstruido.unwrap(), suback_msg);
+    }
+}

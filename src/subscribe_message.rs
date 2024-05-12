@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Debug, PartialEq)]
 pub struct SubscribeMessage {
-    packet_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
+    message_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
     reserved_flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
     packet_identifier: u16,
     topic_filters: Vec<(String, u8)>, // (topic, qos)
@@ -15,7 +15,7 @@ pub struct SubscribeMessage {
 impl SubscribeMessage {
     pub fn new(packet_id: u16, topics: Vec<(String, u8)>) -> Self {
         SubscribeMessage {
-            packet_type: 8,
+            message_type: 8,
             reserved_flags: 2,
             packet_identifier: packet_id,
             topic_filters: topics,
@@ -37,7 +37,7 @@ impl SubscribeMessage {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut msg_bytes = vec![];
         // Envío el primer byte, el tipo en 4 bits superiores, 0010 en 4 bits inferiores
-        let mut byte_de_tipo = self.packet_type << 4;
+        let mut byte_de_tipo = self.message_type << 4;
         byte_de_tipo |= self.reserved_flags;
         msg_bytes.extend(byte_de_tipo.to_be_bytes());
 
@@ -108,7 +108,7 @@ pub fn subs_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
     }
 
     let struct_interpretado = SubscribeMessage {
-        packet_type: tipo,
+        message_type: tipo,
         reserved_flags,
         packet_identifier: packet_id,
         topic_filters: topics,
@@ -134,7 +134,7 @@ mod test {
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
 
         // Estos valores siempre son 8 y 2 respectivamente, para este tipo de mensaje
-        assert_eq!(subscribe_msg.packet_type, 8);
+        assert_eq!(subscribe_msg.message_type, 8);
         assert_eq!(subscribe_msg.reserved_flags, 2);
     }
 
