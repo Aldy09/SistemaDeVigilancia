@@ -7,7 +7,7 @@ use std::{
 #[derive(Debug, PartialEq)]
 pub struct SubscribeMessage {
     packet_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
-    flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
+    reserved_flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
     packet_identifier: u16,
     topic_filters: Vec<(String, u8)>, // (topic, qos)
 }
@@ -16,7 +16,7 @@ impl SubscribeMessage {
     pub fn new(packet_id: u16, topics: Vec<(String, u8)>) -> Self {
         SubscribeMessage {
             packet_type: 8,
-            flags: 2,
+            reserved_flags: 2,
             packet_identifier: packet_id,
             topic_filters: topics,
         }
@@ -25,19 +25,39 @@ impl SubscribeMessage {
     /// Pasa un struct SubscribeMessage a bytes, usando big endian.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut msg_bytes = vec![];
-        msg_bytes.extend(self.packet_type.to_be_bytes());
-        msg_bytes.extend(self.flags.to_be_bytes());
+        //msg_bytes.extend(self.packet_type.to_be_bytes());
+        //msg_bytes.extend(self.flags.to_be_bytes());
+        // Envío el primer byte, el tipo en 4 bits superiores, 0010 en 4 bits inferiores
+        let mut byte_de_tipo = self.packet_type << 4;
+        byte_de_tipo |= self.reserved_flags;
+        msg_bytes.extend(byte_de_tipo.to_be_bytes());
+        
+        // Envío la remaining length, un byte
+        // Calculo la rem_len
+        let mut rem_len = 2; // 2 bytes de packet identifier
+        //esta línea no va --> rem_len += self.topic_filters.len(); // esto no va
+        for (filter, qos) in &self.topic_filters {
+            rem_len += 2; // 2 bytes para enviar la longitud de cada filter
+            rem_len += filter.len(); // la longitud de cada filter
+            rem_len += 1; // 1 byte para qos que es un u8
+        }
+        // La envío
+        msg_bytes.extend(rem_len.to_be_bytes());
+        
+        // Variable header
+        // Envío el packet identifier, 2 bytes
         msg_bytes.extend(self.packet_identifier.to_be_bytes());
 
-        // Envío la longitud del vector de los topic_filters
+        /*Esto no va ---> // Envío la longitud del vector de los topic_filters
         //let topic_filters_len: u16 = u16::from(self.topic_filters.len());
-        let topic_filters_len: u16 = self.topic_filters.len() as u16;
-        msg_bytes.extend(topic_filters_len.to_be_bytes());
-        // Ahora cada longitud (de la string) y elemento del vector topic_filters
+        //let topic_filters_len: u16 = self.topic_filters.len() as u16;
+        //msg_bytes.extend(topic_filters_len.to_be_bytes());*/
+        // Envío el vector de los topic_filters, elemento a elemento:
+        // cada longitud (de la string) y elemento del vector topic_filters
         for topic in &self.topic_filters {
             let topic_str_len = topic.0.len() as u16;
             msg_bytes.extend(topic_str_len.to_be_bytes());
-            msg_bytes.extend(topic.0.as_bytes());
+            msg_bytes.extend(topic.0.as_bytes()); // se envía en utf-8
             msg_bytes.extend(topic.1.to_be_bytes());
         }
 
@@ -49,13 +69,16 @@ impl SubscribeMessage {
 /// Devuelve un struct SubscribeMessage con los valores recibidos e interpretados.
 pub fn subs_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
     let size_of_u8 = size_of::<u8>();
-    // Leo u8 type
-    //let tipo = &msg_bytes[0..size_of_u8];
-    let tipo = (&msg_bytes[0..size_of_u8])[0];
-    // Leo u8 flags
-    let flags = (&msg_bytes[size_of_u8..2 * size_of_u8])[0];
+    // Leo u8 byte de tipo y reserved flags
+    let byte_de_tipo_y_flags = (&msg_bytes[0..size_of_u8])[0];
+    let tipo = byte_de_tipo_y_flags >> 4;
+    let reserved_flags = byte_de_tipo_y_flags & 0b0000_1111;
+
+    // Leo u8 remaining length
+    let rem_len = (&msg_bytes[size_of_u8..2 * size_of_u8])[0];
     let mut idx = 2 * size_of_u8;
 
+    // Variable header
     // Leo u16 packet_id
     let size_of_u16 = size_of::<u16>();
     //let packet_id = &msg_bytes[idx..idx+size_of_u16];
@@ -67,9 +90,11 @@ pub fn subs_msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error
        //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
     idx += size_of_u16;
 
-    // Leo en u16 la longitud del vector de topics
+    /* esto no va --> // Leo en u16 la longitud del vector de topics
     let topics_vec_len = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx + size_of_u8]]); // forma 2
-    idx += size_of_u16;
+    idx += size_of_u16;*/
+    /*// Obtengo la cantidad de topics del vector de topic_filters, no, no la puedo conocer xq la len de cada string es variable
+    let cant_topics = rem_len - 2; */
 
     // Leo cada elemento del vector: primero la len de la string en u16
     // y luego el elemento, que será una tupla (String, u8)
