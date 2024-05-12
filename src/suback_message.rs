@@ -1,6 +1,7 @@
 use std::{
     io::{Error, ErrorKind},
-    mem::size_of};
+    mem::size_of,
+};
 
 use crate::subscribe_return_code::SubscribeReturnCode;
 
@@ -13,12 +14,13 @@ pub struct SubAckMessage {
 }
 
 impl SubAckMessage {
-
     pub fn new(packet_id: u16, return_codes: Vec<SubscribeReturnCode>) -> Self {
-        Self { message_type: 9,
+        Self {
+            message_type: 9,
             reserved_flags: 0,
             packet_identifier: packet_id,
-            return_codes }
+            return_codes,
+        }
     }
 
     fn remaining_length(&self) -> u8 {
@@ -41,7 +43,7 @@ impl SubAckMessage {
         // Calculo y envío la remaining length, un byte
         let rem_len = self.remaining_length();
         msg_bytes.extend(rem_len.to_be_bytes());
-        
+
         // Variable header. Envío el packet identifier, 2 bytes
         msg_bytes.extend(self.packet_identifier.to_be_bytes());
 
@@ -52,7 +54,6 @@ impl SubAckMessage {
 
         msg_bytes
     }
-
 }
 /// Recibe bytes, y los interpreta.
 /// Devuelve un struct SubAckMessage con los valores recibidos e interpretados.
@@ -83,7 +84,7 @@ pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
     let mut ret_codes: Vec<SubscribeReturnCode> = vec![];
     while rem_len_leida < rem_len {
         // Leo el u16
-        let ret_code = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
+        let ret_code = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx + size_of_u8]]); // forma 2
         idx += size_of_u16;
 
         // Terminé de leer, agrego el elemento leído al vector de topics
@@ -99,10 +100,6 @@ pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
         packet_identifier: packet_id,
         return_codes: ret_codes,
     };
-    println!(
-        "Creo struct interpretado desde bytes: {:?}",
-        struct_interpretado
-    );
 
     Ok(struct_interpretado)
 }

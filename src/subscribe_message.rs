@@ -3,13 +3,22 @@ use std::{
     mem::size_of,
     str::from_utf8,
 };
-
+/* [] Siendo que el variable header igualmente es diferente para cada tipo de mensaje,
+ * no veo ganancia en crear un subscribe_variable_header.rs, xq no se va a poder poner comportamiento ahí
+ * (en este caso incluso sería medio trivial, mandar un u16 y listo).
+ * Se puede hacer todo acá en este mismo archivo.
+ * Como lo que mandamos y recibimos son bytes, lo de fixed header var header y payload son divisiones 'lógicas', conceptuales,
+ * para el protocolo no importa cómo tengamos guardados los campos siempre que se envíen en orden y tamaño correctos.
+ * (P/D: la from_bytes queda más 'generalizable' así con ese idx al que irle sumando (en vez de las constantecitas),
+ * de hecho vengo de borrar un campo que no había que mandar y siguió andando bien).
+ * Fin del wall of text, dsp tiramos otro commit para borrar estos comentarios pseudo random, ja :).
+*/
 #[derive(Debug, PartialEq)]
 pub struct SubscribeMessage {
-    message_type: u8, //para subscribe siempre es 8(por protocolo mqtt)
-    reserved_flags: u8,       //para subscribe siempre es 2(por protocolo mqtt)
-    packet_identifier: u16,
-    topic_filters: Vec<(String, u8)>, // (topic, qos)
+    message_type: u8, // Fixed header: 4 bytes sups de primer byte; para subscribe siempre es 8 (por protocolo mqtt)
+    reserved_flags: u8, // fixed header: 4 bytes infs de primer byte; para subscribe siempre es 2 (por protocolo mqtt)
+    packet_identifier: u16, // Variable header: 2 bytes
+    topic_filters: Vec<(String, u8)>, // Payload: vector de elementos "(topic, qos)"
 }
 
 impl SubscribeMessage {
@@ -44,7 +53,7 @@ impl SubscribeMessage {
         // Calculo y envío la remaining length, un byte
         let rem_len = self.remaining_length();
         msg_bytes.extend(rem_len.to_be_bytes());
-        
+
         // Variable header. Envío el packet identifier, 2 bytes
         msg_bytes.extend(self.packet_identifier.to_be_bytes());
 

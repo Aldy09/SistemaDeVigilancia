@@ -17,7 +17,10 @@ impl SubscribeReturnCode {
             0x01 => Ok(SubscribeReturnCode::QoS1),
             0x02 => Ok(SubscribeReturnCode::QoS2),
             0x80 => Ok(SubscribeReturnCode::Failure),
-            _ => Err(Error::new(ErrorKind::Other, "Error, subscribe returned code inválido."))
+            _ => Err(Error::new(
+                ErrorKind::Other,
+                "Error, subscribe returned code inválido.",
+            )),
         }
     }
 }
