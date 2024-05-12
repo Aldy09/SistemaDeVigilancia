@@ -1,58 +1,122 @@
-extern crate image;
-extern crate reqwest;
+extern crate gio;
+extern crate gtk;
 
-use std::fs::File;
-use std::io::BufWriter;
-use std::io::Write;
-
-use image::GenericImageView;
-use minifb::{Window, WindowOptions};
+use gio::prelude::*;
+use gtk::prelude::*;
 
 fn main() {
-    // URL del mapa estático de Yandex Maps
-    let map_url = "http://static-maps.yandex.ru/1.x/?lang=en-US&ll=32.810152,39.889847&size=450,450&z=10&l=map&pt=32.810152,39.889847,pm2rdl1~32.870152,39.869847,pm2rdl99";
-
-    // Realizar la solicitud GET para obtener la imagen del mapa
-    let response = reqwest::blocking::get(map_url).unwrap();
-    let image_bytes = response.bytes().unwrap();
-
-    // Guardar la imagen en un archivo temporal (opcional)
-    let temp_file = "mapa_temp.png";
-    let output_file = File::create(temp_file).unwrap();
-    let mut writer = BufWriter::new(output_file);
-    writer.write_all(&image_bytes).unwrap();
-
-    // Mostrar la imagen por pantalla utilizando la biblioteca image
-    //let img = ImageReader::open(temp_file).unwrap().decode().unwrap();
-    //img.show().unwrap();
-
-    let img = image::open(temp_file).unwrap();
-    let img_dimensions = img.dimensions();
-    let img_buffer_u8 = img.to_rgba8().into_raw();
-
-    // Convertir el buffer de u8 a u32
-    let img_buffer_u32: Vec<u32> = img_buffer_u8
-        .chunks(4)
-        .map(|b| u32::from_ne_bytes([b[0], b[1], b[2], b[3]]))
-        .collect();
-
-    let mut window = Window::new(
-        "Visualizador de imágenes",
-        img_dimensions.0 as usize,
-        img_dimensions.1 as usize,
-        WindowOptions::default(),
+    let application = gtk::Application::new(
+        Some("fi.uba.sistemamonitoreo"),
+        gio::ApplicationFlags::FLAGS_NONE,
     )
-    .unwrap_or_else(|e| {
-        panic!("{}", e);
+    .expect("Fallo en iniciar la aplicacion");
+
+    application.connect_activate(build_ui);
+
+    application.run(&[]);
+}
+
+fn build_ui(application: &gtk::Application) {
+    let window = gtk::ApplicationWindow::new(application);
+    window.set_title("Sistema de Monitoreo");
+    window.set_default_size(800, 600);
+
+    let menubar = gtk::MenuBar::new();
+
+    let menu_incidents = gtk::Menu::new();
+    let item_add = gtk::MenuItem::with_label("Alta de Incidente");
+    let item_edit = gtk::MenuItem::with_label("Modificación de Incidente");
+    let item_delete = gtk::MenuItem::with_label("Baja de Incidente");
+
+    menu_incidents.append(&item_add);
+    menu_incidents.append(&item_edit);
+    menu_incidents.append(&item_delete);
+
+    item_add.connect_activate(move |_| {
+        show_add_form();
     });
 
-    while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
-        window
-            .update_with_buffer(
-                &img_buffer_u32,
-                img_dimensions.0 as usize,
-                img_dimensions.1 as usize,
-            )
-            .unwrap();
-    }
+    item_edit.connect_activate(|_| {
+        println!("Modificación de Incidente");
+    });
+
+    item_delete.connect_activate(|_| {
+        println!("Baja de Incidente");
+    });
+
+    let item_quit = gtk::MenuItem::with_label("Salir");
+    item_quit.connect_activate(|_| {
+        gtk::main_quit();
+    });
+
+    let menu_app = gtk::Menu::new();
+    menu_app.append(&item_quit);
+
+    let item_incidents = gtk::MenuItem::with_label("Incidentes");
+    let item_exit = gtk::MenuItem::with_label("Salir");
+
+    item_incidents.set_submenu(Some(&menu_incidents));
+    item_exit.connect_activate(|_| {
+        gtk::main_quit();
+    });
+
+    menubar.append(&item_incidents);
+    menubar.append(&item_exit);
+
+    let layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    layout.pack_start(&menubar, false, false, 0);
+
+    // Create an image widget and load the map image
+    let map_image = gtk::Image::from_file("mapa_temp.png");
+    layout.pack_start(&map_image, true, true, 0); // Add image to layout
+
+    window.add(&layout);
+
+    window.show_all();
+}
+
+fn show_add_form() {
+    let dialog = gtk::Dialog::with_buttons(
+        Some("Alta de Incidente"),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            ("Ok", gtk::ResponseType::Ok),
+            ("Cancel", gtk::ResponseType::Cancel),
+        ],
+    );
+
+    let content_area = dialog.get_content_area();
+    content_area.set_spacing(5);
+
+    let name_label = gtk::Label::new(Some("Nombre del Incidente:"));
+    let name_entry = gtk::Entry::new();
+    content_area.add(&name_label);
+    content_area.add(&name_entry);
+
+    let x_label = gtk::Label::new(Some("Coordenada X:"));
+    let x_entry = gtk::Entry::new();
+    content_area.add(&x_label);
+    content_area.add(&x_entry);
+
+    let y_label = gtk::Label::new(Some("Coordenada Y:"));
+    let y_entry = gtk::Entry::new();
+    content_area.add(&y_label);
+    content_area.add(&y_entry);
+
+    dialog.show_all();
+
+    dialog.connect_response(move |dialog, response_type| {
+        if response_type == gtk::ResponseType::Ok {
+            let name = name_entry.get_text().to_string();
+            let x_coord = x_entry.get_text().to_string();
+            let y_coord = y_entry.get_text().to_string();
+
+            println!("Nombre del Incidente: {}", name);
+            println!("Coordenada X: {}", x_coord);
+            println!("Coordenada Y: {}", y_coord);
+        }
+
+        dialog.close();
+    });
 }
