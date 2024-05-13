@@ -3,7 +3,6 @@ use log::{error, info};
 
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
-use rustx::subscribe_message::{subs_msg_from_bytes, SubscribeMessage};
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 
 fn main() {
@@ -35,30 +34,32 @@ fn main() {
         Some("rustx123"),
     );
 
+    // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
     match mqtt_client_res {
         Ok(mut mqtt_client) => {
-            info!("Conectado al broker MQTT.");
-            // publish
+            //info!("Conectado al broker MQTT."); // 
+            println!("Cliente: Conectado al broker MQTT.");
+            // Cliente usa publish
             let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
             match res {
-                Ok(_) => println!("Hecho un publish exitosamente"),
+                Ok(_) => {
+                    println!("Cliente: Hecho un publish exitosamente");
+                    // Cliente usa subscribe
+                    let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic1"), 1)]);
+                    match res_sub {
+                        Ok(_) => {println!("Cliente: Hecho un subscribe exitosamente");},
+                        Err(e) => {println!("Cliente: Error al hacer un subscribe: {:?}", e);},
+                    }
+
+
+                },
                 Err(e) => {
-                    error!("Error al hacer el publish {:?}", e);
+                    error!("Cliente: Error al hacer el publish {:?}", e);
                     println!("------------------------------------");
                 }
             }
         }
-        Err(e) => error!("Error al conectar al broker MQTT: {:?}", e),
+        Err(e) => error!("Cliente: Error al conectar al broker MQTT: {:?}", e),
     }
-
-    // Construyo subscribe
-    let packet_id: u16 = 1;
-    let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"), 1)];
-    let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
-    let subs_bytes = subscribe_msg.to_bytes();
-    println!("Enviando mensaje {:?}", subscribe_msg);
-
-    let _msg_reconstruido = subs_msg_from_bytes(subs_bytes);
-    // enviarlo, etc.
 }

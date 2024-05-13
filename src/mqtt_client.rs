@@ -3,6 +3,8 @@ use crate::mqtt_client::io::ErrorKind;
 use crate::puback_message::PubAckMessage;
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
+use crate::suback_message::SubAckMessage;
+use crate::subscribe_message::SubscribeMessage;
 use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
@@ -47,7 +49,7 @@ impl MQTTClient {
             .read_exact(&mut connack_response)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
-        println!("Respuesta del servidor: {:?}", &connack_response);
+        println!("Respuesta del servidor: \n   {:?}", &connack_response);
 
         Ok(MQTTClient { stream })
     }
@@ -55,6 +57,8 @@ impl MQTTClient {
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el payload a enviar, y el topic al cual enviarlo.
+    /// Devuelve Ok si el publish fue exitoso, es decir si se pudo enviar el mensaje Publish
+    /// y se recibió un ack correcto. Devuelve error en caso contrario.
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
         println!("-----------------");
         // Construyo publish
@@ -64,36 +68,51 @@ impl MQTTClient {
         //let pub_msg = PublishMessage::new(flags, string, 1, payload); //"hola".as_bytes() );
         let result = PublishMessage::new(3, flags, topic, Some(1), payload);
         let pub_msg = match result {
-            Ok(msg) => msg,
+            Ok(msg) => {
+                println!("Mqtt publish: envío publish: \n   {:?}", msg);
+                msg
+            },
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
         let bytes_msg = pub_msg.to_bytes();
         //if let Some(mut s) = self.stream {
         //s.write_all(&bytes_msg)?;
-        println!("   Mensaje publish en bytes a enviar: {:?}", bytes_msg);
+        //println!("   Mensaje publish en bytes a enviar: {:?}", bytes_msg);
         self.stream.write_all(&bytes_msg)?;
 
-        //let max_buff_size: usize = PubAckMessage::max_posible_msg_size();
         let mut bytes_rta_leida = [0; 5];
-        let cant_leida = self.stream.read(&mut bytes_rta_leida);
-        match cant_leida {
-            Ok(u) => {
-                println!("READ correcto en mqtt_publish, usize: {}", u);
-            }
-            Err(e) => {
-                println!("ERROR al leer: {:?}", e);
-                println!("Lo leído hasta dar error, fue: {:?}", bytes_rta_leida);
-            }
-        }
-        println!("-----------------");
+        let _cant_leida = self.stream.read(&mut bytes_rta_leida)?;
+        //println!("-----------------");
 
         let puback_msg = PubAckMessage::msg_from_bytes(bytes_rta_leida.to_vec())?; // []
-        println!("RECIBO ESTE PUB ACK MSG: {:?}", puback_msg);
-        //}
+        println!("Mqtt publish: recibo este pub ack: \n   {:?}", puback_msg);
 
-        let _msg_reconstruido = PublishMessage::from_bytes(bytes_msg);
         println!("-----------------");
         Ok(())
+    }
+
+    // Nuestras apps clientes llamarán a esta función (los drones, etc)
+    /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
+    /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
+    pub fn mqtt_subscribe(&mut self, packet_id: u16, topics_to_subscribe: Vec<(String, u8)>) -> Result<(), Error> {
+        println!("-----------------");
+        // Construyo subscribe
+        let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
+        let subs_bytes = subscribe_msg.to_bytes();
+        println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
+        // Lo envío
+        self.stream.write_all(&subs_bytes)?;
+
+        // Leo la respuesta
+        let mut bytes_rta_leida = [0; 5];
+        let _cant_leida = self.stream.read(&mut bytes_rta_leida)?;
+        //println!("-----------------");
+
+        let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // []
+        println!("Mqtt subscribe: recibo ack: \n   {:?}", ack);
+        println!("-----------------");
+        Ok(())
+
     }
 }
 
