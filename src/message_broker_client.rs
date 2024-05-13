@@ -40,19 +40,19 @@ fn main() {
         Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); // 
             println!("Cliente: Conectado al broker MQTT.");
+
+            // Cliente usa subscribe // [] Consulta
+            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic1"), 1)]);
+            match res_sub {
+                Ok(_) => {println!("Cliente: Hecho un subscribe exitosamente");},
+                Err(e) => {println!("Cliente: Error al hacer un subscribe: {:?}", e);},
+            }
+
             // Cliente usa publish
             let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
             match res {
                 Ok(_) => {
                     println!("Cliente: Hecho un publish exitosamente");
-                    // Cliente usa subscribe
-                    let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic1"), 1)]);
-                    match res_sub {
-                        Ok(_) => {println!("Cliente: Hecho un subscribe exitosamente");},
-                        Err(e) => {println!("Cliente: Error al hacer un subscribe: {:?}", e);},
-                    }
-
-
                 },
                 Err(e) => {
                     error!("Cliente: Error al hacer el publish {:?}", e);

@@ -104,7 +104,7 @@ impl MQTTClient {
         self.stream.write_all(&subs_bytes)?;
 
         // Leo la respuesta
-        let mut bytes_rta_leida = [0; 5];
+        let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
         let _cant_leida = self.stream.read(&mut bytes_rta_leida)?;
         //println!("-----------------");
 
