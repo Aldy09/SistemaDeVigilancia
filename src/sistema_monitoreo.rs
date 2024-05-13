@@ -21,7 +21,6 @@ fn build_ui(application: &gtk::Application) {
     window.set_title("Sistema de Monitoreo");
     window.set_default_size(800, 600);
 
-    // Crear un menú _ Código de creación del menú
     let menubar = gtk::MenuBar::new();
 
     let menu_incidents = gtk::Menu::new();
@@ -64,27 +63,23 @@ fn build_ui(application: &gtk::Application) {
     menubar.append(&item_incidents);
     menubar.append(&item_exit);
 
-    // Crear un contenedor Box para contener el menú y el mapa
     let layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    // Agregar el menú al contenedor
     layout.pack_start(&menubar, false, false, 0);
 
-    // Crear un Image para mostrar el mapa
-    let map_image = gtk::Image::from_file("mapa_temp.png");
-    // Agregar el mapa al contenedor
-    layout.pack_start(&map_image, true, true, 0);
-
-    // Crear un Overlay para superponer la imagen
     let overlay = gtk::Overlay::new();
-    // Agregar el Overlay al contenedor
     layout.pack_start(&overlay, true, true, 0);
 
-    // Crear un Image para la imagen superpuesta
-    let superimposed_image = gtk::Image::from_file("dron.png");
+    let map_image = gtk::Image::from_file("mapa_temp.png");
+    overlay.add(&map_image);
 
-    // Agregar la imagen superpuesta al Overlay
-    overlay.add(&superimposed_image);
-    
+    let superimposed_image = gtk::Image::from_file("dron.png");
+    overlay.add_overlay(&superimposed_image);
+    gtk::WidgetExt::set_halign(&superimposed_image, gtk::Align::Start);
+    gtk::WidgetExt::set_valign(&superimposed_image, gtk::Align::Start);
+    gtk::WidgetExt::set_margin_start(&superimposed_image, 0);
+    gtk::WidgetExt::set_margin_top(&superimposed_image, 0);
+    overlay.set_child_index(&superimposed_image, 0);
+
     window.add(&layout);
     window.show_all();
 }
