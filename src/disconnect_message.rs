@@ -1,14 +1,11 @@
+use crate::disconnect_fixed_header::FixedHeader;
+
 pub struct Disconnect {
     fixed_header: FixedHeader,
 }
 
-pub struct FixedHeader {
-    message_type: u8,
-    reserved: u8,
-    remaining_length: u8,
-}
-
 impl Disconnect {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Disconnect {
         let fixed_header = FixedHeader {
             message_type: 0b1110,
