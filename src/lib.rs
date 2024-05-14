@@ -25,3 +25,6 @@ pub mod unsubscribe_message;
 pub mod unsubscribe_fixed_header;
 pub mod unsubscribe_variable_header;
 pub mod unsubscribe_payload;
+pub mod unsuback_message;
+pub mod unsuback_fixed_header;
+pub mod unsuback_variable_header;
