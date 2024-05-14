@@ -94,6 +94,11 @@ impl SubAckMessage {
             rem_len_leida += 2;
         }
 
+        // Chequeo tipo correcto
+        if tipo != 9 {
+            return Err(Error::new(ErrorKind::Other, "Tipo incorrecto."));
+        }
+
         let struct_interpretado = SubAckMessage {
             message_type: tipo,
             reserved_flags,

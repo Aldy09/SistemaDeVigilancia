@@ -80,6 +80,11 @@ impl PubAckMessage {
             puback_reason_code = (&msg_bytes[0..size_of_u8])[0];
         }
 
+        // Chequeo tipo correcto
+        if tipo != 4 {
+            return Err(Error::new(ErrorKind::Other, "Tipo incorrecto."));
+        }
+
         Ok(PubAckMessage {
             tipo,
             packet_id,

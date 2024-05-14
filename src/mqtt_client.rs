@@ -67,11 +67,8 @@ impl MQTTClient {
     /// y se recibió un ack correcto. Devuelve error en caso contrario.
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
         println!("-----------------");
-        // Construyo publish
-        // Creo un pub msg
+        // Creo un msj publish
         let flags = PublishFlags::new(0, 1, 0)?;
-        //let string = String::from(topic);
-        //let pub_msg = PublishMessage::new(flags, string, 1, payload); //"hola".as_bytes() );
         let result = PublishMessage::new(3, flags, topic, Some(1), payload);
         let pub_msg = match result {
             Ok(msg) => {
@@ -130,6 +127,17 @@ impl MQTTClient {
         println!("-----------------");
         Ok(())
 
+    }
+
+    /// Función que devuelve un struct MQTTClient que contiene una referencia adicional
+    /// del `Arc<Mutex<TcpStream>>`.
+    pub fn clone(&self) -> Self {
+        MQTTClient { stream: self.stream.clone() }
+    }
+
+    /// Da una referencia adicional al `Arc<Mutex<TcpStream>>`.
+    pub fn get_stream(&self) -> Arc<Mutex<TcpStream>> {
+        self.stream.clone()
     }
 }
 

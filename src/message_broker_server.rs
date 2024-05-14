@@ -76,10 +76,10 @@ fn continuar_la_conexion(stream: &mut TcpStream) -> Result<(), Error> {
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
     let tipo = fixed_header.get_tipo();
     println!("--------------------------");
-    /*println!(
-        "Recibo msj con tipo: {}, bytes de fixed header leidos: {:?}",
+    println!(
+        "Recibo fixed header, tipo: {}, bytes de fixed header leidos: {:?}",
         tipo, fixed_header
-    );*/
+    );
     // Ahora sí ya puede haber diferentes tipos de mensaje.
     match tipo {
         3 => {
@@ -116,8 +116,8 @@ fn continuar_la_conexion(stream: &mut TcpStream) -> Result<(), Error> {
             let msg_bytes = ack.to_bytes();
             stream.write_all(&msg_bytes)?;
             println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
-        }
-        _ => {}
+        },
+        _ => println!("   ERROR: tipo desconocido: recibido: \n   {:?}", fixed_header),
     };
 
     Ok(())
