@@ -54,61 +54,65 @@ impl SubAckMessage {
 
         msg_bytes
     }
-}
-/// Recibe bytes, y los interpreta.
-/// Devuelve un struct SubAckMessage con los valores recibidos e interpretados.
-pub fn msg_from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
-    let size_of_u8 = size_of::<u8>();
-    // Leo u8 byte de tipo y reserved flags
-    let byte_de_tipo_y_flags = (&msg_bytes[0..size_of_u8])[0];
-    let tipo = byte_de_tipo_y_flags >> 4;
-    let reserved_flags = byte_de_tipo_y_flags & 0b0000_1111;
 
-    // Leo u8 remaining length
-    let rem_len = (&msg_bytes[size_of_u8..2 * size_of_u8])[0];
-    let mut idx = 2 * size_of_u8;
+    /// Recibe bytes, y los interpreta.
+    /// Devuelve un struct SubAckMessage con los valores recibidos e interpretados.
+    pub fn from_bytes(msg_bytes: Vec<u8>) -> Result<SubAckMessage, Error> {
+        let size_of_u8 = size_of::<u8>();
+        // Leo u8 byte de tipo y reserved flags
+        let byte_de_tipo_y_flags = (&msg_bytes[0..size_of_u8])[0];
+        let tipo = byte_de_tipo_y_flags >> 4;
+        let reserved_flags = byte_de_tipo_y_flags & 0b0000_1111;
 
-    // Variable header. Leo u16 packet_id
-    let size_of_u16 = size_of::<u16>();
-    let packet_id = u16::from_be_bytes(
-        msg_bytes[idx..idx + size_of_u16]
-            .try_into()
-            .map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?,
-    ); // forma 1
-       //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
-    idx += size_of_u16;
+        // Leo u8 remaining length
+        let rem_len = (&msg_bytes[size_of_u8..2 * size_of_u8])[0];
+        let mut idx = 2 * size_of_u8;
 
-    // Payload. Leo cada elemento del vector
-    // Siendo que mqtt no envía la longitud del vector, utilizamos la remaining length
-    let mut rem_len_leida: u8 = 2;
-    let mut ret_codes: Vec<SubscribeReturnCode> = vec![];
-    while rem_len_leida < rem_len {
-        // Leo el u16
-        let ret_code = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx + size_of_u8]]); // forma 2
+        // Variable header. Leo u16 packet_id
+        let size_of_u16 = size_of::<u16>();
+        let packet_id = u16::from_be_bytes(
+            msg_bytes[idx..idx + size_of_u16]
+                .try_into()
+                .map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?,
+        ); // forma 1
+        //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
         idx += size_of_u16;
 
-        // Terminé de leer, agrego el elemento leído al vector de topics
-        let elemento = SubscribeReturnCode::from_u16(ret_code)?;
-        ret_codes.push(elemento);
-        // Avanzo la rem_len_leida para saber cuándo termino de leer todos los elementos
-        rem_len_leida += 2;
+        // Payload. Leo cada elemento del vector
+        // Siendo que mqtt no envía la longitud del vector, utilizamos la remaining length
+        let mut rem_len_leida: u8 = 2;
+        let mut ret_codes: Vec<SubscribeReturnCode> = vec![];
+        while rem_len_leida < rem_len {
+            // Leo el u16
+            let ret_code = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx + size_of_u8]]); // forma 2
+            idx += size_of_u16;
+
+            // Terminé de leer, agrego el elemento leído al vector de topics
+            let elemento = SubscribeReturnCode::from_u16(ret_code)?;
+            ret_codes.push(elemento);
+            // Avanzo la rem_len_leida para saber cuándo termino de leer todos los elementos
+            rem_len_leida += 2;
+        }
+
+        // Chequeo tipo correcto
+        if tipo != 9 {
+            return Err(Error::new(ErrorKind::Other, "Tipo incorrecto."));
+        }
+
+        let struct_interpretado = SubAckMessage {
+            message_type: tipo,
+            reserved_flags,
+            packet_identifier: packet_id,
+            return_codes: ret_codes,
+        };
+
+        Ok(struct_interpretado)
     }
-
-    let struct_interpretado = SubAckMessage {
-        message_type: tipo,
-        reserved_flags,
-        packet_identifier: packet_id,
-        return_codes: ret_codes,
-    };
-
-    Ok(struct_interpretado)
 }
 
 #[cfg(test)]
 mod test {
     use crate::{suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
-
-    use super::msg_from_bytes;
 
     #[test]
     fn test_1_suback_msg_se_crea_con_tipo_y_flag_adecuados() {
@@ -129,7 +133,7 @@ mod test {
 
         let bytes_msg = suback_msg.to_bytes();
 
-        let msg_reconstruido = msg_from_bytes(bytes_msg);
+        let msg_reconstruido = SubAckMessage::from_bytes(bytes_msg);
         assert_eq!(msg_reconstruido.unwrap(), suback_msg);
     }
 
@@ -142,7 +146,7 @@ mod test {
 
         let bytes_msg = suback_msg.to_bytes();
 
-        let msg_reconstruido = msg_from_bytes(bytes_msg);
+        let msg_reconstruido = SubAckMessage::from_bytes(bytes_msg);
         assert_eq!(msg_reconstruido.unwrap(), suback_msg);
     }
 }
