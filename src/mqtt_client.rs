@@ -43,8 +43,9 @@ impl MQTTClient {
         let msg_bytes = connect_msg.to_bytes();
         {
             let mut s = mqtt.stream.lock().unwrap();
-            s.write_all(&msg_bytes)
+            s.write(&msg_bytes)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+            s.flush().unwrap();
         }
 
         // Intenta leer la respuesta del servidor (CONNACK)
@@ -81,7 +82,8 @@ impl MQTTClient {
         // Lo envío
         {
             let mut s = self.stream.lock().unwrap();
-            s.write_all(&bytes_msg)?;
+            s.write(&bytes_msg)?;
+            s.flush().unwrap();
         }
 
         // Leo la respuesta
@@ -90,12 +92,10 @@ impl MQTTClient {
             let mut s = self.stream.lock().unwrap();
             let _cant_leida = s.read(&mut bytes_rta_leida)?;
         }
-        //println!("-----------------");
 
         let puback_msg = PubAckMessage::msg_from_bytes(bytes_rta_leida.to_vec())?; // []
         println!("Mqtt publish: recibo este pub ack: \n   {:?}", puback_msg);
 
-        println!("-----------------");
         Ok(())
     }
 
@@ -111,22 +111,22 @@ impl MQTTClient {
         // Lo envío
         {
             let mut s = self.stream.lock().unwrap();
-            s.write_all(&subs_bytes)?;
+            s.write(&subs_bytes)?;
+            s.flush().unwrap();
         }
 
         // Leo la respuesta
         let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
         {
             let mut s = self.stream.lock().unwrap();
-            let _cant_leida = s.read(&mut bytes_rta_leida)?;
+            let cant_leida = s.read(&mut bytes_rta_leida)?;
+            println!("Mqtt subscribe: cant_leida de bytes de sub ack: {}", cant_leida);
         }
-        //println!("-----------------");
 
         let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // []
         println!("Mqtt subscribe: recibo ack: \n   {:?}", ack);
-        println!("-----------------");
-        Ok(())
 
+        Ok(())
     }
 
     /// Función que devuelve un struct MQTTClient que contiene una referencia adicional
