@@ -1,4 +1,4 @@
-use std::io::Read;
+//use std::io::Read;
 use std::thread;
 
 use config::{Config, File, FileFormat};
@@ -80,8 +80,8 @@ fn main() {
                 // cada mensaje tipo publish que le llegue para ese topic. No está implementado, así que acá abajo no leo nada.
                 // (^ para eso había que ver qué cosa se guarda server de cada cliente).
                 // :. Lo de acá abajo siempre va a leer todo 0 hasta implementar eso en el server.
-                let stream = mqtt_client.get_stream();
-                /*let mut veces = 3;
+                /*let stream = mqtt_client.get_stream();
+                let mut veces = 3;
                 while veces > 0 {
                     println!("[loop cliente subscribe] vuelta por intentar leer");
                     // Leo la respuesta

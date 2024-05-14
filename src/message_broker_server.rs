@@ -57,35 +57,21 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
             // A partir de ahora que ya se hizo el connect exitosamente,
             // se puede empezar a recibir publish y subscribe de ese cliente.
             // Acá: un mismo cliente puede enviarme muchos mensajes, no solamente uno.
-            // Por ello, acá debe haber un loop.
-            // Cómo se determina si la conexión está abierta, tengo que hacer una lectura? y le paso lo leído para adentro
-            // Leo, hasta que sea un msj de tipo unsubscribe... me parece, (ver dsp tema reconexiones).
-            //let mut tipo: Option<u8> = None; // [] Refactorizable al tenerlo más claro
-            //let mut aux: i32 = 1;
-            println!("LEO UN MENSAJE, UNO, HARDCODEADO");
+            // Por ello, acá debe haber un loop. Leo, y le paso lo leído a la función
+            // hasta que lea [0, 0].
             let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
-            continuar_la_conexion(&mut stream, fixed_header_buf)?; // esta función lee UN mensaje.
-
-            println!("LEO UN SEGUNDO MENSAJE, UNO, HARDCODEADO");
-            fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
-            continuar_la_conexion(&mut stream, fixed_header_buf)?; // esta función lee UN mensaje.
-
-
-            /*println!("Pre while");
             //let mut n = fixed_header.is_not_null(); // move occurs
             let ceros: &[u8; 2] = &[0; 2];
-            //let mut n = (&fixed_header_buf[0])==&[0]; // & &fixed_header_buf[1]==0; // move occurs
             let mut vacio = (&fixed_header_buf == ceros);
             while !vacio {
                 println!("Adentro del while");
-                continuar_la_conexion(&mut stream, &fixed_header_buf)?; // esta función lee UN mensaje.
+                continuar_la_conexion(&mut stream, fixed_header_buf)?; // esta función lee UN mensaje.
                 // Leo para la siguiente iteración
-                let fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
-                //n = fixed_header.is_not_null();
+                fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
                 vacio = (&fixed_header_buf == ceros);
-            }*/
+            }
             
-            //};
+            //}; // (fin del if es authentic, está comentado pero debe conservarse).
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
@@ -100,11 +86,6 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
 /// Recibe el `stream` para la comunicación con el cliente en cuestión.
 /// Lee un mensaje.
 fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
-    /*const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
-    let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
-
-    let _res = stream.read(&mut fixed_header_buf)?;*/
-
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
     let tipo = fixed_header.get_tipo();
@@ -186,11 +167,10 @@ fn continuar_leyendo_bytes_del_msg(fixed_header: FixedHeader, stream: &mut TcpSt
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
     let msg_rem_len: usize = fixed_header.get_rem_len();
     let mut rem_buf = vec![0; msg_rem_len];
-    let _res = stream.read(&mut rem_buf)?; //.expect("Error al leer mensaje");
+    let _res = stream.read(&mut rem_buf)?;
 
     // Ahora junto las dos partes leídas, para obt mi msg original
-    //let mut buf = fixed_header_bytes.to_vec();
-    let mut buf = fixed_header.to_bytes().to_vec(); // [] probando
+    let mut buf = fixed_header_bytes.to_vec();
     buf.extend(rem_buf);
     println!(
         "   Mensaje en bytes recibido, antes de hacerle from_bytes: {:?}",
