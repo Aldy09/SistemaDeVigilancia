@@ -44,7 +44,7 @@ fn main() {
             //info!("Conectado al broker MQTT."); // 
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut mqtt_client_para_hijo = mqtt_client.clone();
+            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
             
             let h_pub = thread::spawn(move ||{
                 // Cliente usa publish

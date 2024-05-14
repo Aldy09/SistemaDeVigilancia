@@ -47,7 +47,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
             } else {
                 [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
             };
-            stream
+            let _ = stream
                 .write(&connack_response)
                 .expect("Error al enviar CONNACK");
             stream.flush()?;
@@ -62,13 +62,13 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
             let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
             //let mut n = fixed_header.is_not_null(); // move occurs
             let ceros: &[u8; 2] = &[0; 2];
-            let mut vacio = (&fixed_header_buf == ceros);
+            let mut vacio = &fixed_header_buf == ceros;
             while !vacio {
                 println!("Adentro del while");
                 continuar_la_conexion(&mut stream, fixed_header_buf)?; // esta función lee UN mensaje.
                 // Leo para la siguiente iteración
                 fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
-                vacio = (&fixed_header_buf == ceros);
+                vacio = &fixed_header_buf == ceros;
             }
             
             //}; // (fin del if es authentic, está comentado pero debe conservarse).
@@ -109,7 +109,7 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             // ToDo: Acá imagino que hago algún checkeo, leer la doc
             let ack = PubAckMessage::new(packet_id, 0);
             let msg_bytes = ack.to_bytes();
-            stream.write(&msg_bytes)?;
+            let _ = stream.write(&msg_bytes)?;
             stream.flush()?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
         }
@@ -129,7 +129,7 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.
             let ack = SubAckMessage::new(0, return_codes);
             let msg_bytes = ack.to_bytes();
-            stream.write(&msg_bytes)?;
+            let _ = stream.write(&msg_bytes)?;
             stream.flush()?;
             println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
         },

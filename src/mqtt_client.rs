@@ -83,7 +83,7 @@ impl MQTTClient {
         // Lo envío
         {
             let mut s = self.stream.lock().unwrap();
-            s.write(&bytes_msg)?;
+            let _ = s.write(&bytes_msg)?;
             s.flush()?;
         }
 
@@ -112,7 +112,7 @@ impl MQTTClient {
         // Lo envío
         {
             let mut s = self.stream.lock().unwrap();
-            s.write(&subs_bytes)?;
+            let _ = s.write(&subs_bytes)?;
             s.flush()?;
         }
         println!("Mqtt subscribe: enviado mensaje en bytes: \n   {:?}", subs_bytes);
@@ -134,7 +134,7 @@ impl MQTTClient {
 
     /// Función que devuelve un struct MQTTClient que contiene una referencia adicional
     /// del `Arc<Mutex<TcpStream>>`.
-    pub fn clone(&self) -> Self {
+    pub fn mqtt_clone(&self) -> Self {
         MQTTClient { stream: self.stream.clone() }
     }
 
