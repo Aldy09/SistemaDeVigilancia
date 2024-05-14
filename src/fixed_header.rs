@@ -13,6 +13,10 @@ impl FixedHeader {
         2 // dos bytes
     }
 
+    pub fn to_bytes(&self) -> Vec<u8> {
+        vec![self.message_type_byte, self.remaining_length]
+    }
+
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
         let tipo = u8::from_be_bytes([msg_bytes[0]]);
         let rem_len = u8::from_be_bytes([msg_bytes[1]]);
@@ -29,5 +33,9 @@ impl FixedHeader {
 
     pub const fn get_rem_len(&self) -> usize {
         self.remaining_length as usize
+    }
+
+    pub fn is_not_null(&self) -> bool {
+        !((self.message_type_byte == 0) & (self.remaining_length == 0))
     }
 }

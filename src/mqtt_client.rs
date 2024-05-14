@@ -115,6 +115,7 @@ impl MQTTClient {
             s.write(&subs_bytes)?;
             s.flush()?;
         }
+        println!("Mqtt subscribe: enviado mensaje en bytes: \n   {:?}", subs_bytes);
 
         // Leo la respuesta
         let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
@@ -122,6 +123,7 @@ impl MQTTClient {
             let mut s = self.stream.lock().unwrap();
             let cant_leida = s.read(&mut bytes_rta_leida)?;
             println!("Mqtt subscribe: cant_leida de bytes de sub ack: {}", cant_leida);
+            //println!("Mqtt subscribe: bytes de sub ack: {:?}", bytes_rta_leida);
         }
 
         let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // []
