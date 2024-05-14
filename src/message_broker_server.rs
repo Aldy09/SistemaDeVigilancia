@@ -30,10 +30,14 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
         1 => {
             // Es tipo Connect, acá procesar el connect y dar connack
             println!("Recibo mensaje tipo Connect");
-            let msg_bytes = continuar_leyendo_bytes_del_msg(fixed_header, &mut stream, &fixed_header_buf)?;
+            let msg_bytes =
+                continuar_leyendo_bytes_del_msg(fixed_header, &mut stream, &fixed_header_buf)?;
             // Entonces tengo el mensaje completo
             let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
-            println!("   Mensaje connect completo recibido: \n   {:?}", connect_msg);
+            println!(
+                "   Mensaje connect completo recibido: \n   {:?}",
+                connect_msg
+            );
 
             // Se fija si la conexión se establece correctamente y responde un connack
             let username = "sistema-monitoreo";
@@ -51,7 +55,10 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
                 .write(&connack_response)
                 .expect("Error al enviar CONNACK");
             stream.flush()?;
-            println!("   tipo connect: Enviado el ack: \n   {:?}", connack_response);
+            println!(
+                "   tipo connect: Enviado el ack: \n   {:?}",
+                connack_response
+            );
 
             //if is_authentic { // ToDo: actuamente está dando siempre false, fijarse.
             // A partir de ahora que ya se hizo el connect exitosamente,
@@ -66,11 +73,11 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
             while !vacio {
                 println!("Adentro del while");
                 continuar_la_conexion(&mut stream, fixed_header_buf)?; // esta función lee UN mensaje.
-                // Leo para la siguiente iteración
+                                                                       // Leo para la siguiente iteración
                 fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream)?;
                 vacio = &fixed_header_buf == ceros;
             }
-            
+
             //}; // (fin del if es authentic, está comentado pero debe conservarse).
         }
         _ => {
@@ -98,7 +105,8 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
     match tipo {
         3 => {
             println!("Recibo mensaje tipo Publish");
-            let msg_bytes = continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
+            let msg_bytes =
+                continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
             // Entonces tengo el mensaje completo
             let msg = PublishMessage::from_bytes(msg_bytes)?;
             println!("   Mensaje publish completo recibido: {:?}", msg);
@@ -113,9 +121,11 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             stream.flush()?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
         }
-        8 => { // Acá  análogo, para cuando recibo un Subscribe
+        8 => {
+            // Acá  análogo, para cuando recibo un Subscribe
             println!("Recibo mensaje tipo Subscribe");
-            let msg_bytes = continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
+            let msg_bytes =
+                continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
             // Entonces tengo el mensaje completo
             let msg = SubscribeMessage::from_bytes(msg_bytes)?;
             //println!("   Mensaje completo recibido: {:?}", msg);
@@ -132,8 +142,11 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             let _ = stream.write(&msg_bytes)?;
             stream.flush()?;
             println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
-        },
-        _ => println!("   ERROR: tipo desconocido: recibido: \n   {:?}", fixed_header),
+        }
+        _ => println!(
+            "   ERROR: tipo desconocido: recibido: \n   {:?}",
+            fixed_header
+        ),
     };
 
     Ok(())
@@ -163,7 +176,11 @@ fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<[u8;
 /// lee los siguientes `remaining length` bytes indicados en el fixed header.
 /// Concatena ambos grupos de bytes leídos para conformar los bytes totales del mensaje leído.
 /// (Podría hacer fixed_header.to_bytes(), se aprovecha que ya se leyó fixed_header_bytes).
-fn continuar_leyendo_bytes_del_msg(fixed_header: FixedHeader, stream: &mut TcpStream, fixed_header_bytes: &[u8; 2]) -> Result<Vec<u8>, Error> {
+fn continuar_leyendo_bytes_del_msg(
+    fixed_header: FixedHeader,
+    stream: &mut TcpStream,
+    fixed_header_bytes: &[u8; 2],
+) -> Result<Vec<u8>, Error> {
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
     let msg_rem_len: usize = fixed_header.get_rem_len();
     let mut rem_buf = vec![0; msg_rem_len];

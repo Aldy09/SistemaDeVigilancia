@@ -75,7 +75,7 @@ impl SubAckMessage {
                 .try_into()
                 .map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?,
         ); // forma 1
-        //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
+           //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
         idx += size_of_u16;
 
         // Payload. Leo cada elemento del vector

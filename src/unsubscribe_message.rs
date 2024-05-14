@@ -1,4 +1,7 @@
-use crate::{unsubscribe_fixed_header::FixedHeader, unsubscribe_payload::Payload, unsubscribe_variable_header::VariableHeader};
+use crate::{
+    unsubscribe_fixed_header::FixedHeader, unsubscribe_payload::Payload,
+    unsubscribe_variable_header::VariableHeader,
+};
 
 // UNSUBSCRIBE MESSAGE
 #[derive(Debug)]
@@ -8,9 +11,7 @@ pub struct UnsubscribeMessage {
     payload: Payload,
 }
 
-
 impl UnsubscribeMessage {
-    
     // Crea un nuevo mensaje UNSUBSCRIBE
     pub fn new(packet_identifier: u16, topics: Vec<String>) -> UnsubscribeMessage {
         let variable_header = VariableHeader { packet_identifier };
@@ -109,8 +110,6 @@ impl UnsubscribeMessage {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
 
@@ -168,14 +167,14 @@ mod test {
             0x70,
             0x69,
             0x63,
-            0x31, 
+            0x31,
             0x06, // Topic2
             0x74,
             0x6F,
             0x70,
             0x69,
             0x63,
-            0x32, 
+            0x32,
         ];
 
         let unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
@@ -199,7 +198,7 @@ mod test {
         let bytes = unsubscribe_message.to_bytes();
 
         let new_unsubscribe_message = UnsubscribeMessage::from_bytes(bytes).unwrap();
-        
+
         assert_eq!(
             unsubscribe_message.fixed_header.message_type,
             new_unsubscribe_message.fixed_header.message_type
