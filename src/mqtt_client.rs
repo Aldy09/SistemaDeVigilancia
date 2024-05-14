@@ -45,8 +45,9 @@ impl MQTTClient {
             let mut s = mqtt.stream.lock().unwrap();
             s.write(&msg_bytes)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
-            s.flush().unwrap();
+            s.flush()?;
         }
+        println!("Envía connect: \n   {:?}", &connect_msg);
 
         // Intenta leer la respuesta del servidor (CONNACK)
         let mut connack_response = [0; 4];
@@ -83,7 +84,7 @@ impl MQTTClient {
         {
             let mut s = self.stream.lock().unwrap();
             s.write(&bytes_msg)?;
-            s.flush().unwrap();
+            s.flush()?;
         }
 
         // Leo la respuesta
@@ -112,7 +113,7 @@ impl MQTTClient {
         {
             let mut s = self.stream.lock().unwrap();
             s.write(&subs_bytes)?;
-            s.flush().unwrap();
+            s.flush()?;
         }
 
         // Leo la respuesta

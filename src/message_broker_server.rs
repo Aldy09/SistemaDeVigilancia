@@ -46,8 +46,10 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
                 [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
             };
             stream
-                .write_all(&connack_response)
+                .write(&connack_response)
                 .expect("Error al enviar CONNACK");
+            stream.flush()?;//.unwrap();
+            println!("   tipo connect: Enviado el ack: \n   {:?}", connack_response);
 
             //if is_authentic { // ToDo: actuamente está dando siempre false, fijarse.
             // A partir de ahora que ya se hizo el connect exitosamente,
@@ -95,7 +97,8 @@ fn continuar_la_conexion(stream: &mut TcpStream) -> Result<(), Error> {
             // ToDo: Acá imagino que hago algún checkeo, leer la doc
             let ack = PubAckMessage::new(packet_id, 0);
             let msg_bytes = ack.to_bytes();
-            stream.write_all(&msg_bytes)?;
+            stream.write(&msg_bytes)?;
+            stream.flush()?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
         }
         8 => { // Acá  análogo, para cuando recibo un Subscribe
@@ -114,7 +117,8 @@ fn continuar_la_conexion(stream: &mut TcpStream) -> Result<(), Error> {
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.
             let ack = SubAckMessage::new(0, return_codes);
             let msg_bytes = ack.to_bytes();
-            stream.write_all(&msg_bytes)?;
+            stream.write(&msg_bytes)?;
+            stream.flush()?;
             println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
         },
         _ => println!("   ERROR: tipo desconocido: recibido: \n   {:?}", fixed_header),
