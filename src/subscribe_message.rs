@@ -69,7 +69,6 @@ impl SubscribeMessage {
         msg_bytes
     }
 
-
     /// Recibe bytes, y los interpreta.
     /// Devuelve un struct SubscribeMessage con los valores recibidos e interpretados.
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Result<SubscribeMessage, Error> {
@@ -90,7 +89,7 @@ impl SubscribeMessage {
                 .try_into()
                 .map_err(|_| Error::new(ErrorKind::Other, "Error leyendo bytes subs msg."))?,
         ); // forma 1
-        //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
+           //let packet_id = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx+size_of_u8]]); // forma 2
         idx += size_of_u16;
 
         // Payload. Leo cada elemento del vector: primero la len de la string en u16
@@ -103,7 +102,8 @@ impl SubscribeMessage {
             let elem_string_len = u16::from_be_bytes([msg_bytes[idx], msg_bytes[idx + size_of_u8]]); // forma 2
             idx += size_of_u16;
             // Leo la string, de tam "elem_string_len"
-            let string_leida = from_utf8(&msg_bytes[idx..idx + (elem_string_len as usize)]).unwrap();
+            let string_leida =
+                from_utf8(&msg_bytes[idx..idx + (elem_string_len as usize)]).unwrap();
             idx += elem_string_len as usize;
             // Leo el u8
             let elem_qos = (&msg_bytes[idx..idx + size_of_u8])[0];

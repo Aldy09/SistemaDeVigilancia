@@ -38,13 +38,15 @@ impl MQTTClient {
         let stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
-        let mqtt = MQTTClient { stream: Arc::new(Mutex::new(stream)) };
+        let mqtt = MQTTClient {
+            stream: Arc::new(Mutex::new(stream)),
+        };
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
         {
             let mut s = mqtt.stream.lock().unwrap();
             s.write(&msg_bytes)
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
             s.flush()?;
         }
         println!("Envía connect: \n   {:?}", &connect_msg);
@@ -54,7 +56,7 @@ impl MQTTClient {
         {
             let mut s = mqtt.stream.lock().unwrap();
             s.read_exact(&mut connack_response)
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
         }
 
         println!("Respuesta del servidor: \n   {:?}", &connack_response);
@@ -76,7 +78,7 @@ impl MQTTClient {
             Ok(msg) => {
                 println!("Mqtt publish: envío publish: \n   {:?}", msg);
                 msg
-            },
+            }
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
         let bytes_msg = pub_msg.to_bytes();
@@ -103,7 +105,11 @@ impl MQTTClient {
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
-    pub fn mqtt_subscribe(&mut self, packet_id: u16, topics_to_subscribe: Vec<(String, u8)>) -> Result<(), Error> {
+    pub fn mqtt_subscribe(
+        &mut self,
+        packet_id: u16,
+        topics_to_subscribe: Vec<(String, u8)>,
+    ) -> Result<(), Error> {
         println!("-----------------");
         // Construyo subscribe
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
@@ -115,7 +121,10 @@ impl MQTTClient {
             let _ = s.write(&subs_bytes)?;
             s.flush()?;
         }
-        println!("Mqtt subscribe: enviado mensaje en bytes: \n   {:?}", subs_bytes);
+        println!(
+            "Mqtt subscribe: enviado mensaje en bytes: \n   {:?}",
+            subs_bytes
+        );
 
         /*// Leo la respuesta
         let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
@@ -135,7 +144,9 @@ impl MQTTClient {
     /// Función que devuelve un struct MQTTClient que contiene una referencia adicional
     /// del `Arc<Mutex<TcpStream>>`.
     pub fn mqtt_clone(&self) -> Self {
-        MQTTClient { stream: self.stream.clone() }
+        MQTTClient {
+            stream: self.stream.clone(),
+        }
     }
 
     /// Da una referencia adicional al `Arc<Mutex<TcpStream>>`.
