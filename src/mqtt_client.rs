@@ -87,7 +87,7 @@ impl MQTTClient {
             s.flush()?;
         }
 
-        // Leo la respuesta
+        /*// Leo la respuesta [] <-- no debe ir acá, ver comentario abajo.
         let mut bytes_rta_leida = [0; 5];
         {
             let mut s = self.stream.lock().unwrap();
@@ -95,7 +95,7 @@ impl MQTTClient {
         }
 
         let puback_msg = PubAckMessage::msg_from_bytes(bytes_rta_leida.to_vec())?; // []
-        println!("Mqtt publish: recibo este pub ack: \n   {:?}", puback_msg);
+        println!("Mqtt publish: recibo este pub ack: \n   {:?}", puback_msg);*/
 
         Ok(())
     }
@@ -117,7 +117,7 @@ impl MQTTClient {
         }
         println!("Mqtt subscribe: enviado mensaje en bytes: \n   {:?}", subs_bytes);
 
-        // Leo la respuesta
+        /*// Leo la respuesta
         let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
         {
             let mut s = self.stream.lock().unwrap();
@@ -126,8 +126,8 @@ impl MQTTClient {
             //println!("Mqtt subscribe: bytes de sub ack: {:?}", bytes_rta_leida);
         }
 
-        let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // []
-        println!("Mqtt subscribe: recibo ack: \n   {:?}", ack);
+        let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // [] <-- este paso rompe, da error, si no es el tipo esperado, pero por el stream podría venir el ack de un publish por ejemplo.
+        println!("Mqtt subscribe: recibo ack: \n   {:?}", ack); // y si ya hice el read y no me interesaba, lo perdí. Debe haber un hilo para los reads de ack, y otro para enviar. */
 
         Ok(())
     }
