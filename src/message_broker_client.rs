@@ -1,3 +1,5 @@
+use std::thread;
+
 use config::{Config, File, FileFormat};
 use log::{error, info};
 
@@ -41,7 +43,7 @@ fn main() {
             //info!("Conectado al broker MQTT."); // 
             println!("Cliente: Conectado al broker MQTT.");
 
-            // Cliente usa subscribe // [] Consulta
+            /*// Cliente usa subscribe // [] Consulta
             let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic1"), 1)]);
             match res_sub {
                 Ok(_) => {println!("Cliente: Hecho un subscribe exitosamente");},
@@ -58,7 +60,35 @@ fn main() {
                     error!("Cliente: Error al hacer el publish {:?}", e);
                     println!("------------------------------------");
                 }
+            }*/
+
+            //let mqtt_client_para_hijo = mqtt_client.clone(); // [] ?? ver
+            let h = thread::spawn(move ||{
+                // Cliente usa publish
+                let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
+                match res {
+                    Ok(_) => {
+                        println!("Cliente: Hecho un publish exitosamente");
+                    },
+                    Err(e) => {
+                        error!("Cliente: Error al hacer el publish {:?}", e);
+                        println!("------------------------------------");
+                    }
+                }
+            });
+
+            /*// Cliente usa subscribe // [] Consulta
+            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic1"), 1)]);
+            match res_sub {
+                Ok(_) => {println!("Cliente: Hecho un subscribe exitosamente");},
+                Err(e) => {println!("Cliente: Error al hacer un subscribe: {:?}", e);},
+            }*/
+
+
+            if h.join().is_err() {
+                println!("Error al esperar a hijo.");
             }
+
         }
         Err(e) => error!("Cliente: Error al conectar al broker MQTT: {:?}", e),
     }

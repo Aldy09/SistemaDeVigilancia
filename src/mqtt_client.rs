@@ -7,6 +7,7 @@ use crate::suback_message::SubAckMessage;
 use crate::subscribe_message::SubscribeMessage;
 use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::{Arc, Mutex};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 
 #[allow(dead_code)]
@@ -15,7 +16,7 @@ use std::net::{SocketAddr, TcpStream};
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
 pub struct MQTTClient {
     //stream: Option<TcpStream>,
-    stream: TcpStream,
+    stream: Arc<Mutex<TcpStream>>,
 }
 
 impl MQTTClient {
@@ -34,24 +35,29 @@ impl MQTTClient {
     ) -> Result<Self, Error> {
         //io::Result<()> {
         // Intenta conectar al servidor MQTT
-        let mut stream = TcpStream::connect(addr)
+        let stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
+        let mqtt = MQTTClient { stream: Arc::new(Mutex::new(stream)) };
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
-        stream
-            .write_all(&msg_bytes)
+        {
+            let mut s = mqtt.stream.lock().unwrap();
+            s.write_all(&msg_bytes)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+        }
 
         // Intenta leer la respuesta del servidor (CONNACK)
         let mut connack_response = [0; 4];
-        stream
-            .read_exact(&mut connack_response)
+        {
+            let mut s = mqtt.stream.lock().unwrap();
+            s.read_exact(&mut connack_response)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+        }
 
         println!("Respuesta del servidor: \n   {:?}", &connack_response);
 
-        Ok(MQTTClient { stream })
+        Ok(mqtt)
     }
 
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
@@ -75,13 +81,18 @@ impl MQTTClient {
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
         let bytes_msg = pub_msg.to_bytes();
-        //if let Some(mut s) = self.stream {
-        //s.write_all(&bytes_msg)?;
-        //println!("   Mensaje publish en bytes a enviar: {:?}", bytes_msg);
-        self.stream.write_all(&bytes_msg)?;
+        // Lo envío
+        {
+            let mut s = self.stream.lock().unwrap();
+            s.write_all(&bytes_msg)?;
+        }
 
+        // Leo la respuesta
         let mut bytes_rta_leida = [0; 5];
-        let _cant_leida = self.stream.read(&mut bytes_rta_leida)?;
+        {
+            let mut s = self.stream.lock().unwrap();
+            let _cant_leida = s.read(&mut bytes_rta_leida)?;
+        }
         //println!("-----------------");
 
         let puback_msg = PubAckMessage::msg_from_bytes(bytes_rta_leida.to_vec())?; // []
@@ -101,11 +112,17 @@ impl MQTTClient {
         let subs_bytes = subscribe_msg.to_bytes();
         println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
         // Lo envío
-        self.stream.write_all(&subs_bytes)?;
+        {
+            let mut s = self.stream.lock().unwrap();
+            s.write_all(&subs_bytes)?;
+        }
 
         // Leo la respuesta
         let mut bytes_rta_leida = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
-        let _cant_leida = self.stream.read(&mut bytes_rta_leida)?;
+        {
+            let mut s = self.stream.lock().unwrap();
+            let _cant_leida = s.read(&mut bytes_rta_leida)?;
+        }
         //println!("-----------------");
 
         let ack = SubAckMessage::from_bytes(bytes_rta_leida.to_vec())?; // []
