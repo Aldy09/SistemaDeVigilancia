@@ -1,3 +1,5 @@
+use crate::{unsubscribe_fixed_header::FixedHeader, unsubscribe_payload::Payload, unsubscribe_variable_header::VariableHeader};
+
 // UNSUBSCRIBE MESSAGE
 #[derive(Debug)]
 pub struct UnsubscribeMessage {
@@ -6,22 +8,6 @@ pub struct UnsubscribeMessage {
     payload: Payload,
 }
 
-#[derive(Debug)]
-pub struct FixedHeader {
-    message_type: u8,
-    reserved: u8,
-    remaining_length: usize,
-}
-
-#[derive(Debug)]
-pub struct VariableHeader {
-    packet_identifier: u16,
-}
-
-#[derive(Debug)]
-pub struct Payload {
-    topics: Vec<String>,
-}
 
 impl UnsubscribeMessage {
     
