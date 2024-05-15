@@ -1,3 +1,5 @@
+use std::io::Error;
+
 use crate::{
     connack_fixed_header::FixedHeader, connack_session_present::SessionPresent,
     connack_variable_header::VariableHeader, connect_return_code::ConnectReturnCode,
@@ -51,7 +53,7 @@ impl ConnackPacket {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
         let fixed_header = FixedHeader {
             message_type: bytes[0],
             remaining_length: bytes[1],
@@ -62,10 +64,12 @@ impl ConnackPacket {
             connect_return_code: bytes[3],
         };
 
-        ConnackPacket {
+        // un if message_type != de (2<<4) {dar error}
+
+        Ok(ConnackPacket {
             fixed_header,
             variable_header,
-        }
+        })
     }
 }
 
@@ -103,7 +107,7 @@ mod tests {
             ConnectReturnCode::ConnectionAccepted,
         );
         let bytes = connack_packet.to_bytes();
-        let connack_packet = ConnackPacket::from_bytes(&bytes);
+        let connack_packet = ConnackPacket::from_bytes(&bytes).unwrap();
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);

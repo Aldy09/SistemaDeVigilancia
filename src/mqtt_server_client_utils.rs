@@ -39,6 +39,7 @@ pub fn old_continuar_leyendo_bytes_del_msg(
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
     let msg_rem_len: usize = fixed_header.get_rem_len();
     let mut rem_buf = vec![0; msg_rem_len];
+    println!("UTILS AUX: REM LEN LEÍDA VALE: {}", msg_rem_len); // debug
     let _res = stream.read(&mut rem_buf)?;
 
     // Ahora junto las dos partes leídas, para obt mi msg original
