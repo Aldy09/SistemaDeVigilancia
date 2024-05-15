@@ -9,6 +9,7 @@ use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use crate::mqtt_server_client_utils::{leer_fixed_header_de_stream_y_obt_tipo, continuar_leyendo_bytes_del_msg};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 
 #[allow(dead_code)]
@@ -33,10 +34,10 @@ impl MQTTClient {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
         
         let stream = Arc::new(Mutex::new(stream_tcp));
-        let stream_para_hijo = stream.clone();
+        let mut stream_para_hijo = stream.clone();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
         let h = thread::spawn(move || {
-            leer_desde_server(stream_para_hijo) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
+            leer_desde_server(&mut stream_para_hijo) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
         });
         let mqtt = MQTTClient {
             stream,
@@ -180,7 +181,26 @@ impl MQTTClient {
     }
 }
 
-fn leer_desde_server(stream: Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+/// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
+fn leer_desde_server(stream: &mut Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+    // Este bloque de código de acá abajo es similar a lo que hay en server,
+    // pero la función que lee Un mensaje loo procesa de manera diferente.
+    let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
+    let ceros: &[u8; 2] = &[0; 2];
+    let mut vacio = &fixed_header_buf == ceros;
+    while !vacio {
+        println!("Mqtt leyendo un mensaje");
+        leer_un_mensaje(&mut *stream, fixed_header_buf)?; // esta función lee UN mensaje.
+        // Leo para la siguiente iteración
+        fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
+        vacio = &fixed_header_buf == ceros;
+    }
+    Ok(())
+}
+
+/// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
+fn leer_un_mensaje(_stream: &Arc<Mutex<TcpStream>>, _fixed_header_buf: [u8; 2]) -> Result<(), Error> {
+    // ...
     Ok(())
 }
 
