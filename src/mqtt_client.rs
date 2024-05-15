@@ -30,10 +30,19 @@ impl MQTTClient {
     */
 
     pub fn connect_to_broker(
-        addr: &SocketAddr,
-        connect_msg: &mut ConnectMessage,
+        addr: &SocketAddr
     ) -> Result<Self, Error> {
         //io::Result<()> {
+        // Crea el mensaje tipo Connect y lo pasa a bytes
+        let mut connect_msg = ConnectMessage::new(
+            "rust-client",
+            None, // will_topic
+            None, // will_message
+            Some("sistema-monitoreo"),
+            Some("rustx123"),
+        );
+        let msg_bytes = connect_msg.to_bytes();
+
         // Intenta conectar al servidor MQTT
         let stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
@@ -42,7 +51,6 @@ impl MQTTClient {
             stream: Arc::new(Mutex::new(stream)),
         };
         // Intenta enviar el mensaje CONNECT al servidor MQTT
-        let msg_bytes = connect_msg.to_bytes();
         {
             let mut s = mqtt.stream.lock().unwrap();
             s.write(&msg_bytes)
