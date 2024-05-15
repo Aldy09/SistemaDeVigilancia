@@ -8,6 +8,7 @@ use crate::subscribe_message::SubscribeMessage;
 use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 
 #[allow(dead_code)]
@@ -15,24 +16,34 @@ use std::sync::{Arc, Mutex};
 /// Posee el `stream` que usará para comunicarse con el `MQTTServer`.
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
 pub struct MQTTClient {
-    //stream: Option<TcpStream>,
     stream: Arc<Mutex<TcpStream>>,
+    //handle_hijo: Vec<JoinHandle<Result<(), Error>>>,
+    handle_hijo: Option<JoinHandle<Result<(), Error>>>,
+    //handle_hijo: JoinHandle<Result<(), Error>>,
 }
 
 impl MQTTClient {
-    /*
-    pub fn new(addr: &SocketAddr) -> io::Result<Self> {
-        let stream = TcpStream::connect(addr)?;
-        Ok(MQTTClient {
-            stream,
-        })
-    }
-    */
-
     pub fn connect_to_broker(
         addr: &SocketAddr
     ) -> Result<Self, Error> {
         //io::Result<()> {
+        // Inicializaciones
+        // Intenta conectar al servidor MQTT
+        let stream_tcp = TcpStream::connect(addr)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+        
+        let stream = Arc::new(Mutex::new(stream_tcp));
+        let stream_para_hijo = stream.clone();
+        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
+        let h = thread::spawn(move || {
+            leer_desde_server(stream_para_hijo) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
+        });
+        let mqtt = MQTTClient {
+            stream,
+            handle_hijo: Some(h),
+        };     
+        // Fin inicializaciones.
+
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
             "rust-client",
@@ -43,13 +54,6 @@ impl MQTTClient {
         );
         let msg_bytes = connect_msg.to_bytes();
 
-        // Intenta conectar al servidor MQTT
-        let stream = TcpStream::connect(addr)
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
-
-        let mqtt = MQTTClient {
-            stream: Arc::new(Mutex::new(stream)),
-        };
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         {
             let mut s = mqtt.stream.lock().unwrap();
@@ -149,19 +153,37 @@ impl MQTTClient {
         Ok(())
     }
 
-    /// Función que devuelve un struct MQTTClient que contiene una referencia adicional
+    // [] Creo que esta función ya no es necesaria, ver
+    /*/// Función que devuelve un struct MQTTClient que contiene una referencia adicional
     /// del `Arc<Mutex<TcpStream>>`.
     pub fn mqtt_clone(&self) -> Self {
         MQTTClient {
             stream: self.stream.clone(),
+            //handle_hijo: handle_hijo.clone(),
         }
-    }
+    }*/
 
     /// Da una referencia adicional al `Arc<Mutex<TcpStream>>`.
     pub fn get_stream(&self) -> Arc<Mutex<TcpStream>> {
         self.stream.clone()
     }
+
+    /// Función que debe ser llamada por cada cliente que utilice la librería,
+    /// como último paso, al finalizar.
+    pub fn finalizar(&mut self) {
+        if let Some(h) = self.handle_hijo.take() {
+            let res = h.join();
+            if res.is_err() {
+                println!("Mqtt cliente: error al esperar hijo de lectura.");
+            }
+        }
+    }
 }
+
+fn leer_desde_server(stream: Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+    Ok(())
+}
+
 
 /*
 #[cfg(test)]
