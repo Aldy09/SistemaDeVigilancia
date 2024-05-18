@@ -1,9 +1,13 @@
-use rustx::camera::Camera;
+use rustx::camera::{self, Camera};
+use rustx::connect_message::ConnectMessage;
+use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::sync::Mutex;
 use std::{fs, thread};
+use std::sync::Arc;
 
-fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
+fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     let mut cameras = HashMap::new();
     let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
 
@@ -19,21 +23,87 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
 
             //println!("[DEBUG]")
             let camera = Camera::new(id, coord_x, coord_y, range, vec);
-            cameras.insert(id, camera);
+            let shareable_camera = Arc::new(Mutex::new(camera));
+            cameras.insert(id, shareable_camera);
+
         }
     }
 
     cameras
 }
 
+fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
+    let ip = "127.0.0.1".to_string();
+    let port = 9090;
+    let broker_addr = format!("{}:{}", ip, port)
+        .parse()
+        .expect("Dirección no válida");
+    let mut connect_msg = ConnectMessage::new(
+        0x01 << 4, // Me fijé y el fixed header no estaba shifteado, el message type tiene que quedar en los 4 bits más signifs del primer byte (toDo: arreglarlo para el futuro)
+        // toDo: obs: además, al propio new podría agregarlo, no? para no tener yo que acordarme qué tipo es cada mensaje.
+        "rust-client",
+        None, // will_topic
+        None, // will_message
+        Some("sistema-monitoreo"),
+        Some("rustx123"),
+    );
+
+    // Cliente usa funciones connect, publish, y subscribe de la lib.
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
+    match mqtt_client_res {
+        Ok(mut mqtt_client) => {
+            //info!("Conectado al broker MQTT."); //
+            println!("Sistema-Camara: Conectado al broker MQTT.");
+
+            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
+            let camera_para_hilo = Arc::clone(&camera);
+            
+            let h_pub = thread::spawn(move || {
+                // Cliente usa publish
+                
+                let camera_2 = camera.lock().unwrap(); 
+            let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera_2.to_bytes());
+            match res {
+                Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
+                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+            };
+            
+
+            });
+
+            // Esperar a los hijos
+            if h_pub.join().is_err() {
+                println!("Error al esperar a hijo publisher.");
+            }
+        }
+        Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
+    }
+}
+
+
+fn publish_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
+    loop {
+        for camera in cameras.values_mut() {
+            connect_and_publish(camera); 
+        }
+        thread::sleep(std::time::Duration::from_secs(5));
+    }
+}
+
+
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    let mut cameras: HashMap<u8, Camera> = read_cameras_from_file("cameras.properties");
-
+    let mut cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("cameras.properties");
+    let mut cameras_cloned = cameras.clone();
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut cameras);
+    });
+
+    // Publicar cámaras
+    let handle_2 = thread::spawn(move || {
+        publish_cameras(&mut cameras_cloned);
     });
 
     // Manejar incidentes
@@ -42,9 +112,12 @@ fn main() {
     if handle.join().is_err() {
         println!("Error al esperar al hijo.");
     }
+    if handle_2.join().is_err() {
+        println!("Error al esperar al hijo.");
+    }
 }
 
-fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
+fn abm_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
     loop {
         println!("1. Agregar cámara");
         println!("2. Mostrar cámaras");
@@ -101,13 +174,17 @@ fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
                 let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
 
                 let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
-                cameras.insert(id, new_camera);
+                let shareable_camera = Arc::new(Mutex::new(new_camera));
+                cameras.insert(id, shareable_camera);
                 println!("Cámara agregada con éxito.\n");
             }
             "2" => {
                 println!("Cámaras registradas:\n");
                 for camera in (*cameras).values() {
+                {
+                    let camera = camera.lock().unwrap();
                     camera.display();
+                }
                 }
             }
             "3" => {

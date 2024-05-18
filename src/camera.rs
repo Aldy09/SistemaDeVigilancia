@@ -7,6 +7,7 @@ pub struct Camera {
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
+    sent: bool,
 }
 
 impl Camera {
@@ -18,6 +19,7 @@ impl Camera {
             state: CameraState::SavingMode,
             range,
             border_cameras,
+            sent: false,
         }
     }
 
@@ -53,6 +55,7 @@ impl Camera {
             state,
             range,
             border_cameras,
+            sent: false,
         }
     }
 
