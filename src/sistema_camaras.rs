@@ -1,9 +1,9 @@
-use rustx::camera_state::CameraState;
+use rustx::camera::Camera;
 use std::collections::HashMap;
-use std::fs;
 use std::io::{self, Write};
+use std::{fs, thread};
 
-fn read_cameras_from_file(filename: &str) -> HashMap<u8, (i32, i32, CameraState, u8, u8)> {
+fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
     let mut cameras = HashMap::new();
     let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
 
@@ -13,12 +13,13 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, (i32, i32, CameraState,
             let id: u8 = parts[0].trim().parse().expect("Id no válido");
             let coord_x = parts[1].trim().parse().expect("Coordenada X no válida");
             let coord_y = parts[2].trim().parse().expect("Coordenada Y no válida");
-            let state = CameraState::SavingMode;
             let range = parts[3].trim().parse().expect("Rango no válido");
-            let border_cam = parts[4].trim().parse().expect("Id no válido");
+            let border_cam: u8 = parts[4].trim().parse().expect("Id no válido");
+            let vec = vec![border_cam];
 
             //println!("[DEBUG]")
-            cameras.insert(id, (coord_x, coord_y, state, range, border_cam));
+            let camera = Camera::new(id, coord_x, coord_y, range, vec);
+            cameras.insert(id, camera);
         }
     }
 
@@ -28,9 +29,22 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, (i32, i32, CameraState,
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    let mut cameras: HashMap<u8, (i32, i32, CameraState, u8, u8)> =
-        read_cameras_from_file("cameras.properties");
+    let mut cameras: HashMap<u8, Camera> = read_cameras_from_file("cameras.properties");
 
+    // Menú cámaras
+    let handle = thread::spawn(move || {
+        abm_cameras(&mut cameras);
+    });
+
+    // Manejar incidentes
+
+    // Esperar hijo
+    if handle.join().is_err() {
+        println!("Error al esperar al hijo.");
+    }
+}
+
+fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
     loop {
         println!("1. Agregar cámara");
         println!("2. Mostrar cámaras");
@@ -85,27 +99,14 @@ fn main() {
                     .expect("Error al leer la entrada");
                 let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
 
-                cameras.insert(
-                    id,
-                    (
-                        coord_x,
-                        coord_y,
-                        CameraState::SavingMode,
-                        range,
-                        border_camera,
-                    ),
-                );
+                let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
+                cameras.insert(id, new_camera);
                 println!("Cámara agregada con éxito.\n");
             }
             "2" => {
                 println!("Cámaras registradas:\n");
-                for (id, (coord_x, coord_y, state, range, border_cam)) in &cameras {
-                    println!("ID: {}", id);
-                    println!("Coordenada X: {}", coord_x);
-                    println!("Coordenada Y: {}", coord_y);
-                    println!("Estado: {:?}", state);
-                    println!("Rango de alcance: {}", range);
-                    println!("Cámaras lindantes: {}\n", border_cam);
+                for (_id, camera) in &*cameras {
+                    camera.display();
                 }
             }
             "3" => {
