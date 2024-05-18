@@ -105,7 +105,7 @@ fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
             }
             "2" => {
                 println!("Cámaras registradas:\n");
-                for (_id, camera) in &*cameras {
+                for camera in (*cameras).values() {
                     camera.display();
                 }
             }
