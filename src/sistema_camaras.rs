@@ -48,7 +48,8 @@ fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
     loop {
         println!("1. Agregar cámara");
         println!("2. Mostrar cámaras");
-        println!("3. Salir");
+        println!("3. Eliminar cámara");
+        println!("4. Salir");
         print!("Ingrese una opción: ");
         io::stdout().flush().unwrap();
 
@@ -110,6 +111,20 @@ fn abm_cameras(cameras: &mut HashMap<u8, Camera>) {
                 }
             }
             "3" => {
+                print!("Ingrese el ID de la cámara a eliminar: ");
+                io::stdout().flush().unwrap();
+                let mut read_id = String::new();
+                io::stdin()
+                    .read_line(&mut read_id)
+                    .expect("Error al leer la entrada");
+                let id: u8 = read_id.trim().parse().expect("Id no válido");
+
+                match cameras.remove(&id) {
+                    Some(_) => println!("Cámara eliminada con éxito.\n"),
+                    None => println!("No se encontró la cámara con el ID especificado.\n"),
+                }
+            }
+            "4" => {
                 println!("Saliendo del programa.");
                 break;
             }
