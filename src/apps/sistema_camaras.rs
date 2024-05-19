@@ -96,7 +96,6 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 }
 
 
-
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
@@ -117,7 +116,7 @@ fn main() {
     // Atender incidentes
     manage_incidents(&mut cameras_cloned_2);
 
-    // Esperar hijo
+    // Esperar hijos
     if handle.join().is_err() {
         println!("Error al esperar al hijo.");
     }
@@ -216,11 +215,12 @@ fn procesar_incidente_por_primera_vez(cameras_cl: &mut ShCamerasType, inc: Incid
 
 fn abm_cameras(cameras: &mut ShCamerasType) {
     loop {
-        println!("1. Agregar cámara");
-        println!("2. Mostrar cámaras");
-        println!("3. Eliminar cámara");
-        println!("4. Salir");
-        print!("Ingrese una opción: ");
+        println!("      MENÚ
+        1. Agregar cámara
+        2. Mostrar cámaras
+        3. Eliminar cámara
+        4. Salir
+        Ingrese una opción:");
         let _ = io::stdout().flush();
 
         let mut input = String::new();
