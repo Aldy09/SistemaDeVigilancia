@@ -102,6 +102,7 @@ fn main() {
     let cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("./cameras.properties");
     let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
+    let mut cameras_cloned_2 = shareable_cameras.clone();
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut shareable_cameras);
@@ -112,9 +113,8 @@ fn main() {
         connect_and_publish(&mut cameras_cloned);
     });
 
-    // Manejar incidentes
-    // probando, un incidente hardcodeado
-    let _inc = Incident::new(1, 1, 1);
+    // Atender incidentes
+    manage_incidents(&mut cameras_cloned_2);
 
     // Esperar hijo
     if handle.join().is_err() {
@@ -123,6 +123,56 @@ fn main() {
     if handle_2.join().is_err() {
         println!("Error al esperar al hijo.");
     }
+}
+
+fn manage_incidents(cameras_cloned_2: &mut ShCamerasType) {
+    // probando, unos incidentes hardcodeados
+    let mut read_incs : Vec<Incident> = vec![]; // (a mí no me digan, yo querpia programar en castellano, xd)
+    let inc = Incident::new(1, 1, 1);
+    let inc2 = Incident::new(2, 5, 5);
+    let inc3 = Incident::new(3, 15, 15);
+    read_incs.push(inc);
+    read_incs.push(inc2);
+    read_incs.push(inc3);
+
+    //
+    //let incs_being_managed: HashMap<u8, u8> = HashMap::new(); // esto puede ser un atributo..., o no.
+    let mut incs_being_managed: Vec<u8> = vec![]; // esto puede ser un atributo..., o no.
+    for inc in read_incs {
+        if !incs_being_managed.contains(&inc.id){
+            // Recibo este incidente por primera vez
+            // Para cada cámara veo, si inc.pos está dentro de alcance de cam o sus lindantes,
+            // cambio estado de cam a activo
+            let len = incs_being_managed.len();
+            incs_being_managed.insert(len, inc.id);
+
+            // Recorremos cada una de las cámaras, para ver si el inc está en su rango
+            match cameras_cloned_2.lock() {
+                Ok(cams) => {
+                    for (_, camera) in cams.iter(){
+                        if let Ok(mut cam) = camera.lock() {
+                            if cam.will_register(inc.pos()) {
+                                println!("Debug: registrará");
+                            }                      
+                        }
+
+                    }
+
+                },
+                Err(e) => println!("Error lockeando cameras al atender incidentes {:?}", e),
+            }
+
+
+            
+        } else {
+            // Es la segunda vez que me llega el incidente con este id (condición "hasta que" del enunciado)
+            // Vuelvo el estado de la/s cámara/s que lo atendían, a ahorro de energía
+        }
+    }
+
+
+
+    
 }
 
 fn abm_cameras(cameras: &mut ShCamerasType) {

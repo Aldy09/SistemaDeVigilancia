@@ -72,4 +72,14 @@ impl Camera {
         println!("Rango de alcance: {}", self.range);
         println!("Cámaras lindantes: {:?}\n", self.border_cameras);
     }
+
+    /// Devuelve si el incidente de coordenadas `(inc_coord_x, inc_coord_y)`
+    /// está en el rango de la cámara `Self`.
+    pub fn will_register(&self, (inc_coord_x, inc_coord_y): (u8, u8)) -> bool {
+        let is_in_x_range = self.coord_x + self.range >= inc_coord_x; // El range es un radio
+        let is_in_y_range = self.coord_y + self.range >= inc_coord_y;
+        let inc_is_within_cam_range = is_in_x_range & is_in_y_range;
+
+        inc_is_within_cam_range
+    }
 }
