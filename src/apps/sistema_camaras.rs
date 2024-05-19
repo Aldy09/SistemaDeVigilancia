@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::{fs, thread};
 type ShareableCamType = Arc<Mutex<Camera>>;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
+use rustx::apps::incident::Incident;
 
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     let mut cameras = HashMap::new();
@@ -112,6 +113,8 @@ fn main() {
     });
 
     // Manejar incidentes
+    // probando, un incidente hardcodeado
+    let _inc = Incident::new(1, 1, 1);
 
     // Esperar hijo
     if handle.join().is_err() {
