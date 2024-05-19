@@ -98,7 +98,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    let cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("cameras.properties");
+    let cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("./cameras.properties");
     let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
     // Menú cámaras
