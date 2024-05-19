@@ -26,12 +26,12 @@ path = "src/message_broker_server.rs"
 
 [[bin]]
 name = "sistema_monitoreo"
-path = "src/sistema_monitoreo.rs"
+path = "src/apps/sistema_monitoreo.rs"
 
 [[bin]]
 name = "sistema_camaras"
-path = "src/sistema_camaras.rs"
+path = "src/apps/sistema_camaras.rs"
 
 [[bin]]
 name = "generar_camaras"
-path = "src/generar_camaras.rs"
+path = "src/apps/generar_camaras.rs"

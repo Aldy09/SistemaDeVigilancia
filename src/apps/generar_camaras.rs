@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{self, Write};
 
 fn main() -> io::Result<()> {
-    let mut file = File::create("cameras.properties")?;
+    let mut file = File::create("./cameras.properties")?;
 
     writeln!(file, "# Lista de cámaras")?;
     writeln!(
