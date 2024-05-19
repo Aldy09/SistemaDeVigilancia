@@ -1,4 +1,4 @@
-use rustx::camera::Camera;
+use rustx::camera::{Camera, self};
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     cameras
 }
 
-fn connect_and_publish(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
+fn connect_and_publish(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
     let ip = "127.0.0.1".to_string();
     let port = 9090;
     let broker_addr = format!("{}:{}", ip, port)
@@ -55,23 +55,30 @@ fn connect_and_publish(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
             println!("Sistema-Camara: Conectado al broker MQTT.");
 
             let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
-            let camera_para_hilo = Arc::clone(cameras);
-            
-
+            let mut cameras_para_hilo = Arc::clone(cameras); 
 
             let h_pub = thread::spawn(move || {
-                let camera = camera_para_hilo.lock().unwrap();
 
+                let cams = cameras_para_hilo.lock().unwrap(); // <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
                 loop {
-                    for camera in cameras.values_mut() {
-                        if !(camera.lock().unwrap().sent) {
-                            let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera.to_bytes());
-                            match res {
-                                Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
-                                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-                            }
-                            camera.lock().unwrap().sent = true;
-                        }
+                    for (_, camera) in cams.iter() {
+                    //for (_, camera) in cams {
+                    //for (_, camera) in cameras_para_hilo.as_ref() {
+                        match camera.lock() { // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
+                            Ok(mut cam) => {
+                                if !(cam.sent) {
+                                    let res = mqtt_client_para_hijo.mqtt_publish("Cam", &cam.to_bytes());
+                                    match res {
+                                        Ok(_) => {
+                                            println!("Sistema-Camara: Hecho un publish exitosamente");
+                                            cam.sent=true;
+                                    },
+                                        Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                                };
+                            }},
+                            Err(_) => todo!(),
+                        };
+                        
                     }
                 }
 
@@ -91,11 +98,12 @@ fn connect_and_publish(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    let mut cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("cameras.properties");
-    let mut cameras_cloned = cameras.clone();
+    let cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("cameras.properties");
+    let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
+    let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
     // Menú cámaras
     let handle = thread::spawn(move || {
-        abm_cameras(&mut cameras);
+        abm_cameras(&mut shareable_cameras);
     });
 
     // Publicar cámaras
@@ -114,7 +122,7 @@ fn main() {
     }
 }
 
-fn abm_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
+fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
     loop {
         println!("1. Agregar cámara");
         println!("2. Mostrar cámaras");
@@ -172,21 +180,33 @@ fn abm_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
 
                 let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
                 let shareable_camera = Arc::new(Mutex::new(new_camera));
-                cameras.insert(id, shareable_camera);
-                println!("Cámara agregada con éxito.\n");
+                match cameras.lock(){
+                    Ok(mut cams) => {
+                        cams.insert(id, shareable_camera);
+                        println!("Cámara agregada con éxito.\n");
+                    },
+                    Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
+                };
             }
             "2" => {
+                // Mostramos todas las cámaras
                 println!("Cámaras registradas:\n");
-                for camera in (*cameras).values() {
-                    {
-                        if !(camera.lock().unwrap().deleted) {
-                            let camera = camera.lock().unwrap();
-                            camera.display();
+                match cameras.lock() {
+                    Ok(cams) => {
+                        for camera in (*cams).values() {
+                            {
+                                if !(camera.lock().unwrap().deleted) {
+                                    let camera = camera.lock().unwrap();
+                                    camera.display();
+                                }
+                            }
                         }
-                    }
+                    },
+                    Err(_) => todo!(),
                 }
             }
             "3" => {
+                // Leemos el id de la cámara a eliminar
                 print!("Ingrese el ID de la cámara a eliminar: ");
                 io::stdout().flush().unwrap();
                 let mut read_id = String::new();
@@ -195,10 +215,16 @@ fn abm_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
                     .expect("Error al leer la entrada");
                 let id: u8 = read_id.trim().parse().expect("Id no válido");
 
-                match cameras.remove(&id) {
-                    Some(_) => println!("Cámara eliminada con éxito.\n"),
-                    None => println!("No se encontró la cámara con el ID especificado.\n"),
-                }
+                // Eliminamos la cámara
+                match cameras.lock(){
+                    Ok(mut cams) => {
+                        match cams.remove(&id) { // [] obs, ToDo: habíamos dicho que era un borrado lógico
+                            Some(_) => println!("Cámara eliminada con éxito.\n"),
+                            None => println!("No se encontró la cámara con el ID especificado.\n"),
+                        }
+                    },
+                    Err(e) => println!("Error tomando lock en baja abm, {:?}.\n", e),
+                };
             }
             "4" => {
                 println!("Saliendo del programa.");
