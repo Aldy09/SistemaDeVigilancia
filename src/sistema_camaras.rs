@@ -59,7 +59,7 @@ fn connect_and_publish(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>
 
             let h_pub = thread::spawn(move || {
 
-                let cams = cameras_para_hilo.lock().unwrap(); // <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
+                let cams = cameras_para_hilo.lock().unwrap(); // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
                 loop {
                     for (_, camera) in cams.iter() {
                     //for (_, camera) in cams {
@@ -76,7 +76,7 @@ fn connect_and_publish(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>
                                         Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
                                 };
                             }},
-                            Err(_) => todo!(),
+                            Err(e) => println!("Sistema-Camara: Error al tomar lock de una cámara: {:?}", e),
                         };
                         
                     }
@@ -195,14 +195,19 @@ fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
                     Ok(cams) => {
                         for camera in (*cams).values() {
                             {
-                                if !(camera.lock().unwrap().deleted) {
-                                    let camera = camera.lock().unwrap();
-                                    camera.display();
+                                match camera.lock() {
+                                    Ok(cam) => {
+                                        // Si no está marcada borrada, mostrarla
+                                        if !cam.deleted {
+                                            cam.display();
+                                        };
+                                    },
+                                    Err(_) => println!("Error al tomar lock de la cámara."),
                                 }
                             }
                         }
                     },
-                    Err(_) => todo!(),
+                    Err(_) => println!("Error al tomar lock de cámaras."),
                 }
             }
             "3" => {
@@ -215,15 +220,22 @@ fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
                     .expect("Error al leer la entrada");
                 let id: u8 = read_id.trim().parse().expect("Id no válido");
 
-                // Eliminamos la cámara
+                // Eliminamos la cámara, es un borrado lógico para simplificar la comunicación
                 match cameras.lock(){
                     Ok(mut cams) => {
-                        match cams.remove(&id) { // [] obs, ToDo: habíamos dicho que era un borrado lógico
-                            Some(_) => println!("Cámara eliminada con éxito.\n"),
-                            None => println!("No se encontró la cámara con el ID especificado.\n"),
-                        }
+                        match cams[&id].lock(){
+                            Ok(mut cam_a_eliminar) => {
+                                
+                                // Si ya estaba deleted, no hago nada, tampoco es error; else, la marco deleted
+                                if !cam_a_eliminar.deleted {
+                                    cam_a_eliminar.deleted = true;
+                                };
+                                println!("Cámara eliminada con éxito.\n");
+                            },
+                            Err(_) => println!("Error al tomar lock de cámara a eliminar."),
+                        };           
                     },
-                    Err(e) => println!("Error tomando lock en baja abm, {:?}.\n", e),
+                    Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
                 };
             }
             "4" => {
