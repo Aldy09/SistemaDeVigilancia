@@ -1,5 +1,6 @@
 use crate::apps::camera_state::CameraState;
 
+#[derive(Debug)]
 pub struct Camera {
     id: u8,
     coord_x: u8,
@@ -9,6 +10,7 @@ pub struct Camera {
     border_cameras: Vec<u8>,
     pub sent: bool,
     pub deleted : bool,
+    incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
 }
 
 impl Camera {
@@ -22,6 +24,7 @@ impl Camera {
             border_cameras,
             sent: false,
             deleted: false,
+            incs_being_managed: vec![],
         }
     }
 
@@ -61,6 +64,7 @@ impl Camera {
             border_cameras,
             sent: false,
             deleted,
+            incs_being_managed: vec![],
         }
     }
 
@@ -81,5 +85,32 @@ impl Camera {
         let inc_is_within_cam_range = is_in_x_range & is_in_y_range;
 
         inc_is_within_cam_range
+    }
+
+    /// Modifica su estado al recibido por parámetro, y se marca un atributo
+    /// para luego ser detectada como modificada y enviada.
+    pub fn set_state_to(&mut self, new_state: CameraState) {
+        self.state = new_state;
+        self.sent = false;
+
+    }
+
+    /// Devuelve un vector con los ids de sus cámaras lindantes.
+    pub fn get_bordering_cams(&self) -> Vec<u8> {
+        self.border_cameras.to_vec()
+    }
+
+    pub fn append_to_incs_being_managed(&mut self, inc_id: u8){
+        self.incs_being_managed.push(inc_id);
+    }
+    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8){
+        self.incs_being_managed.remove(inc_id as usize);
+    }
+    pub fn empty_incs_list(&self) -> bool {
+        self.incs_being_managed.len() == 0
+    }
+    /// Función getter utilizada con propósitos de debugging.
+    pub fn get_id_e_incs_for_debug_display(&self) -> (u8, Vec<u8>) {
+        (self.id, self.incs_being_managed.to_vec())
     }
 }

@@ -1,4 +1,5 @@
 use rustx::apps::camera::Camera;
+use rustx::apps::camera_state::CameraState;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -125,54 +126,87 @@ fn main() {
     }
 }
 
-fn manage_incidents(cameras_cloned_2: &mut ShCamerasType) {
+fn manage_incidents(cameras_cl: &mut ShCamerasType) {
     // probando, unos incidentes hardcodeados
     let mut read_incs : Vec<Incident> = vec![]; // (a mí no me digan, yo querpia programar en castellano, xd)
-    let inc = Incident::new(1, 1, 1);
+    let inc1 = Incident::new(1, 1, 1);
     let inc2 = Incident::new(2, 5, 5);
     let inc3 = Incident::new(3, 15, 15);
-    read_incs.push(inc);
+    let mut inc1_resuelto = Incident::new(1, 1, 1);
+    inc1_resuelto.set_resolved();
+    read_incs.push(inc1);
     read_incs.push(inc2);
     read_incs.push(inc3);
+    read_incs.push(inc1_resuelto);
 
     //
-    //let incs_being_managed: HashMap<u8, u8> = HashMap::new(); // esto puede ser un atributo..., o no.
-    let mut incs_being_managed: Vec<u8> = vec![]; // esto puede ser un atributo..., o no.
+    let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new(); // esto puede ser un atributo..., o no.
+    //let mut incs_being_managed: Vec<u8> = vec![]; // esto puede ser un atributo..., o no.
     for inc in read_incs {
-        if !incs_being_managed.contains(&inc.id){
+        //if !incs_being_managed.contains(&inc.id){
+        if !incs_being_managed.contains_key(&inc.id){
+            println!("Proceso el incidente {} por primera vez", inc.id);
             // Recibo este incidente por primera vez
             // Para cada cámara veo, si inc.pos está dentro de alcance de cam o sus lindantes,
             // cambio estado de cam a activo
-            let len = incs_being_managed.len();
-            incs_being_managed.insert(len, inc.id);
+            //let len = incs_being_managed.len();
+            //incs_being_managed.insert(len, inc.id); // acá todavía no sé si...
 
             // Recorremos cada una de las cámaras, para ver si el inc está en su rango
-            match cameras_cloned_2.lock() {
+            match cameras_cl.lock() {
                 Ok(cams) => {
-                    for (_, camera) in cams.iter(){
+                    for (cam_id, camera) in cams.iter(){
+                        //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
                         if let Ok(mut cam) = camera.lock() {
                             if cam.will_register(inc.pos()) {
-                                println!("Debug: registrará");
-                            }                      
-                        }
+                                println!("Está en rango de cam: {}, cambiando su estado a activo.", cam_id); // [] ver lindantes
+                                cam.set_state_to(CameraState::Active);
+                                incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
+                                cam.append_to_incs_being_managed(inc.id);
+                                println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
 
+                                // aux: acá puedo quedarme con los ids de las lindantes
+                                // y afuera del if let procesar esto mismo pero para lindantes
+                                // Complejidad de eso #revisable (capaz podrían marcarse...) [] ver
+                            }
+                        };
                     }
-
                 },
                 Err(e) => println!("Error lockeando cameras al atender incidentes {:?}", e),
             }
 
-
-            
         } else {
-            // Es la segunda vez que me llega el incidente con este id (condición "hasta que" del enunciado)
-            // Vuelvo el estado de la/s cámara/s que lo atendían, a ahorro de energía
+            // Es no es la primera vez que me llega el incidente con este id (condición "hasta que" del enunciado)
+            // y su estado es resuelto: Vuelvo el estado de la/s cámara/s que lo atendían, a ahorro de energía
+            // para eso debo buscar qué cámara fue la que lo atendía
+            if inc.is_resolved() {
+                println!("Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.", inc.id);
+                if let Some(cams_managing_inc) = incs_being_managed.get(&inc.id){ // sé que existe, por el if de más arriba
+                    //let cam_central = &cams_managing_inc[0];
+
+                    // Cambio el estado de las cámaras que lo manejaban, otra vez a ahorro de energía
+                    // solamente si el incidente en cuestión era el único que manejaban (si tenía más incidentes en rango, sigue estando activa)
+                    for camera_id in cams_managing_inc {
+                        match cameras_cl.lock() {
+                            Ok(cams) => {
+                                if let Ok(mut cam) = cams[camera_id].lock() {
+                                    // Actualizo las cámaras en cuestión
+                                    cam.remove_from_incs_being_managed(inc.id);
+                                    if cam.empty_incs_list() {
+                                        cam.set_state_to(CameraState::SavingMode);
+                                    }
+                                    println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
+                                };
+                            },
+                            Err(_) => println!("Error al tomar lock de cámaras para volver estado a ahorro energía."),
+                        };
+                    }
+                }
+                // También elimino la entrada del hashmap que busca por incidente, ya no le doy seguimiento
+                incs_being_managed.remove(&inc.id);
+            }
         }
-    }
-
-
-
-    
+    }  
 }
 
 fn abm_cameras(cameras: &mut ShCamerasType) {
