@@ -1,4 +1,4 @@
-use rustx::camera::Camera;
+use rustx::apps::camera::Camera;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;

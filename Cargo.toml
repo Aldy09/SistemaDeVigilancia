@@ -30,7 +30,7 @@ path = "src/sistema_monitoreo.rs"
 
 [[bin]]
 name = "sistema_camaras"
-path = "src/sistema_camaras.rs"
+path = "src/apps/sistema_camaras.rs"
 
 [[bin]]
 name = "generar_camaras"

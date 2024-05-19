@@ -1,4 +1,4 @@
-use crate::camera_state::CameraState;
+use crate::apps::camera_state::CameraState;
 
 pub struct Camera {
     id: u8,
