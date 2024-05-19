@@ -1,4 +1,4 @@
-use rustx::camera::{Camera, self};
+use rustx::camera::Camera;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -6,6 +6,8 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::{fs, thread};
+type ShareableCamType = Arc<Mutex<Camera>>;
+type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     let mut cameras = HashMap::new();
@@ -21,7 +23,6 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
             let border_cam: u8 = parts[4].trim().parse().expect("Id no válido");
             let vec = vec![border_cam];
 
-            //println!("[DEBUG]")
             let camera = Camera::new(id, coord_x, coord_y, range, vec);
             let shareable_camera = Arc::new(Mutex::new(camera));
             cameras.insert(id, shareable_camera);
@@ -31,7 +32,7 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     cameras
 }
 
-fn connect_and_publish(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
+fn connect_and_publish(cameras: &mut ShCamerasType) {
     let ip = "127.0.0.1".to_string();
     let port = 9090;
     let broker_addr = format!("{}:{}", ip, port)
@@ -55,15 +56,13 @@ fn connect_and_publish(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>
             println!("Sistema-Camara: Conectado al broker MQTT.");
 
             let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
-            let mut cameras_para_hilo = Arc::clone(cameras); 
+            let cameras_para_hilo = Arc::clone(cameras); 
 
             let h_pub = thread::spawn(move || {
 
                 let cams = cameras_para_hilo.lock().unwrap(); // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
                 loop {
                     for (_, camera) in cams.iter() {
-                    //for (_, camera) in cams {
-                    //for (_, camera) in cameras_para_hilo.as_ref() {
                         match camera.lock() { // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
                             Ok(mut cam) => {
                                 if !(cam.sent) {
@@ -122,7 +121,7 @@ fn main() {
     }
 }
 
-fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
+fn abm_cameras(cameras: &mut ShCamerasType) {
     loop {
         println!("1. Agregar cámara");
         println!("2. Mostrar cámaras");
@@ -152,7 +151,7 @@ fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
                 io::stdin()
                     .read_line(&mut read_coord_x)
                     .expect("Error al leer la entrada");
-                let coord_x: i32 = read_coord_x.trim().parse().expect("Coordenada X no válida");
+                let coord_x: u8 = read_coord_x.trim().parse().expect("Coordenada X no válida");
 
                 print!("Ingrese la coordenada Y: ");
                 io::stdout().flush().unwrap();
@@ -160,7 +159,7 @@ fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
                 io::stdin()
                     .read_line(&mut read_coord_y)
                     .expect("Error al leer la entrada");
-                let coord_y: i32 = read_coord_y.trim().parse().expect("Coordenada Y no válida");
+                let coord_y: u8 = read_coord_y.trim().parse().expect("Coordenada Y no válida");
 
                 print!("Ingrese el rango: ");
                 io::stdout().flush().unwrap();
@@ -222,7 +221,7 @@ fn abm_cameras(cameras: &mut Arc<Mutex<HashMap<u8, Arc<Mutex<Camera>>>>>) {
 
                 // Eliminamos la cámara, es un borrado lógico para simplificar la comunicación
                 match cameras.lock(){
-                    Ok(mut cams) => {
+                    Ok(cams) => {
                         match cams[&id].lock(){
                             Ok(mut cam_a_eliminar) => {
                                 

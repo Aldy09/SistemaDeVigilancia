@@ -7,8 +7,8 @@ pub enum CameraState {
 impl CameraState {
     pub fn to_byte(&self) -> [u8; 1] {
         match self {
-            CameraState::Active => (1 as u8).to_be_bytes(),
-            CameraState::SavingMode => (2 as u8).to_be_bytes(),
+            CameraState::Active => 1_u8.to_be_bytes(),
+            CameraState::SavingMode => 2_u8.to_be_bytes(),
         }
     }
 

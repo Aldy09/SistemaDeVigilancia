@@ -2,8 +2,8 @@ use crate::camera_state::CameraState;
 
 pub struct Camera {
     id: u8,
-    coord_x: i32,
-    coord_y: i32,
+    coord_x: u8,
+    coord_y: u8,
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
@@ -12,7 +12,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(id: u8, coord_x: i32, coord_y: i32, range: u8, border_cameras: Vec<u8>) -> Self {
+    pub fn new(id: u8, coord_x: u8, coord_y: u8, range: u8, border_cameras: Vec<u8>) -> Self {
         Self {
             id,
             coord_x,
@@ -42,14 +42,14 @@ impl Camera {
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let id = bytes[0];
-        let coord_x = i32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
-        let coord_y = i32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
-        let state = CameraState::from_byte([bytes[9]]);
-        let range = bytes[10];
-        let border_cameras_len = bytes[11];
+        let coord_x = bytes[1];
+        let coord_y = bytes[2];
+        let state = CameraState::from_byte([bytes[3]]);
+        let range = bytes[4];
+        let border_cameras_len = bytes[5];
         let mut border_cameras = vec![];
         for i in 0..border_cameras_len {
-            border_cameras.push(bytes[12 + i as usize]);
+            border_cameras.push(bytes[6 + i as usize]);
         }
         let deleted = bytes[12 + border_cameras_len as usize] == 1;
         Self {
