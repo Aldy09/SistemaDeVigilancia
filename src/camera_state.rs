@@ -4,7 +4,6 @@ pub enum CameraState {
     SavingMode,
 }
 
-
 impl CameraState {
     pub fn to_byte(&self) -> [u8; 1] {
         match self {
@@ -21,4 +20,3 @@ impl CameraState {
         }
     }
 }
-

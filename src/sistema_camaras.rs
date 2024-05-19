@@ -1,11 +1,11 @@
-use rustx::camera::{self, Camera};
+use rustx::camera::Camera;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::{fs, thread};
-use std::sync::Arc;
 
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     let mut cameras = HashMap::new();
@@ -25,7 +25,6 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
             let camera = Camera::new(id, coord_x, coord_y, range, vec);
             let shareable_camera = Arc::new(Mutex::new(camera));
             cameras.insert(id, shareable_camera);
-
         }
     }
 
@@ -51,24 +50,23 @@ fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
     match mqtt_client_res {
-        Ok(mut mqtt_client) => {
+        Ok(mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
             println!("Sistema-Camara: Conectado al broker MQTT.");
 
             let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
             let camera_para_hilo = Arc::clone(&camera);
-            
-            let h_pub = thread::spawn(move || {
-                // Cliente usa publish
-                
-                let camera_2 = camera.lock().unwrap(); 
-            let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera_2.to_bytes());
-            match res {
-                Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
-                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-            };
-            
 
+
+
+            let h_pub = thread::spawn(move || {
+                let camera_2 = camera_para_hilo.lock().unwrap();
+
+                let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera_2.to_bytes());
+                match res {
+                    Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
+                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                }
             });
 
             // Esperar a los hijos
@@ -80,16 +78,17 @@ fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
     }
 }
 
-
 fn publish_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
+
     loop {
         for camera in cameras.values_mut() {
-            connect_and_publish(camera); 
+            if !(camera.lock().unwrap().sent) {
+                connect_and_publish(camera);
+                camera.lock().unwrap().sent = true;
+            }
         }
-        thread::sleep(std::time::Duration::from_secs(5));
     }
 }
-
 
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
@@ -181,10 +180,12 @@ fn abm_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
             "2" => {
                 println!("Cámaras registradas:\n");
                 for camera in (*cameras).values() {
-                {
-                    let camera = camera.lock().unwrap();
-                    camera.display();
-                }
+                    {
+                        if !(camera.lock().unwrap().deleted) {
+                            let camera = camera.lock().unwrap();
+                            camera.display();
+                        }
+                    }
                 }
             }
             "3" => {

@@ -7,7 +7,8 @@ pub struct Camera {
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
-    sent: bool,
+    pub sent: bool,
+    pub deleted : bool,
 }
 
 impl Camera {
@@ -20,34 +21,37 @@ impl Camera {
             range,
             border_cameras,
             sent: false,
+            deleted: false,
         }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![];
-        bytes.extend_from_slice(&self.id.to_be_bytes());
+        bytes.push(self.id);
         bytes.extend_from_slice(&self.coord_x.to_be_bytes());
         bytes.extend_from_slice(&self.coord_y.to_be_bytes());
         bytes.extend_from_slice(&self.state.to_byte());
-        bytes.extend_from_slice(&self.range.to_be_bytes());
+        bytes.push(self.range);
         bytes.extend_from_slice(&(self.border_cameras.len() as u8).to_be_bytes());
         for camera in &self.border_cameras {
-            bytes.extend_from_slice(&camera.to_be_bytes());
+            bytes.push(*camera);
         }
+        bytes.push(self.deleted as u8);
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        let id = u8::from_be_bytes([bytes[0]]);
+        let id = bytes[0];
         let coord_x = i32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
         let coord_y = i32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
         let state = CameraState::from_byte([bytes[9]]);
-        let range = u8::from_be_bytes([bytes[10]]);
-        let border_cameras_len = u8::from_be_bytes([bytes[11]]);
+        let range = bytes[10];
+        let border_cameras_len = bytes[11];
         let mut border_cameras = vec![];
         for i in 0..border_cameras_len {
-            border_cameras.push(u8::from_be_bytes([bytes[12 + i as usize]]));
+            border_cameras.push(bytes[12 + i as usize]);
         }
+        let deleted = bytes[12 + border_cameras_len as usize] == 1;
         Self {
             id,
             coord_x,
@@ -56,9 +60,9 @@ impl Camera {
             range,
             border_cameras,
             sent: false,
+            deleted: false,
         }
     }
-
 
     pub fn display(&self) {
         println!("ID: {}", self.id);
