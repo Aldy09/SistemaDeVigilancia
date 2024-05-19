@@ -52,6 +52,7 @@ impl<'a> PublishMessage {
     fn calculate_remaining_length(&self) -> u8 {
         //remaining length = variable header + payload
         //variable header = topic_name + packet_identifier
+        let rem_len_in_two_bytes = 2;
         let topic_name_length = self.variable_header.topic_name.len();
         let packet_identifier_length = match self.variable_header.packet_identifier {
             Some(_) => 2, //si qos > 0
@@ -59,7 +60,7 @@ impl<'a> PublishMessage {
         };
         let payload_length = self.payload.content.len();
 
-        (topic_name_length + packet_identifier_length + payload_length) as u8
+        (rem_len_in_two_bytes + topic_name_length + packet_identifier_length + payload_length) as u8
     }
 
     pub fn get_packet_identifier(&self) -> Option<u16> {
