@@ -60,26 +60,27 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 
             let h_pub = thread::spawn(move || {
 
-                let cams = cameras_para_hilo.lock().unwrap(); // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
-                loop {
-                    for (_, camera) in cams.iter() {
-                        match camera.lock() { // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
-                            Ok(mut cam) => {
-                                if !(cam.sent) {
-                                    let res = mqtt_client_para_hijo.mqtt_publish("Cam", &cam.to_bytes());
-                                    match res {
-                                        Ok(_) => {
-                                            println!("Sistema-Camara: Hecho un publish exitosamente");
-                                            cam.sent=true;
-                                    },
-                                        Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-                                };
-                            }},
-                            Err(e) => println!("Sistema-Camara: Error al tomar lock de una cámara: {:?}", e),
-                        };
-                        
-                    }
-                }
+                if let Ok(cams) = cameras_para_hilo.lock(){ // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
+                    loop {
+                        for (_, camera) in cams.iter() {
+                            match camera.lock() { // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
+                                Ok(mut cam) => {
+                                    if !(cam.sent) {
+                                        let res = mqtt_client_para_hijo.mqtt_publish("Cam", &cam.to_bytes());
+                                        match res {
+                                            Ok(_) => {
+                                                println!("Sistema-Camara: Hecho un publish exitosamente");
+                                                cam.sent=true;
+                                        },
+                                            Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                                    };
+                                }},
+                                Err(e) => println!("Sistema-Camara: Error al tomar lock de una cámara: {:?}", e),
+                            };
+                            
+                        }
+                    };
+            };
 
             });
 
@@ -128,7 +129,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
         println!("3. Eliminar cámara");
         println!("4. Salir");
         print!("Ingrese una opción: ");
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
 
         let mut input = String::new();
         io::stdin()
@@ -138,7 +139,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
         match input.trim() {
             "1" => {
                 print!("Ingrese el ID de la cámara: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_id = String::new();
                 io::stdin()
                     .read_line(&mut read_id)
@@ -146,7 +147,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 let id: u8 = read_id.trim().parse().expect("Coordenada X no válida");
 
                 print!("Ingrese la coordenada X: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_coord_x = String::new();
                 io::stdin()
                     .read_line(&mut read_coord_x)
@@ -154,7 +155,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 let coord_x: u8 = read_coord_x.trim().parse().expect("Coordenada X no válida");
 
                 print!("Ingrese la coordenada Y: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_coord_y = String::new();
                 io::stdin()
                     .read_line(&mut read_coord_y)
@@ -162,7 +163,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 let coord_y: u8 = read_coord_y.trim().parse().expect("Coordenada Y no válida");
 
                 print!("Ingrese el rango: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_range = String::new();
                 io::stdin()
                     .read_line(&mut read_range)
@@ -170,7 +171,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 let range: u8 = read_range.trim().parse().expect("Rango no válido");
 
                 print!("Ingrese el id de cámara lindante: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_border_cam = String::new();
                 io::stdin()
                     .read_line(&mut read_border_cam)
@@ -212,7 +213,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
             "3" => {
                 // Leemos el id de la cámara a eliminar
                 print!("Ingrese el ID de la cámara a eliminar: ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
                 let mut read_id = String::new();
                 io::stdin()
                     .read_line(&mut read_id)
