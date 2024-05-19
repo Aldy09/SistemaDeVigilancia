@@ -31,7 +31,7 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     cameras
 }
 
-fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
+fn connect_and_publish(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
     let ip = "127.0.0.1".to_string();
     let port = 9090;
     let broker_addr = format!("{}:{}", ip, port)
@@ -55,18 +55,26 @@ fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
             println!("Sistema-Camara: Conectado al broker MQTT.");
 
             let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
-            let camera_para_hilo = Arc::clone(&camera);
-
+            let camera_para_hilo = Arc::clone(cameras);
+            
 
 
             let h_pub = thread::spawn(move || {
-                let camera_2 = camera_para_hilo.lock().unwrap();
+                let camera = camera_para_hilo.lock().unwrap();
 
-                let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera_2.to_bytes());
-                match res {
-                    Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
-                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                loop {
+                    for camera in cameras.values_mut() {
+                        if !(camera.lock().unwrap().sent) {
+                            let res = mqtt_client_para_hijo.mqtt_publish("Cam", &camera.to_bytes());
+                            match res {
+                                Ok(_) => println!("Sistema-Camara: Hecho un publish exitosamente"),
+                                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                            }
+                            camera.lock().unwrap().sent = true;
+                        }
+                    }
                 }
+
             });
 
             // Esperar a los hijos
@@ -78,17 +86,7 @@ fn connect_and_publish(camera: &Arc<Mutex<Camera>>) {
     }
 }
 
-fn publish_cameras(cameras: &mut HashMap<u8, Arc<Mutex<Camera>>>) {
 
-    loop {
-        for camera in cameras.values_mut() {
-            if !(camera.lock().unwrap().sent) {
-                connect_and_publish(camera);
-                camera.lock().unwrap().sent = true;
-            }
-        }
-    }
-}
 
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
@@ -102,7 +100,7 @@ fn main() {
 
     // Publicar cámaras
     let handle_2 = thread::spawn(move || {
-        publish_cameras(&mut cameras_cloned);
+        connect_and_publish(&mut cameras_cloned);
     });
 
     // Manejar incidentes
