@@ -60,7 +60,7 @@ impl Camera {
             range,
             border_cameras,
             sent: false,
-            deleted: false,
+            deleted,
         }
     }
 
