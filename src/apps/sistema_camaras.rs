@@ -9,6 +9,8 @@ type ShareableCamType = Arc<Mutex<Camera>>;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
 
+#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
+
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     let mut cameras = HashMap::new();
     let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
@@ -42,52 +44,43 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
     match mqtt_client_res {
-        Ok(mqtt_client) => {
+        Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
-            let cameras_para_hilo = Arc::clone(cameras);
-
-            let h_pub = thread::spawn(move || {
-                if let Ok(cams) = cameras_para_hilo.lock() {
-                    // [] <--
-                    loop {
-                        for (_, camera) in cams.iter() {
-                            match camera.lock() {
-                                // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
-                                Ok(mut cam) => {
-                                    if !(cam.sent) {
-                                        let res = mqtt_client_para_hijo
-                                            .mqtt_publish("Cam", &cam.to_bytes());
-                                        match res {
-                                            Ok(_) => {
-                                                println!(
-                                                    "Sistema-Camara: Hecho un publish exitosamente"
-                                                );
-                                                cam.sent = true;
-                                            }
-                                            Err(e) => println!(
-                                                "Sistema-Camara: Error al hacer el publish {:?}",
-                                                e
-                                            ),
-                                        };
-                                    }
+            if let Ok(cams) = cameras.lock() {
+                // [] <--
+                loop {
+                    for (_, camera) in cams.iter() {
+                        match camera.lock() {
+                            // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
+                            Ok(mut cam) => {
+                                if !(cam.sent) {
+                                    let res = mqtt_client
+                                        .mqtt_publish("Cam", &cam.to_bytes());
+                                    match res {
+                                        Ok(_) => {
+                                            println!(
+                                                "Sistema-Camara: Hecho un publish exitosamente"
+                                            );
+                                            cam.sent = true;
+                                        }
+                                        Err(e) => println!(
+                                            "Sistema-Camara: Error al hacer el publish {:?}",
+                                            e
+                                        ),
+                                    };
                                 }
-                                Err(e) => println!(
-                                    "Sistema-Camara: Error al tomar lock de una cámara: {:?}",
-                                    e
-                                ),
-                            };
-                        }
+                            }
+                            Err(e) => println!(
+                                "Sistema-Camara: Error al tomar lock de una cámara: {:?}",
+                                e
+                            ),
+                        };
                     }
-                };
-            });
-
-            // Esperar a los hijos
-            if h_pub.join().is_err() {
-                println!("Error al esperar a hijo publisher.");
-            }
+                }
+            };
+            
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
