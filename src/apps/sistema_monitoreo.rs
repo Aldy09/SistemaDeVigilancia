@@ -1,8 +1,11 @@
 extern crate gio;
 extern crate gtk;
 
+use std::thread;
+
 use gio::prelude::*;
 use gtk::prelude::*;
+use rustx::{connect_message::ConnectMessage, mqtt_client::MQTTClient};
 
 fn main() {
     let application = gtk::Application::new(
@@ -14,6 +17,68 @@ fn main() {
     application.connect_activate(build_ui);
 
     application.run(&[]);
+}
+
+fn connect_and_subscribe() {
+    let ip = "127.0.0.1".to_string();
+    let port = 9090;
+    let broker_addr = format!("{}:{}", ip, port)
+        .parse()
+        .expect("Dirección no válida");
+    let mut connect_msg = ConnectMessage::new(
+        0x01 << 4, // Me fijé y el fixed header no estaba shifteado, el message type tiene que quedar en los 4 bits más signifs del primer byte (toDo: arreglarlo para el futuro)
+        // toDo: obs: además, al propio new podría agregarlo, no? para no tener yo que acordarme qué tipo es cada mensaje.
+        "rust-client",
+        None, // will_topic
+        None, // will_message
+        Some("sistema-monitoreo"),
+        Some("rustx123"),
+    );
+
+    // Cliente usa funciones connect, publish, y subscribe de la lib.
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
+    match mqtt_client_res {
+        Ok(mqtt_client) => {
+            //info!("Conectado al broker MQTT."); //
+            println!("Sistema-Camara: Conectado al broker MQTT.");
+
+            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
+
+            let h_sub = thread::spawn(move || {
+                // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
+                let res_sub =
+                    mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+                match res_sub {
+                    Ok(_) => {
+                        println!("Cliente: Hecho un subscribe exitosamente");
+                    }
+                    Err(e) => {
+                        println!("Cliente: Error al hacer un subscribe: {:?}", e);
+                    }
+                }
+                /*let stream = mqtt_client.get_stream();
+                let mut veces = 3;
+                while veces > 0 {
+                    println!("[loop cliente subscribe] vuelta por intentar leer");
+                    // Leo la respuesta
+                    let mut bytes_leidos = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
+                    {
+                        match stream.lock(){
+                            Ok(mut s) => {let _cant_leida = s.read(&mut bytes_leidos).unwrap();},
+                            Err(e) => println!("cliente subscribe: error al lockear: {:?}",e),
+                        }
+                    }
+                    println!("[loop cliente subscribe] vuelta leí bytes: {:?}", bytes_leidos);
+                    veces -= 1;
+                }*/
+            });
+
+            if h_sub.join().is_err() {
+                println!("Error al esperar a hijo subscriber.");
+            }
+        }
+        Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
+    }
 }
 
 fn build_ui(application: &gtk::Application) {
@@ -102,6 +167,15 @@ fn build_ui(application: &gtk::Application) {
     overlay.set_child_index(&cam_img, 0);
 
     window.add(&layout);
+
+    let h_connect = thread::spawn(move || {
+        connect_and_subscribe();
+    });
+
+    if h_connect.join().is_err() {
+        println!("Error al esperar a la conexión y suscripción.");
+    }
+
     window.show_all();
 }
 

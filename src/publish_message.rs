@@ -52,6 +52,7 @@ impl<'a> PublishMessage {
     fn calculate_remaining_length(&self) -> u8 {
         //remaining length = variable header + payload
         //variable header = topic_name + packet_identifier
+        let rem_len_in_two_bytes = 2;
         let topic_name_length = self.variable_header.topic_name.len();
         let packet_identifier_length = match self.variable_header.packet_identifier {
             Some(_) => 2, //si qos > 0
@@ -59,7 +60,7 @@ impl<'a> PublishMessage {
         };
         let payload_length = self.payload.content.len();
 
-        (topic_name_length + packet_identifier_length + payload_length) as u8
+        (rem_len_in_two_bytes + topic_name_length + packet_identifier_length + payload_length) as u8
     }
 
     pub fn get_packet_identifier(&self) -> Option<u16> {
@@ -85,9 +86,12 @@ impl<'a> PublishMessage {
 
         // Variable Header
         let topic_name_length = self.variable_header.topic_name.len() as u8;
-        let remaining_length = topic_name_length
+        let remaining_length = 2
+            + topic_name_length
             + 2 * self.variable_header.packet_identifier.is_some() as u8
             + self.payload.content.len() as u8;
+        // Los 2 iniciales que le faltaban son de la longitud que se envía primero.
+        // por ej si la string es "abc", primero se manda un 3 en dos bytes, y dsp "a", "b", "c".
         bytes.push(remaining_length);
         //bytes.push(topic_name_length);//longitud del topic_name en bytes (TENDRIA Q SER 2 BYTES msb y lsb)
         let topic_name_length_msb = ((topic_name_length as u16 >> 8) & 0xFF) as u8;
