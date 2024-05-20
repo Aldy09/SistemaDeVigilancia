@@ -8,7 +8,7 @@ use crate::publish_message::PublishMessage;
 use crate::subscribe_message::SubscribeMessage;
 use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -25,6 +25,7 @@ use crate::suback_message::SubAckMessage;
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
+    rx: Receiver<Vec<u8>>,
 }
 
 impl MQTTClient {
@@ -70,6 +71,7 @@ impl MQTTClient {
         let mqtt = MQTTClient {
             stream,
             handle_hijo: Some(h),
+            rx
         };
         // Fin inicializaciones.
 
@@ -165,9 +167,15 @@ impl MQTTClient {
         Ok(())
     }
 
-    /// Da una referencia adicional al `Arc<Mutex<TcpStream>>`.
+    /*/// Da una referencia adicional al `Arc<Mutex<TcpStream>>`.
+    // (esta función no debería existir / usarse, dijimos que el stream era detalle de implementación desconocido desde afuera)
     pub fn get_stream(&self) -> Arc<Mutex<TcpStream>> {
         self.stream.clone()
+    }*/
+
+    /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
+    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<Vec<u8>, mpsc::RecvError>  {
+        self.rx.recv()  
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -180,6 +188,7 @@ impl MQTTClient {
             }
         }
     }
+    
 }
 
 /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
