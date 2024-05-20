@@ -19,7 +19,7 @@ pub struct Camera {
     range: u8,
     border_cameras: Vec<u8>,
     pub sent: bool,
-    pub deleted : bool,
+    pub deleted: bool,
     incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
 }
 
@@ -101,7 +101,6 @@ impl Camera {
     pub fn set_state_to(&mut self, new_state: CameraState) {
         self.state = new_state;
         self.sent = false;
-
     }
 
     /// Devuelve un vector con los ids de sus cámaras lindantes.

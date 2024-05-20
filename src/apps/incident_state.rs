@@ -18,8 +18,10 @@ impl IncidentState {
         match u8::from_be_bytes(byte) {
             1 => Ok(IncidentState::ActiveIncident),
             2 => Ok(IncidentState::ResolvedIncident),
-            _ => Err(Error::new(ErrorKind::Other, "Estado de incidente no válido")),
-
+            _ => Err(Error::new(
+                ErrorKind::Other,
+                "Estado de incidente no válido",
+            )),
         }
     }
 }
