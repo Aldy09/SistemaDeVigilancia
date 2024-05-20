@@ -19,3 +19,7 @@ En dos terminales diferentes, en este orden:
 
 ## Cómo testear
 - cargo test
+
+## Cargo clippy
+El comando de clippy que corre el ci es:
+- cargo clippy --all-targets --all-features

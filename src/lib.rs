@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod connack_fixed_header;
 pub mod connack_message;
 pub mod connack_session_present;
