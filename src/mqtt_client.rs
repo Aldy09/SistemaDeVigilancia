@@ -222,7 +222,7 @@ fn leer_un_mensaje(
 ) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
-    let tipo = fixed_header.get_tipo();
+    let tipo = fixed_header.get_message_type();
     println!("--------------------------");
     println!(
         "Mqtt cliente leyendo: Recibo fixed header, tipo: {}, bytes de fixed header leidos: {:?}",

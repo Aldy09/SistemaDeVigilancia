@@ -27,7 +27,7 @@ impl FixedHeader {
         }
     }
 
-    pub fn get_tipo(&self) -> u8 {
+    pub fn get_message_type(&self) -> u8 {
         self.message_type_byte >> 4
     }
 
