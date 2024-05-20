@@ -5,7 +5,7 @@ use std::thread;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use rustx::{connect_message::ConnectMessage, mqtt_client::MQTTClient};
+use rustx::mqtt_client::MQTTClient;
 
 fn main() {
     let application = gtk::Application::new(
@@ -25,11 +25,11 @@ fn connect_and_subscribe() {
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
-    
+
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
     match mqtt_client_res {
-        Ok(mut mqtt_client) => {
+        Ok(mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 

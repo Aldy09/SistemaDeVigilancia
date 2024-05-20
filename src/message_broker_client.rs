@@ -4,7 +4,6 @@ use std::thread;
 use config::{Config, File, FileFormat};
 use log::{error, info};
 
-use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 

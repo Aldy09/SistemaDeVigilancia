@@ -29,9 +29,7 @@ impl MQTTClient {
     }
     */
 
-    pub fn connect_to_broker(
-        addr: &SocketAddr
-    ) -> Result<Self, Error> {
+    pub fn connect_to_broker(addr: &SocketAddr) -> Result<Self, Error> {
         //io::Result<()> {
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
