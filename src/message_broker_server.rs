@@ -62,25 +62,23 @@ fn handle_client(
                 connack_response
             );
 
-            //if is_authentic { // ToDo: actuamente está dando siempre false, fijarse.
+            //if is_authentic { // ToDo: actuamente está dando siempre false, fijarse. []
             // A partir de ahora que ya se hizo el connect exitosamente,
             // se puede empezar a recibir publish y subscribe de ese cliente.
-            // Acá: un mismo cliente puede enviarme muchos mensajes, no solamente uno.
-            // Por ello, acá debe haber un loop. Leo, y le paso lo leído a la función
-            // hasta que lea [0, 0].
+            // Cono un mismo cliente puede enviarme múltiples mensajes, no solamente uno, va un loop.
+            // Leo, y le paso lo leído a la función hasta que lea [0, 0].
             let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
-            //let mut n = fixed_header.is_not_null(); // move occurs
             let ceros: &[u8; 2] = &[0; 2];
             let mut vacio = &fixed_header_buf == ceros;
             while !vacio {
-                println!("Adentro del while");
+                //println!("Adentro del while");
                 continuar_la_conexion(stream, subs_by_topic, fixed_header_buf)?; // esta función lee UN mensaje.
                                                                                  // Leo para la siguiente iteración
                 fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
                 vacio = &fixed_header_buf == ceros;
             }
 
-            //}; // (fin del if es authentic, está comentado pero debe conservarse).
+            //}; // (fin del if es authentic, está comentado por ahora pero debe conservarse).
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
@@ -145,14 +143,20 @@ fn continuar_la_conexion(
             // Tengo que buscar, para ese topic, todos sus subscribers, los guardé cuando hicieron subscribe
             if let Ok(subs_by_top) = subs_by_topic.lock() {
                 if let Some(topic_subscribers) = subs_by_top.get(&topic) {
+                    println!(
+                        "   Se encontraron {} suscriptores al topic {:?}",
+                        topic_subscribers.len(),
+                        topic
+                    );
                     for subscriber in topic_subscribers {
                         escribir_a_cliente(&msg_bytes, subscriber)?;
+                        println!("      enviado mensaje publish a subscriber");
                     }
                 }
             }
         }
         8 => {
-            // Acá  análogo, para cuando recibo un Subscribe
+            // Acá análogo, para cuando recibo un Subscribe
             println!("Recibo mensaje tipo Subscribe");
             let msg_bytes =
                 continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
@@ -176,6 +180,7 @@ fn continuar_la_conexion(
                         .or_insert_with(Vec::new)
                         .push(stream.clone());
                 } // []
+                println!("   Se agregó el suscriptor al topic {:?}", topic);
             }
 
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.
