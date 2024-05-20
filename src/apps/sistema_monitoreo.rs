@@ -8,7 +8,6 @@ use gtk::prelude::*;
 use rustx::mqtt_client::MQTTClient;
 
 fn main() {
-
     let hijo_connect = thread::spawn(move || {
         connect_and_subscribe();
     });
@@ -59,21 +58,6 @@ fn connect_and_subscribe() {
                         println!("Cliente: Error al hacer un subscribe: {:?}", e);
                     }
                 }
-                /*let stream = mqtt_client.get_stream();
-                let mut veces = 3;
-                while veces > 0 {
-                    println!("[loop cliente subscribe] vuelta por intentar leer");
-                    // Leo la respuesta
-                    let mut bytes_leidos = [0; 6]; // [] Aux temp: 6 para 1 elem, 8 p 2, 10 p 3, en realidad hay que leer el fixed hdr como en server.
-                    {
-                        match stream.lock(){
-                            Ok(mut s) => {let _cant_leida = s.read(&mut bytes_leidos).unwrap();},
-                            Err(e) => println!("cliente subscribe: error al lockear: {:?}",e),
-                        }
-                    }
-                    println!("[loop cliente subscribe] vuelta leí bytes: {:?}", bytes_leidos);
-                    veces -= 1;
-                }*/
             });
 
             if h_sub.join().is_err() {
