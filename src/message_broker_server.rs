@@ -7,8 +7,10 @@ use rustx::publish_message::PublishMessage;
 use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
+use std::collections::HashMap;
 use std::io::{Error, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::Arc;
 
 /// Procesa los mensajes entrantes de cada cliente.
 fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
@@ -120,6 +122,12 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             let _ = stream.write(&msg_bytes)?;
             stream.flush()?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
+
+            // Les tengo que enviar mensaje Publish a quienes se suscribieron a su topic
+            let topic = msg.get_topic();
+            // Tengo que buscar, para ese topic, todos sus subscribers, los guardé cuando hicieron subscribe
+
+
         }
         8 => {
             // Acá  análogo, para cuando recibo un Subscribe
@@ -131,9 +139,26 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
             //println!("   Mensaje completo recibido: {:?}", msg);
 
             // Proceso lo recibido
+            // Tengo una lista de subscribers por cada topic, y guardo en ella al cliente
+            // para después mandarle lo que se publique en ese topic
+            //aux: let subs_by_topic = Hashmap<topic, subscriber>
+            let mut subs_by_topic: HashMap<String, Vec<&mut TcpStream>> = HashMap::new(); // le pondría arc mutex, pero es único hilo por ahora []
+            //let mut subs_by_topic: HashMap<String, Vec<Arc<&mut TcpStream>>> = HashMap::new(); // le pongo arc xq si no rust no me deja x tema de borrows
+            // ^ aux, obviamente este hashmap se crea afuera.
+            
             let mut return_codes = vec![];
-            for (_topic, _qos) in msg.get_topic_filters() {
+            for (topic, _qos) in msg.get_topic_filters() {
                 return_codes.push(SubscribeReturnCode::QoS1); // [] ToDo: ver bien qué mandarle
+                
+                // Agrego el stream del cliente que se está suscribiendo, a la lista de suscriptores
+                // para ese topic, en el hashmap, para poder enviarle lo que se publique en dicho tpoic                
+                if let Ok(stream_cl) = stream.try_clone() { // <-- [] rust no me deja, voy a tener que hacer arc.
+                    let topic_s = topic.to_string();
+                    subs_by_topic.entry(topic_s)
+                                .or_insert_with(|| Vec::new())
+                                .push(stream)
+                }
+
             }
 
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.

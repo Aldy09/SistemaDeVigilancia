@@ -162,6 +162,10 @@ impl<'a> PublishMessage {
             },
         })
     }
+
+    pub fn get_topic(&self) -> String {
+        self.variable_header.topic_name.to_string()
+    }
 }
 
 #[cfg(test)]
