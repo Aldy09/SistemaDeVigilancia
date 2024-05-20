@@ -8,15 +8,27 @@ use gtk::prelude::*;
 use rustx::mqtt_client::MQTTClient;
 
 fn main() {
-    let application = gtk::Application::new(
-        Some("fi.uba.sistemamonitoreo"),
-        gio::ApplicationFlags::FLAGS_NONE,
-    )
-    .expect("Fallo en iniciar la aplicacion");
 
-    application.connect_activate(build_ui);
+    let hijo_connect = thread::spawn(move || {
+        connect_and_subscribe();
+    });
 
-    application.run(&[]);
+    let hijo_ui = thread::spawn(move || {
+        let application = gtk::Application::new(
+            Some("fi.uba.sistemamonitoreo"),
+            gio::ApplicationFlags::FLAGS_NONE,
+        )
+        .expect("Fallo en iniciar la aplicacion");
+        application.connect_activate(build_ui);
+        application.run(&[]);
+    });
+
+    if hijo_connect.join().is_err() {
+        println!("Error al esperar a la conexión y suscripción.");
+    }
+    if hijo_ui.join().is_err() {
+        println!("Error al esperar a la ui.");
+    }
 }
 
 fn connect_and_subscribe() {
@@ -158,14 +170,6 @@ fn build_ui(application: &gtk::Application) {
     overlay.set_child_index(&cam_img, 0);
 
     window.add(&layout);
-
-    let h_connect = thread::spawn(move || {
-        connect_and_subscribe();
-    });
-
-    if h_connect.join().is_err() {
-        println!("Error al esperar a la conexión y suscripción.");
-    }
 
     window.show_all();
 }
