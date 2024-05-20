@@ -5,7 +5,7 @@ use std::thread;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use rustx::{connect_message::ConnectMessage, mqtt_client::MQTTClient};
+use rustx::mqtt_client::MQTTClient;
 
 fn main() {
     let application = gtk::Application::new(
@@ -25,22 +25,13 @@ fn connect_and_subscribe() {
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
-    let mut connect_msg = ConnectMessage::new(
-        0x01 << 4, // Me fijé y el fixed header no estaba shifteado, el message type tiene que quedar en los 4 bits más signifs del primer byte (toDo: arreglarlo para el futuro)
-        // toDo: obs: además, al propio new podría agregarlo, no? para no tener yo que acordarme qué tipo es cada mensaje.
-        "rust-client",
-        None, // will_topic
-        None, // will_message
-        Some("sistema-monitoreo"),
-        Some("rustx123"),
-    );
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
-    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr, &mut connect_msg);
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
     match mqtt_client_res {
         Ok(mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
-            println!("Sistema-Camara: Conectado al broker MQTT.");
+            println!("Cliente: Conectado al broker MQTT.");
 
             let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
 

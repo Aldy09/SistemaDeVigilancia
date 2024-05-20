@@ -12,7 +12,6 @@ pub struct ConnectMessage<'a> {
 
 impl<'a> ConnectMessage<'a> {
     pub fn new(
-        message_type: u8, // Siempre vale 1.
         client_id: &'a str,
         will_topic: Option<&'a str>,
         will_message: Option<&'a str>,
@@ -20,8 +19,8 @@ impl<'a> ConnectMessage<'a> {
         password: Option<&'a str>,
     ) -> Self {
         let fixed_header = FixedHeader {
-            message_type,
-            remaining_length: 0, // Se actualizará más tarde
+            message_type: 1 << 4, // Siempre vale 1 (Podría llamarse message_type_byte, el tipo está en los 4 bits más signifs.)
+            remaining_length: 0,  // Se actualizará más tarde
         };
 
         let variable_header = VariableHeader {
@@ -136,6 +135,9 @@ impl<'a> ConnectMessage<'a> {
         // Procesar el payload según los flags y su longitud
         let payload = Self::process_payload(&variable_header.connect_flags, payload_bytes);
 
+        // Verificar que el tipo sea correcto, siempre debe valer 1
+        // algo del estilo if message_type != 1 {return error tipo incorrecto al crear ConnectMessage },
+        // me va a cambiar la firma, lo dejo así ahora y dsp lo refactorizo []
         // Construir y retornar el mensaje ConnectMessage completo
         ConnectMessage {
             fixed_header,
@@ -224,7 +226,6 @@ mod tests {
     fn test_from_bytes_parsing_fixed_header() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
         let mut connect_message = ConnectMessage::new(
-            1,
             "test_client",
             Some("test/topic"),
             Some("test message"),
@@ -246,7 +247,6 @@ mod tests {
     fn test_from_bytes_parsing_variable_header() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
         let mut connect_message = ConnectMessage::new(
-            1,
             "test_client",
             Some("test/topic"),
             Some("test message"),
@@ -270,7 +270,6 @@ mod tests {
     fn test_from_bytes_parsing_payload() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
         let mut connect_message = ConnectMessage::new(
-            1,
             "test_client",
             Some("test/topic"),
             Some("test message"),

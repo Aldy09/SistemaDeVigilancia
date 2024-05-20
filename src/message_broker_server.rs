@@ -82,6 +82,8 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
+            println!("   recibido: {:?}", fixed_header_buf);
+            println!("   recibido: {:?}", fixed_header);
             // ToDo: Leer de la doc qué hacer en este caso, o si solo ignoramos.
         }
     };
