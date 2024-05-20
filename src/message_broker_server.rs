@@ -10,10 +10,13 @@ use rustx::subscribe_return_code::SubscribeReturnCode;
 use std::collections::HashMap;
 use std::io::{Error, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+type shareable_stream = Arc<Mutex<TcpStream>>;
+type sh_hashmap_type = Arc<Mutex<HashMap<String, Vec<shareable_stream>>>>;
 
 /// Procesa los mensajes entrantes de cada cliente.
-fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
+fn handle_client(mut stream: Arc<Mutex<TcpStream>>, subs_by_topic: sh_hashmap_type) -> Result<(), Error> {
     // Lee el inicio de un mensaje, para determinar su tipo
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
@@ -94,7 +97,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
 /// Se puede empezar a recibir mensajes de otros tipos (`Publish`, `Subscribe`), de este cliente.
 /// Recibe el `stream` para la comunicación con el cliente en cuestión.
 /// Lee un mensaje.
-fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
+fn continuar_la_conexion(stream: &mut  Arc<Mutex<TcpStream>>, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
     let tipo = fixed_header.get_tipo();
@@ -140,24 +143,20 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
 
             // Proceso lo recibido
             // Tengo una lista de subscribers por cada topic, y guardo en ella al cliente
-            // para después mandarle lo que se publique en ese topic
-            //aux: let subs_by_topic = Hashmap<topic, subscriber>
-            let mut subs_by_topic: HashMap<String, Vec<&mut TcpStream>> = HashMap::new(); // le pondría arc mutex, pero es único hilo por ahora []
-            //let mut subs_by_topic: HashMap<String, Vec<Arc<&mut TcpStream>>> = HashMap::new(); // le pongo arc xq si no rust no me deja x tema de borrows
-            // ^ aux, obviamente este hashmap se crea afuera.
-            
+            // para después mandarle lo que se publique en ese topic            
             let mut return_codes = vec![];
-            for (topic, _qos) in msg.get_topic_filters() {
+            for (_topic, _qos) in msg.get_topic_filters() {
                 return_codes.push(SubscribeReturnCode::QoS1); // [] ToDo: ver bien qué mandarle
                 
                 // Agrego el stream del cliente que se está suscribiendo, a la lista de suscriptores
                 // para ese topic, en el hashmap, para poder enviarle lo que se publique en dicho tpoic                
-                if let Ok(stream_cl) = stream.try_clone() { // <-- [] rust no me deja, voy a tener que hacer arc.
+                // [] DESCOMENTAR ESTO POST REFACTOR ARC MUTEX 
+                /*if let Ok(stream_cl) = stream {
                     let topic_s = topic.to_string();
                     subs_by_topic.entry(topic_s)
                                 .or_insert_with(|| Vec::new())
                                 .push(stream)
-                }
+                }*/
 
             }
 
@@ -182,7 +181,7 @@ fn continuar_la_conexion(stream: &mut TcpStream, fixed_header_bytes: [u8; 2]) ->
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 //fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<(u8, [u8; 2], FixedHeader), Error> {
-fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<[u8; 2], Error> {
+fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut  Arc<Mutex<TcpStream>>) -> Result<[u8; 2], Error> {
     // Leer un fixed header y obtener tipo
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
@@ -203,7 +202,7 @@ fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<[u8;
 /// (Podría hacer fixed_header.to_bytes(), se aprovecha que ya se leyó fixed_header_bytes).
 fn continuar_leyendo_bytes_del_msg(
     fixed_header: FixedHeader,
-    stream: &mut TcpStream,
+    stream: &mut  Arc<Mutex<TcpStream>>,
     fixed_header_bytes: &[u8; 2],
 ) -> Result<Vec<u8>, Error> {
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
@@ -240,14 +239,19 @@ fn main() -> Result<(), Error> {
     let listener =
         TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
 
+    // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
+    // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
+    let mut subs_by_topic: sh_hashmap_type = Arc::new(Mutex::new(HashMap::new()));
     println!("Servidor iniciado. Esperando conexiones.");
     let mut handles = vec![];
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let subs_by_topic_clone: sh_hashmap_type = subs_by_topic.clone();
                 let handle = std::thread::spawn(|| {
-                    let _ = handle_client(stream);
+                    let stream = Arc::new(Mutex::new(stream));
+                    let _ = handle_client(stream, subs_by_topic_clone);
                 });
                 handles.push(handle);
             }
