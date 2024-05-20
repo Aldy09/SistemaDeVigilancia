@@ -13,7 +13,13 @@ pub struct Incident {
 
 impl Incident {
     pub fn new(id: u8, coord_x: u8, coord_y: u8) -> Self {
-        Self { id, coord_x, coord_y, state: IncidentState::ActiveIncident, sent: false}
+        Self {
+            id,
+            coord_x,
+            coord_y,
+            state: IncidentState::ActiveIncident,
+            sent: false,
+        }
     }
 
     /// Devuelve coordenadas (x, y) correspondientes a la posición del incidente.
@@ -31,6 +37,4 @@ impl Incident {
         self.state = IncidentState::ResolvedIncident;
         self.sent = false;
     }
-
-
 }

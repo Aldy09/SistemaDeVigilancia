@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod connack_fixed_header;
 pub mod connack_message;
 pub mod connack_session_present;
@@ -30,4 +31,3 @@ pub mod unsubscribe_fixed_header;
 pub mod unsubscribe_message;
 pub mod unsubscribe_payload;
 pub mod unsubscribe_variable_header;
-pub mod apps;

@@ -12,13 +12,16 @@ use std::io::{Error, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
-type shareable_stream = Arc<Mutex<TcpStream>>;
-type sh_hashmap_type = Arc<Mutex<HashMap<String, Vec<shareable_stream>>>>;
+type ShareableStream = Arc<Mutex<TcpStream>>;
+type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
 
 /// Procesa los mensajes entrantes de cada cliente.
-fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type) -> Result<(), Error> {
+fn handle_client(
+    stream: &Arc<Mutex<TcpStream>>,
+    subs_by_topic: &ShHashmapType,
+) -> Result<(), Error> {
     // Lee el inicio de un mensaje, para determinar su tipo
-    let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
+    let fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
@@ -33,7 +36,7 @@ fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type
             // Es tipo Connect, acá procesar el connect y dar connack
             println!("Recibo mensaje tipo Connect");
             let msg_bytes =
-                continuar_leyendo_bytes_del_msg(fixed_header, &stream, &fixed_header_buf)?;
+                continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_buf)?;
             // Entonces tengo el mensaje completo
             let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
             println!(
@@ -53,7 +56,7 @@ fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type
             } else {
                 [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
             };
-            escribir_a_cliente(&connack_response, &stream)?;
+            escribir_a_cliente(&connack_response, stream)?;
             println!(
                 "   tipo connect: Enviado el ack: \n   {:?}",
                 connack_response
@@ -72,7 +75,7 @@ fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type
             while !vacio {
                 println!("Adentro del while");
                 continuar_la_conexion(stream, subs_by_topic, fixed_header_buf)?; // esta función lee UN mensaje.
-                                                                       // Leo para la siguiente iteración
+                                                                                 // Leo para la siguiente iteración
                 fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
                 vacio = &fixed_header_buf == ceros;
             }
@@ -101,7 +104,11 @@ fn escribir_a_cliente(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resul
 /// Se puede empezar a recibir mensajes de otros tipos (`Publish`, `Subscribe`), de este cliente.
 /// Recibe el `stream` para la comunicación con el cliente en cuestión.
 /// Lee un mensaje.
-fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
+fn continuar_la_conexion(
+    stream: &Arc<Mutex<TcpStream>>,
+    subs_by_topic: &ShHashmapType,
+    fixed_header_bytes: [u8; 2],
+) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
     let tipo = fixed_header.get_tipo();
@@ -115,7 +122,7 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hash
         3 => {
             println!("Recibo mensaje tipo Publish");
             let msg_bytes =
-                continuar_leyendo_bytes_del_msg(fixed_header, &stream, &fixed_header_bytes)?;
+                continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
             // Entonces tengo el mensaje completo
             let msg = PublishMessage::from_bytes(msg_bytes)?;
             println!("   Mensaje publish completo recibido: {:?}", msg);
@@ -126,7 +133,7 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hash
             // ToDo: Acá imagino que hago algún checkeo, leer la doc
             let ack = PubAckMessage::new(packet_id, 0);
             let ack_msg_bytes = ack.to_bytes();
-            escribir_a_cliente(&ack_msg_bytes, &stream)?;
+            escribir_a_cliente(&ack_msg_bytes, stream)?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
 
             // Les tengo que enviar mensaje Publish a quienes se suscribieron a su topic
@@ -134,46 +141,45 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hash
             // Obtengo otra vez los bytes, xq no debemos usar clone, y tiene sentido enviar el ack apenas llega el publish
             let msg_bytes = msg.to_bytes();
             // Tengo que buscar, para ese topic, todos sus subscribers, los guardé cuando hicieron subscribe
-            if let Ok(mut subs_by_top) = subs_by_topic.lock() {
-                if let Some(topic_subscribers) = subs_by_top.get(&topic){
+            if let Ok(subs_by_top) = subs_by_topic.lock() {
+                if let Some(topic_subscribers) = subs_by_top.get(&topic) {
                     for subscriber in topic_subscribers {
-                        escribir_a_cliente(&msg_bytes, subscriber);
+                        escribir_a_cliente(&msg_bytes, subscriber)?;
                     }
                 }
             }
-
-
         }
         8 => {
             // Acá  análogo, para cuando recibo un Subscribe
             println!("Recibo mensaje tipo Subscribe");
             let msg_bytes =
-                continuar_leyendo_bytes_del_msg(fixed_header, &stream, &fixed_header_bytes)?;
+                continuar_leyendo_bytes_del_msg(fixed_header, stream, &fixed_header_bytes)?;
             // Entonces tengo el mensaje completo
             let msg = SubscribeMessage::from_bytes(msg_bytes)?;
             //println!("   Mensaje completo recibido: {:?}", msg);
 
             // Proceso lo recibido
             // Tengo una lista de subscribers por cada topic, y guardo en ella al cliente
-            // para después mandarle lo que se publique en ese topic            
+            // para después mandarle lo que se publique en ese topic
             let mut return_codes = vec![];
             for (topic, _qos) in msg.get_topic_filters() {
                 return_codes.push(SubscribeReturnCode::QoS1); // [] ToDo: ver bien qué mandarle
-                
+
                 // Agrego el stream del cliente que se está suscribiendo, a la lista de suscriptores
                 // para ese topic, en el hashmap, para poder enviarle luego lo que se publique en dicho tpoic
                 let topic_s = topic.to_string();
-                if let Ok(mut subs_b_t) = subs_by_topic.lock(){
-                    subs_b_t.entry(topic_s)
-                            .or_insert_with(|| Vec::new())
-                            .push(stream.clone());
+                if let Ok(mut subs_b_t) = subs_by_topic.lock() {
+                    subs_b_t
+                        .entry(topic_s)
+                        .or_insert_with(Vec::new)
+                        .push(stream.clone());
                 } // []
             }
 
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.
             let ack = SubAckMessage::new(0, return_codes);
             let msg_bytes = ack.to_bytes();
-            escribir_a_cliente(&msg_bytes, &stream)?;
+            escribir_a_cliente(&msg_bytes, stream)?;
             println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
         }
         _ => println!(
@@ -190,14 +196,16 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hash
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 //fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<(u8, [u8; 2], FixedHeader), Error> {
-fn leer_fixed_header_de_stream_y_obt_tipo(stream: &Arc<Mutex<TcpStream>>) -> Result<[u8; 2], Error> {
+fn leer_fixed_header_de_stream_y_obt_tipo(
+    stream: &Arc<Mutex<TcpStream>>,
+) -> Result<[u8; 2], Error> {
     // Leer un fixed header y obtener tipo
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
     // Tomo lock y leo del stream
     {
-        if let Ok(mut s) = stream.lock(){
+        if let Ok(mut s) = stream.lock() {
             let _res = s.read(&mut fixed_header_buf)?;
         }
     }
@@ -224,7 +232,8 @@ fn continuar_leyendo_bytes_del_msg(
     let mut rem_buf = vec![0; msg_rem_len];
     // Tomo lock y leo del stream
     {
-        if let Ok(mut s) = stream.lock(){ // [] si uso un if let, no nec el scope de afuera para dropear, no? (o sí?)
+        if let Ok(mut s) = stream.lock() {
+            // [] si uso un if let, no nec el scope de afuera para dropear, no? (o sí?)
             let _res = s.read(&mut rem_buf)?;
         }
     }
@@ -259,14 +268,14 @@ fn main() -> Result<(), Error> {
 
     // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
     // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
-    let subs_by_topic: sh_hashmap_type = Arc::new(Mutex::new(HashMap::new()));
+    let subs_by_topic: ShHashmapType = Arc::new(Mutex::new(HashMap::new()));
     println!("Servidor iniciado. Esperando conexiones.");
     let mut handles = vec![];
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let subs_by_topic_clone: sh_hashmap_type = subs_by_topic.clone();
+                let subs_by_topic_clone: ShHashmapType = subs_by_topic.clone();
                 let handle = std::thread::spawn(move || {
                     let stream = Arc::new(Mutex::new(stream));
                     let _ = handle_client(&stream, &subs_by_topic_clone);
