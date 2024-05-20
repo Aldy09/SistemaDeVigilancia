@@ -92,7 +92,7 @@ impl Camera {
     pub fn will_register(&self, (inc_coord_x, inc_coord_y): (u8, u8)) -> bool {
         let is_in_x_range = self.coord_x + self.range >= inc_coord_x; // El range es un radio
         let is_in_y_range = self.coord_y + self.range >= inc_coord_y;
-                
+
         is_in_x_range & is_in_y_range
     }
 
@@ -110,7 +110,7 @@ impl Camera {
 
     /// Agrega el inc_id a su lista de incidentes a los que le presta atención,
     /// y se cambia el estado a activo. Maneja su marcado.
-    pub fn append_to_incs_being_managed(&mut self, inc_id: u8){
+    pub fn append_to_incs_being_managed(&mut self, inc_id: u8) {
         self.incs_being_managed.push(inc_id);
         // Si ya estaba en estado activo, la dejo como estaba (para no marcarla como modificada)
         if self.state != CameraState::Active {
@@ -121,10 +121,9 @@ impl Camera {
     /// Elimina el inc_id de su lista de incidentes a los que les presta atención,
     /// y si ya no le quedan incidentes, se cambia el estado a modo ahorro de energía.
     /// Maneja su marcado.
-    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8){
-        if let Some(pos_de_inc_id) = self.incs_being_managed.iter().position(|&x| x==inc_id){
-            
-            self.incs_being_managed.remove(pos_de_inc_id as usize);
+    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8) {
+        if let Some(pos_de_inc_id) = self.incs_being_managed.iter().position(|&x| x == inc_id) {
+            self.incs_being_managed.remove(pos_de_inc_id);
             // Maneja su lista y se cambiarse el estado si corresponde
             if self.incs_being_managed.is_empty() {
                 self.set_state_to(CameraState::SavingMode);

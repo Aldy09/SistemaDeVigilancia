@@ -60,8 +60,8 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
             let cameras_para_hilo = Arc::clone(cameras);
 
             let h_pub = thread::spawn(move || {
-
-                if let Ok(cams) = cameras_para_hilo.lock(){ // [] <--
+                if let Ok(cams) = cameras_para_hilo.lock() {
+                    // [] <--
                     loop {
                         for (_, camera) in cams.iter() {
                             match camera.lock() {
@@ -183,7 +183,10 @@ fn procesar_incidente_conocido(
                         if let Ok(mut cam) = cams[camera_id].lock() {
                             // Actualizo las cámaras en cuestión
                             cam.remove_from_incs_being_managed(inc.id);
-                            println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
+                            println!(
+                                "  la cámara queda:\n   cam id y lista de incs: {:?}",
+                                cam.get_id_e_incs_for_debug_display()
+                            );
                         };
                     }
                     Err(_) => println!(
@@ -213,10 +216,16 @@ fn procesar_incidente_por_primera_vez(
                 //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
                 if let Ok(mut cam) = camera.lock() {
                     if cam.will_register(inc.pos()) {
-                        println!("Está en rango de cam: {}, cambiando su estado a activo.", cam_id); // [] ver lindantes
+                        println!(
+                            "Está en rango de cam: {}, cambiando su estado a activo.",
+                            cam_id
+                        ); // [] ver lindantes
                         cam.append_to_incs_being_managed(inc.id);
                         incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
-                        println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
+                        println!(
+                            "  la cámara queda:\n   cam id y lista de incs: {:?}",
+                            cam.get_id_e_incs_for_debug_display()
+                        );
 
                         // aux: acá puedo quedarme con los ids de las lindantes
                         // y afuera del if let procesar esto mismo pero para lindantes
