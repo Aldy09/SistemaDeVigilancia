@@ -16,7 +16,7 @@ type shareable_stream = Arc<Mutex<TcpStream>>;
 type sh_hashmap_type = Arc<Mutex<HashMap<String, Vec<shareable_stream>>>>;
 
 /// Procesa los mensajes entrantes de cada cliente.
-fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: sh_hashmap_type) -> Result<(), Error> {
+fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type) -> Result<(), Error> {
     // Lee el inicio de un mensaje, para determinar su tipo
     let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
 
@@ -71,7 +71,7 @@ fn handle_client(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: sh_hashmap_type)
             let mut vacio = &fixed_header_buf == ceros;
             while !vacio {
                 println!("Adentro del while");
-                continuar_la_conexion(stream, fixed_header_buf)?; // esta función lee UN mensaje.
+                continuar_la_conexion(stream, subs_by_topic, fixed_header_buf)?; // esta función lee UN mensaje.
                                                                        // Leo para la siguiente iteración
                 fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(stream)?;
                 vacio = &fixed_header_buf == ceros;
@@ -101,7 +101,7 @@ fn escribir_a_cliente(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resul
 /// Se puede empezar a recibir mensajes de otros tipos (`Publish`, `Subscribe`), de este cliente.
 /// Recibe el `stream` para la comunicación con el cliente en cuestión.
 /// Lee un mensaje.
-fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
+fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, subs_by_topic: &sh_hashmap_type, fixed_header_bytes: [u8; 2]) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
     let tipo = fixed_header.get_tipo();
@@ -125,13 +125,22 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, fixed_header_bytes: [u8
             let packet_id = option_packet_id.unwrap_or(0);
             // ToDo: Acá imagino que hago algún checkeo, leer la doc
             let ack = PubAckMessage::new(packet_id, 0);
-            let msg_bytes = ack.to_bytes();
-            escribir_a_cliente(&msg_bytes, &stream)?;
+            let ack_msg_bytes = ack.to_bytes();
+            escribir_a_cliente(&ack_msg_bytes, &stream)?;
             println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
 
             // Les tengo que enviar mensaje Publish a quienes se suscribieron a su topic
             let topic = msg.get_topic();
+            // Obtengo otra vez los bytes, xq no debemos usar clone, y tiene sentido enviar el ack apenas llega el publish
+            let msg_bytes = msg.to_bytes();
             // Tengo que buscar, para ese topic, todos sus subscribers, los guardé cuando hicieron subscribe
+            if let Ok(mut subs_by_top) = subs_by_topic.lock() {
+                if let Some(topic_subscribers) = subs_by_top.get(&topic){
+                    for subscriber in topic_subscribers {
+                        escribir_a_cliente(&msg_bytes, subscriber);
+                    }
+                }
+            }
 
 
         }
@@ -148,19 +157,17 @@ fn continuar_la_conexion(stream: &Arc<Mutex<TcpStream>>, fixed_header_bytes: [u8
             // Tengo una lista de subscribers por cada topic, y guardo en ella al cliente
             // para después mandarle lo que se publique en ese topic            
             let mut return_codes = vec![];
-            for (_topic, _qos) in msg.get_topic_filters() {
+            for (topic, _qos) in msg.get_topic_filters() {
                 return_codes.push(SubscribeReturnCode::QoS1); // [] ToDo: ver bien qué mandarle
                 
                 // Agrego el stream del cliente que se está suscribiendo, a la lista de suscriptores
-                // para ese topic, en el hashmap, para poder enviarle lo que se publique en dicho tpoic                
-                // [] DESCOMENTAR ESTO POST REFACTOR ARC MUTEX 
-                /*if let Ok(stream_cl) = stream {
-                    let topic_s = topic.to_string();
-                    subs_by_topic.entry(topic_s)
-                                .or_insert_with(|| Vec::new())
-                                .push(stream)
-                }*/
-
+                // para ese topic, en el hashmap, para poder enviarle luego lo que se publique en dicho tpoic
+                let topic_s = topic.to_string();
+                if let Ok(mut subs_b_t) = subs_by_topic.lock(){
+                    subs_b_t.entry(topic_s)
+                            .or_insert_with(|| Vec::new())
+                            .push(stream.clone());
+                } // []
             }
 
             // Le mando un SubAck. ToDo: leer bien los campos a mandar.
@@ -252,7 +259,7 @@ fn main() -> Result<(), Error> {
 
     // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
     // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
-    let mut subs_by_topic: sh_hashmap_type = Arc::new(Mutex::new(HashMap::new()));
+    let subs_by_topic: sh_hashmap_type = Arc::new(Mutex::new(HashMap::new()));
     println!("Servidor iniciado. Esperando conexiones.");
     let mut handles = vec![];
 
@@ -260,9 +267,9 @@ fn main() -> Result<(), Error> {
         match stream {
             Ok(stream) => {
                 let subs_by_topic_clone: sh_hashmap_type = subs_by_topic.clone();
-                let handle = std::thread::spawn(|| {
+                let handle = std::thread::spawn(move || {
                     let stream = Arc::new(Mutex::new(stream));
-                    let _ = handle_client(&stream, subs_by_topic_clone);
+                    let _ = handle_client(&stream, &subs_by_topic_clone);
                 });
                 handles.push(handle);
             }
