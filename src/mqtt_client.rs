@@ -6,10 +6,10 @@ use crate::mqtt_server_client_utils::{
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
 use crate::subscribe_message::SubscribeMessage;
-use std::io::{self, Error, Read, Write};
+use std::io::{self, Error, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
@@ -71,7 +71,7 @@ impl MQTTClient {
         let mqtt = MQTTClient {
             stream,
             handle_hijo: Some(h),
-            rx
+            rx,
         };
         // Fin inicializaciones.
 
@@ -174,8 +174,8 @@ impl MQTTClient {
     }*/
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<Vec<u8>, mpsc::RecvError>  {
-        self.rx.recv()  
+    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<Vec<u8>, mpsc::RecvError> {
+        self.rx.recv()
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -188,11 +188,13 @@ impl MQTTClient {
             }
         }
     }
-    
 }
 
 /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
-fn leer_desde_server(stream: &mut Arc<Mutex<TcpStream>>, tx: &Sender<Vec<u8>>) -> Result<(), Error> {
+fn leer_desde_server(
+    stream: &mut Arc<Mutex<TcpStream>>,
+    tx: &Sender<Vec<u8>>,
+) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
     // pero la función que lee Un mensaje loo procesa de manera diferente.
     let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
@@ -200,12 +202,12 @@ fn leer_desde_server(stream: &mut Arc<Mutex<TcpStream>>, tx: &Sender<Vec<u8>>) -
     let mut vacio = &fixed_header_buf == ceros;
     while !vacio {
         println!("Mqtt cliente leyendo: siguiente msj");
-        let msg_bytes = leer_un_mensaje(&mut *stream, fixed_header_buf, tx)?; // esta función lee UN mensaje.
-        /*match tx.send(&msg_bytes) {
-            Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
-            Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
-        };*/
-                                                          // Leo para la siguiente iteración
+        leer_un_mensaje(&mut *stream, fixed_header_buf, tx)?; // esta función lee UN mensaje.
+                                                              /*match tx.send(&msg_bytes) {
+                                                                  Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
+                                                                  Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
+                                                              };*/
+        // Leo para la siguiente iteración
         fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
         vacio = &fixed_header_buf == ceros;
     }
@@ -216,7 +218,7 @@ fn leer_desde_server(stream: &mut Arc<Mutex<TcpStream>>, tx: &Sender<Vec<u8>>) -
 fn leer_un_mensaje(
     stream: &mut Arc<Mutex<TcpStream>>,
     fixed_header_bytes: [u8; 2],
-    tx: &Sender<Vec<u8>>
+    tx: &Sender<Vec<u8>>,
 ) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
@@ -235,8 +237,8 @@ fn leer_un_mensaje(
                 continuar_leyendo_bytes_del_msg(fixed_header, &mut *stream, &fixed_header_bytes)?;
             // Entonces tengo el mensaje completo
             let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
-            println!("   Mensaje conn ack completo recibido: {:?}", msg);      
-            
+            println!("   Mensaje conn ack completo recibido: {:?}", msg);
+
             match tx.send(msg.to_bytes()) {
                 Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                 Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
@@ -292,19 +294,20 @@ fn leer_un_mensaje(
             };
         }
 
-        _ => {println!(
-            "   ERROR: tipo desconocido: recibido: \n   {:?}",
-            fixed_header);
+        _ => {
+            println!(
+                "   ERROR: tipo desconocido: recibido: \n   {:?}",
+                fixed_header
+            );
             return Err(Error::new(ErrorKind::Other, "Tipo desconocido."));
-
-        },
+        }
     };
 
     /*match tx.send(msg_bytes) {
         Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
         Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
     };*/
-    
+
     Ok(())
 }
 
