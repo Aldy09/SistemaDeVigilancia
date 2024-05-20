@@ -6,7 +6,6 @@ use std::thread;
 use gio::prelude::*;
 use gtk::prelude::*;
 use rustx::{connect_message::ConnectMessage, mqtt_client::MQTTClient};
-use std::sync::{Arc, Mutex};
 
 fn main() {
     let application = gtk::Application::new(
@@ -15,20 +14,11 @@ fn main() {
     )
     .expect("Fallo en iniciar la aplicacion");
 
-    let application = Arc::new(Mutex::new(application));
-
-    let h_app = thread::spawn(move || {
-        let application = application.lock().unwrap();
-        application.run(&[]);
-    });
+    application.run(&[]);
 
     let h_connect = thread::spawn(move || {
         connect_and_subscribe();
     });
-
-    if h_app.join().is_err() {
-        println!("Error al esperar a la aplicación.");
-    }
 
     if h_connect.join().is_err() {
         println!("Error al esperar a la conexión y suscripción.");
@@ -62,7 +52,7 @@ fn connect_and_subscribe() {
 
             let h_sub = thread::spawn(move || {
                 // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
-                let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+                let res_sub = mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
                 match res_sub {
                     Ok(_) => {
                         println!("Cliente: Hecho un subscribe exitosamente");
