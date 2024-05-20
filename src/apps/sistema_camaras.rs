@@ -1,5 +1,4 @@
 use rustx::apps::camera::Camera;
-use rustx::apps::camera_state::CameraState;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -62,7 +61,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 
             let h_pub = thread::spawn(move || {
 
-                if let Ok(cams) = cameras_para_hilo.lock(){ // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
+                if let Ok(cams) = cameras_para_hilo.lock(){ // [] <--
                     loop {
                         for (_, camera) in cams.iter() {
                             match camera.lock() { // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
@@ -169,9 +168,6 @@ fn procesar_incidente_conocido(cameras_cl: &mut ShCamerasType, inc: Incident, in
                         if let Ok(mut cam) = cams[camera_id].lock() {
                             // Actualizo las cámaras en cuestión
                             cam.remove_from_incs_being_managed(inc.id);
-                            if cam.empty_incs_list() {
-                                cam.set_state_to(CameraState::SavingMode);
-                            }
                             println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
                         };
                     },
@@ -197,9 +193,8 @@ fn procesar_incidente_por_primera_vez(cameras_cl: &mut ShCamerasType, inc: Incid
                 if let Ok(mut cam) = camera.lock() {
                     if cam.will_register(inc.pos()) {
                         println!("Está en rango de cam: {}, cambiando su estado a activo.", cam_id); // [] ver lindantes
-                        cam.set_state_to(CameraState::Active);
-                        incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
                         cam.append_to_incs_being_managed(inc.id);
+                        incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
                         println!("  la cámara queda:\n   cam id y lista de incs: {:?}", cam.get_id_e_incs_for_debug_display());
 
                         // aux: acá puedo quedarme con los ids de las lindantes
