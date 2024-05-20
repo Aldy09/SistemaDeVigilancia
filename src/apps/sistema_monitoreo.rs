@@ -1,13 +1,11 @@
 extern crate gio;
 extern crate gtk;
 
-use std::thread;
+use std::{io::Write, thread};
 
 use gio::prelude::*;
 use gtk::prelude::*;
 use rustx::mqtt_client::MQTTClient;
-
-#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 
 fn main() {
     let hijo_connect = thread::spawn(move || {
@@ -32,6 +30,7 @@ fn main() {
     }
 }
 
+#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 fn connect_and_subscribe() {
     let ip = "127.0.0.1".to_string();
     let port = 9090;
@@ -45,10 +44,9 @@ fn connect_and_subscribe() {
         Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
-        
+
             // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
-            let res_sub =
-                mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
             match res_sub {
                 Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
                 Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
@@ -61,11 +59,12 @@ fn connect_and_subscribe() {
                 loop {
                     let msg_bytes = mqtt_client.mqtt_receive_msg_from_subs_topic();
                     match msg_bytes {
-                        Ok(msg_b) => println!("Cliente: Recibo estos msg_bytes: {:?}", msg_b),
-                        Err(e) => println!("Cliente: Error al recibir msg_bytes: {:?}", e),
+                        Ok(msg_b) => println!("MONITOREO: Recibo estos msg_bytes: {:?}", msg_b),
+                        Err(e) => println!("MONITOREO: Error al recibir msg_bytes: {:?}", e),
                     }
                     // [] ToDo: aux: para que el compilador permita mandar un mensaje en vez de los bytes,
                     // tenemos que hacer un trait Message y que todos los structs de los mensajes lo implementen
+                    let _ = std::io::stdout().flush();
                 }
 
                 // Cliente termina de utilizar mqtt

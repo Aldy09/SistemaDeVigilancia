@@ -56,8 +56,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                             // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
                             Ok(mut cam) => {
                                 if !(cam.sent) {
-                                    let res = mqtt_client
-                                        .mqtt_publish("Cam", &cam.to_bytes());
+                                    let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
                                     match res {
                                         Ok(_) => {
                                             println!(
@@ -80,7 +79,6 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                     }
                 }
             };
-            
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
