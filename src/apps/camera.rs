@@ -19,7 +19,7 @@ pub struct Camera {
     range: u8,
     border_cameras: Vec<u8>,
     pub sent: bool,
-    pub deleted : bool,
+    pub deleted: bool,
     incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
 }
 
@@ -93,7 +93,7 @@ impl Camera {
         let is_in_x_range = self.coord_x + self.range >= inc_coord_x; // El range es un radio
         let is_in_y_range = self.coord_y + self.range >= inc_coord_y;
         // Aux []: ídem acá, podría hacerlo este struct en lugar de hacerse desde afuera. Sería un mini refactor.
-        
+
         is_in_x_range & is_in_y_range
     }
 
@@ -102,7 +102,6 @@ impl Camera {
     pub fn set_state_to(&mut self, new_state: CameraState) {
         self.state = new_state;
         self.sent = false;
-
     }
 
     /// Devuelve un vector con los ids de sus cámaras lindantes.
@@ -110,10 +109,10 @@ impl Camera {
         self.border_cameras.to_vec()
     }
 
-    pub fn append_to_incs_being_managed(&mut self, inc_id: u8){
+    pub fn append_to_incs_being_managed(&mut self, inc_id: u8) {
         self.incs_being_managed.push(inc_id);
     }
-    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8){
+    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8) {
         self.incs_being_managed.remove(inc_id as usize);
         // Obs: acá se podría fijar si su lista está vacía y autocambiarse el estado a savingmode, y se borraría ese código desde afuera. Sería un mini refactor. []
     }
