@@ -1,19 +1,71 @@
 extern crate gio;
 extern crate gtk;
 
+use std::thread;
+
 use gio::prelude::*;
 use gtk::prelude::*;
+use rustx::mqtt_client::MQTTClient;
 
 fn main() {
-    let application = gtk::Application::new(
-        Some("fi.uba.sistemamonitoreo"),
-        gio::ApplicationFlags::FLAGS_NONE,
-    )
-    .expect("Fallo en iniciar la aplicacion");
+    let hijo_connect = thread::spawn(move || {
+        connect_and_subscribe();
+    });
 
-    application.connect_activate(build_ui);
+    let hijo_ui = thread::spawn(move || {
+        let application = gtk::Application::new(
+            Some("fi.uba.sistemamonitoreo"),
+            gio::ApplicationFlags::FLAGS_NONE,
+        )
+        .expect("Fallo en iniciar la aplicacion");
+        application.connect_activate(build_ui);
+        application.run(&[]);
+    });
 
-    application.run(&[]);
+    if hijo_connect.join().is_err() {
+        println!("Error al esperar a la conexión y suscripción.");
+    }
+    if hijo_ui.join().is_err() {
+        println!("Error al esperar a la ui.");
+    }
+}
+
+fn connect_and_subscribe() {
+    let ip = "127.0.0.1".to_string();
+    let port = 9090;
+    let broker_addr = format!("{}:{}", ip, port)
+        .parse()
+        .expect("Dirección no válida");
+
+    // Cliente usa funciones connect, publish, y subscribe de la lib.
+    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
+    match mqtt_client_res {
+        Ok(mqtt_client) => {
+            //info!("Conectado al broker MQTT."); //
+            println!("Cliente: Conectado al broker MQTT.");
+
+            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
+
+            let h_sub = thread::spawn(move || {
+                // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
+                let res_sub =
+                    mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+                match res_sub {
+                    Ok(_) => {
+                        println!("Cliente: Hecho un subscribe exitosamente");
+                    }
+                    Err(e) => {
+                        println!("Cliente: Error al hacer un subscribe: {:?}", e);
+                    }
+                }
+            });
+
+            if h_sub.join().is_err() {
+                println!("Error al esperar a hijo subscriber.");
+            }
+        }
+        Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
+    }
 }
 
 fn build_ui(application: &gtk::Application) {
@@ -102,6 +154,7 @@ fn build_ui(application: &gtk::Application) {
     overlay.set_child_index(&cam_img, 0);
 
     window.add(&layout);
+
     window.show_all();
 }
 
