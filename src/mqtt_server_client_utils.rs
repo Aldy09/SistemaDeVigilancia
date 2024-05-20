@@ -1,4 +1,8 @@
-use std::{net::TcpStream, io::{Error, Read}, sync::{Arc, Mutex}};
+use std::{
+    io::{Error, Read},
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
 
 use crate::fixed_header::FixedHeader;
 
@@ -6,13 +10,14 @@ use crate::fixed_header::FixedHeader;
 // pero todavía son necesarias xq server no tuvo refactor aún. Dsp de refactor a server las borramos a las "old_*"".
 // Son exactamente iguales a las otras dos, solo cambian en que las old_ reciben un stream tcp y las nuevas un arc mutex de eso.
 
-
 /// Lee `fixed_header` bytes del `stream`, sabe cuántos son por ser de tamaño fijo el fixed_header.
 /// Determina el tipo del mensaje recibido que inicia por `fixed_header`.
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 //fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<(u8, [u8; 2], FixedHeader), Error> {
-pub fn old_leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<[u8; 2], Error> {
+pub fn old_leer_fixed_header_de_stream_y_obt_tipo(
+    stream: &mut TcpStream,
+) -> Result<[u8; 2], Error> {
     // Leer un fixed header y obtener tipo
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
@@ -57,7 +62,9 @@ pub fn old_continuar_leyendo_bytes_del_msg(
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 //fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut TcpStream) -> Result<(u8, [u8; 2], FixedHeader), Error> {
-pub fn leer_fixed_header_de_stream_y_obt_tipo(stream: &mut Arc<Mutex<TcpStream>>) -> Result<[u8; 2], Error> {
+pub fn leer_fixed_header_de_stream_y_obt_tipo(
+    stream: &mut Arc<Mutex<TcpStream>>,
+) -> Result<[u8; 2], Error> {
     // Leer un fixed header y obtener tipo
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
@@ -87,7 +94,7 @@ pub fn continuar_leyendo_bytes_del_msg(
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
     let msg_rem_len: usize = fixed_header.get_rem_len();
     let mut rem_buf = vec![0; msg_rem_len];
-    
+
     {
         let mut s = stream.lock().unwrap();
         let _res = s.read(&mut rem_buf)?;

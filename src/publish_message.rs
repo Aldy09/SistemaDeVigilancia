@@ -89,8 +89,8 @@ impl<'a> PublishMessage {
             + topic_name_length
             + 2 * self.variable_header.packet_identifier.is_some() as u8
             + self.payload.content.len() as u8;
-            // Los 2 iniciales que le faltaban son de la longitud que se envía primero.
-            // por ej si la string es "abc", primero se manda un 3 en dos bytes, y dsp "a", "b", "c".
+        // Los 2 iniciales que le faltaban son de la longitud que se envía primero.
+        // por ej si la string es "abc", primero se manda un 3 en dos bytes, y dsp "a", "b", "c".
         bytes.push(remaining_length);
         //bytes.push(topic_name_length);//longitud del topic_name en bytes (TENDRIA Q SER 2 BYTES msb y lsb)
         let topic_name_length_msb = ((topic_name_length as u16 >> 8) & 0xFF) as u8;

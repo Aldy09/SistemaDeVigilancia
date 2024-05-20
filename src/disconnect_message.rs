@@ -37,7 +37,6 @@ impl Disconnect {
 
 // MUST close the Network Connection [MQTT-3.14.4-1].
 // MUST NOT send any more Control Packets on that Network Connection [MQTT-3.14.4-2].
- 
 
 // On receipt of DISCONNECT the Server:
 

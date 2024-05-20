@@ -2,7 +2,9 @@ use config::{Config, File, FileFormat};
 use log::info;
 use rustx::connect_message::ConnectMessage;
 use rustx::fixed_header::FixedHeader;
-use rustx::mqtt_server_client_utils::{old_leer_fixed_header_de_stream_y_obt_tipo, old_continuar_leyendo_bytes_del_msg};
+use rustx::mqtt_server_client_utils::{
+    old_continuar_leyendo_bytes_del_msg, old_leer_fixed_header_de_stream_y_obt_tipo,
+};
 // ^ [] Aux temp: usa las funciones "old_*" xq todavía no tuvo refactor.
 use rustx::puback_message::PubAckMessage;
 use rustx::publish_message::PublishMessage;

@@ -20,7 +20,7 @@ impl<'a> ConnectMessage<'a> {
     ) -> Self {
         let fixed_header = FixedHeader {
             message_type: 1 << 4, // Siempre vale 1 (Podría llamarse message_type_byte, el tipo está en los 4 bits más signifs.)
-            remaining_length: 0, // Se actualizará más tarde
+            remaining_length: 0,  // Se actualizará más tarde
         };
 
         let variable_header = VariableHeader {

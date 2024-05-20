@@ -8,6 +8,8 @@ pub mod connect_message;
 pub mod connect_payload;
 pub mod connect_return_code;
 pub mod connect_variable_header;
+pub mod disconnect_fixed_header;
+pub mod disconnect_message;
 pub mod fixed_header;
 pub mod mqtt_client;
 pub mod mqtt_server;
@@ -28,7 +30,5 @@ pub mod unsubscribe_fixed_header;
 pub mod unsubscribe_message;
 pub mod unsubscribe_payload;
 pub mod unsubscribe_variable_header;
-pub mod disconnect_message;
-pub mod disconnect_fixed_header;
 
 pub mod mqtt_server_client_utils;
