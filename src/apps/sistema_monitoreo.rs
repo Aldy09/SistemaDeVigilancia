@@ -1,7 +1,7 @@
 extern crate gio;
 extern crate gtk;
 
-use std::thread;
+use std::{io::Write, thread};
 
 use gio::prelude::*;
 use gtk::prelude::*;
@@ -30,6 +30,7 @@ fn main() {
     }
 }
 
+#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 fn connect_and_subscribe() {
     let ip = "127.0.0.1".to_string();
     let port = 9090;
@@ -40,28 +41,38 @@ fn connect_and_subscribe() {
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
     match mqtt_client_res {
-        Ok(mqtt_client) => {
+        Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut mqtt_client_para_hijo = mqtt_client.mqtt_clone();
+            // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
+            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+            match res_sub {
+                Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
+                Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
+            }
 
-            let h_sub = thread::spawn(move || {
-                // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
-                let res_sub =
-                    mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
-                match res_sub {
-                    Ok(_) => {
-                        println!("Cliente: Hecho un subscribe exitosamente");
+            //  Que lea del topic al/os cual/es hizo subscribe, implementando [].
+            //let mqtt_client_c = Arc::new(Mutex::new(mqtt_client)); y habrá que usar lock... podemos esperar al hijo adentro?
+            let h = thread::spawn(move || {
+                // while condición de corte? así puedo hacer el finalizar abajo del loop
+                loop {
+                    let msg_bytes = mqtt_client.mqtt_receive_msg_from_subs_topic();
+                    match msg_bytes {
+                        Ok(msg_b) => println!("MONITOREO: Recibo estos msg_bytes: {:?}", msg_b),
+                        Err(e) => println!("MONITOREO: Error al recibir msg_bytes: {:?}", e),
                     }
-                    Err(e) => {
-                        println!("Cliente: Error al hacer un subscribe: {:?}", e);
-                    }
+                    // [] ToDo: aux: para que el compilador permita mandar un mensaje en vez de los bytes,
+                    // tenemos que hacer un trait Message y que todos los structs de los mensajes lo implementen
+                    let _ = std::io::stdout().flush();
                 }
+
+                // Cliente termina de utilizar mqtt
+                mqtt_client.finalizar();
             });
 
-            if h_sub.join().is_err() {
-                println!("Error al esperar a hijo subscriber.");
+            if h.join().is_err() {
+                println!("Cliente: error al esperar a hijo que recibe msjs");
             }
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
