@@ -7,6 +7,7 @@ use std::io::{self, Error, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 use crate::mqtt_server_client_utils::{leer_fixed_header_de_stream_y_obt_tipo, continuar_leyendo_bytes_del_msg};
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 use crate::fixed_header::FixedHeader;
@@ -34,20 +35,7 @@ impl MQTTClient {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
         
         let stream = Arc::new(Mutex::new(stream_tcp));
-        let mut stream_para_hijo = stream.clone();
-        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
-        let h = thread::spawn(move || {
-            loop {
-                // no hace nada, probando
-            }
-            //leer_desde_server(&mut stream_para_hijo) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
-        });
-        let mqtt = MQTTClient {
-            stream,
-            handle_hijo: Some(h),
-        };     
-        // Fin inicializaciones.
-
+        
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
             "rust-client",
@@ -60,12 +48,27 @@ impl MQTTClient {
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         {
-            let mut s = mqtt.stream.lock().unwrap();
+            let mut s = stream.lock().unwrap();
             s.write(&msg_bytes)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
             s.flush()?;
         }
         println!("Envía connect: \n   {:?}", &connect_msg);
+
+        let mut stream_para_hijo = stream.clone();
+        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
+        let h = thread::spawn(move || {
+            /*loop {
+                // no hace nada, probando
+            }*/
+            thread::sleep(Duration::from_secs(3)); // [] aux, probando
+            leer_desde_server(&mut stream_para_hijo) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
+        });
+        let mqtt = MQTTClient {
+            stream,
+            handle_hijo: Some(h),
+        };     
+        // Fin inicializaciones.
 
         /*// Intenta leer la respuesta del servidor (CONNACK)
         let mut connack_response = [0; 4];
@@ -133,6 +136,7 @@ impl MQTTClient {
         let subs_bytes = subscribe_msg.to_bytes();
         println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
         // Lo envío
+        thread::sleep(Duration::from_secs(3)); // [] aux, probando MIÁ QUÉ INTERESANTE
         {
             let mut s = self.stream.lock().unwrap();
             let _ = s.write(&subs_bytes)?;
