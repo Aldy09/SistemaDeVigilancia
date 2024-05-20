@@ -16,10 +16,7 @@ fn main() {
 
     application.connect_activate(build_ui);
 
-
     application.run(&[]);
-
-    
 }
 
 fn connect_and_subscribe() {
@@ -49,7 +46,8 @@ fn connect_and_subscribe() {
 
             let h_sub = thread::spawn(move || {
                 // Cliente usa subscribe // Aux: me suscribo al mismo topic al cual el otro hilo está publicando, para probar
-                let res_sub = mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
+                let res_sub =
+                    mqtt_client_para_hijo.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
                 match res_sub {
                     Ok(_) => {
                         println!("Cliente: Hecho un subscribe exitosamente");
@@ -58,7 +56,7 @@ fn connect_and_subscribe() {
                         println!("Cliente: Error al hacer un subscribe: {:?}", e);
                     }
                 }
-               /*let stream = mqtt_client.get_stream();
+                /*let stream = mqtt_client.get_stream();
                 let mut veces = 3;
                 while veces > 0 {
                     println!("[loop cliente subscribe] vuelta por intentar leer");
@@ -169,7 +167,6 @@ fn build_ui(application: &gtk::Application) {
     overlay.set_child_index(&cam_img, 0);
 
     window.add(&layout);
-
 
     let h_connect = thread::spawn(move || {
         connect_and_subscribe();

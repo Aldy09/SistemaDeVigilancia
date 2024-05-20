@@ -1,5 +1,4 @@
 use rustx::apps::camera::Camera;
-use rustx::apps::camera_state::CameraState;
 use rustx::connect_message::ConnectMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -62,7 +61,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 
             let h_pub = thread::spawn(move || {
                 if let Ok(cams) = cameras_para_hilo.lock() {
-                    // [] <--- esto lockea 'por siempre', xq viene un loop :(, capaz cambiarlo por un rwlock al mutex de afuera? p q el otro hilo pueda leer
+                    // [] <--
                     loop {
                         for (_, camera) in cams.iter() {
                             match camera.lock() {
@@ -184,9 +183,6 @@ fn procesar_incidente_conocido(
                         if let Ok(mut cam) = cams[camera_id].lock() {
                             // Actualizo las cámaras en cuestión
                             cam.remove_from_incs_being_managed(inc.id);
-                            if cam.empty_incs_list() {
-                                cam.set_state_to(CameraState::SavingMode);
-                            }
                             println!(
                                 "  la cámara queda:\n   cam id y lista de incs: {:?}",
                                 cam.get_id_e_incs_for_debug_display()
@@ -224,9 +220,8 @@ fn procesar_incidente_por_primera_vez(
                             "Está en rango de cam: {}, cambiando su estado a activo.",
                             cam_id
                         ); // [] ver lindantes
-                        cam.set_state_to(CameraState::Active);
-                        incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
                         cam.append_to_incs_being_managed(inc.id);
+                        incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
                         println!(
                             "  la cámara queda:\n   cam id y lista de incs: {:?}",
                             cam.get_id_e_incs_for_debug_display()
