@@ -154,6 +154,7 @@ fn process_publish(
 fn send_puback(msg: &PublishMessage, stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
     let option_packet_id = msg.get_packet_identifier();
     let packet_id = option_packet_id.unwrap_or(0);
+
     let ack = PubAckMessage::new(packet_id, 0);
     let ack_msg_bytes = ack.to_bytes();
     write_to_the_client(&ack_msg_bytes, stream)?;
@@ -174,10 +175,12 @@ fn distribute_to_subscribers(
                 topic_subscribers.len(),
                 topic
             );
+            //println!("Debug 1, pre for");
             for subscriber in topic_subscribers {
                 write_to_the_client(&msg_bytes, subscriber)?;
                 println!("      enviado mensaje publish a subscriber");
             }
+            //println!("Debug 2, afuera del for");
         }
     }
     Ok(())
@@ -201,9 +204,12 @@ fn add_subscribers_to_topic(
     subs_by_topic: &ShHashmapType,
 ) -> Result<Vec<SubscribeReturnCode>, Error> {
     let mut return_codes = vec![];
+
     for (topic, _qos) in msg.get_topic_filters() {
         return_codes.push(SubscribeReturnCode::QoS1);
         let topic_s = topic.to_string();
+        
+        // Guarda una referencia (arc clone) al stream, en el vector de suscriptores al topic en cuestión
         if let Ok(mut subs_b_t) = subs_by_topic.lock() {
             subs_b_t
                 .entry(topic_s)
@@ -229,6 +235,7 @@ fn send_suback(
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
 /// Puede devolver error si falla la escritura o el flush.
 fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+    //println!("Debug 1.5, adentro de write");
     if let Ok(mut s) = stream.lock() {
         let _ = s.write(msg_bytes)?;
         s.flush()?;
