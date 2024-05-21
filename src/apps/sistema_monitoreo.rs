@@ -6,6 +6,7 @@ use std::{io::Write, thread};
 use gio::prelude::*;
 use gtk::prelude::*;
 use rustx::mqtt_client::MQTTClient;
+use rustx::apps::properties::Properties;
 
 fn main() {
     let hijo_connect = thread::spawn(move || {
@@ -32,8 +33,10 @@ fn main() {
 
 #[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 fn connect_and_subscribe() {
-    let ip = "127.0.0.1".to_string();
-    let port = 9090;
+    let properties = Properties::new("sistema_monitoreo.properties").expect("Error al leer el archivo de properties");
+    let ip = properties.get("ip-server-mqtt").expect("No se encontró la propiedad 'ip-server-mqtt'");
+    let port = properties.get("port-server-mqtt").expect("No se encontró la propiedad 'port-server-mqtt'").parse::<i32>().expect("Error al parsear el puerto");
+
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
