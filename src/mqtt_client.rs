@@ -25,7 +25,7 @@ use crate::suback_message::SubAckMessage;
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
-    rx: Receiver<Vec<u8>>,
+    rx: Receiver<PublishMessage>,
 }
 
 impl MQTTClient {
@@ -59,7 +59,7 @@ impl MQTTClient {
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
         // Más inicializaciones
-        let (tx, rx) = mpsc::channel::<Vec<u8>>(); // [] que mande bytes, xq no hicimos un trait Message
+        let (tx, rx) = mpsc::channel::<PublishMessage>(); // [] que mande bytes, xq no hicimos un trait Message
         let mut stream_para_hijo = stream.clone();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
         let h = thread::spawn(move || {
@@ -137,7 +137,7 @@ impl MQTTClient {
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<Vec<u8>, mpsc::RecvError> {
+    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvError> {
         self.rx.recv()
     }
 
@@ -156,7 +156,7 @@ impl MQTTClient {
 /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
 fn leer_desde_server(
     stream: &mut Arc<Mutex<TcpStream>>,
-    tx: &Sender<Vec<u8>>,
+    tx: &Sender<PublishMessage>,
 ) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
     // pero la función que lee Un mensaje loo procesa de manera diferente.
@@ -178,7 +178,7 @@ fn leer_desde_server(
 fn leer_un_mensaje(
     stream: &mut Arc<Mutex<TcpStream>>,
     fixed_header_bytes: [u8; 2],
-    tx: &Sender<Vec<u8>>,
+    tx: &Sender<PublishMessage>,
 ) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
@@ -214,7 +214,7 @@ fn leer_un_mensaje(
                 // Con el packet_id, marco en algún lado que recibí el ack.
             }
 
-            match tx.send(msg.to_bytes()) {
+            match tx.send(msg) {
                 Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                 Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
             };
