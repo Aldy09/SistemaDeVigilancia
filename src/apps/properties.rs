@@ -10,7 +10,7 @@ pub struct Properties {
 impl Properties {
     pub fn new(file_path: &str) -> io::Result<Self> {
         let path = Path::new(file_path);
-        let file = File::open(&path)?;
+        let file = File::open(path)?;
         let reader = io::BufReader::new(file);
 
         let mut props = HashMap::new();
