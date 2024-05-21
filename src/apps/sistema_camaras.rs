@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{fs, thread};
 type ShareableCamType = Arc<Mutex<Camera>>;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
@@ -39,6 +41,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
     let properties = Properties::new("sistema_camaras.properties").expect("Error al leer el archivo de properties");
     let ip = properties.get("ip-server-mqtt").expect("No se encontró la propiedad 'ip-server-mqtt'");
     let port = properties.get("port-server-mqtt").expect("No se encontró la propiedad 'port-server-mqtt'").parse::<i32>().expect("Error al parsear el puerto");
+    let publish_interval = properties.get("publish-interval-mqtt").expect("No se encontró la propiedad 'publish-interval-mqtt'").parse::<u64>().expect("Error al parsear el intervalo"); // []
 
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
@@ -80,6 +83,9 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                             ),
                         };
                     }
+                    
+                    // Esperamos, para publicar los cambios "periódicamente"
+                    sleep(Duration::from_secs(publish_interval));
                 }
             };
         }
