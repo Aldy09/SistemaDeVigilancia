@@ -21,22 +21,25 @@ type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 fn get_fixed_header_from_stream(
     stream: &Arc<Mutex<TcpStream>>,
-) -> Result<([u8; 2], FixedHeader, u8), Error> {
+) -> Result<([u8; 2], FixedHeader), Error> {
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
-            let _res = s.read(&mut fixed_header_buf)?;
+            let _res = s.read_exact(&mut fixed_header_buf)?;
+            println!("Leyendo A: {:?}", fixed_header_buf);
+        } else {
+            println!("ERROR 1");
+            let _ = std::io::stdout().flush();
         }
     }
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
-    let tipo = fixed_header.get_message_type();
 
-    Ok((fixed_header_buf, fixed_header, tipo))
+    Ok((fixed_header_buf, fixed_header))
 }
 
 /// Una vez leídos los dos bytes del fixed header de un mensaje desde el stream,
@@ -55,7 +58,11 @@ fn get_message_decoded_in_bytes_from_stream(
     {
         if let Ok(mut s) = stream.lock() {
             // [] si uso un if let, no nec el scope de afuera para dropear, no? (o sí?)
-            let _res = s.read(&mut rem_buf)?;
+            let _res = s.read_exact(&mut rem_buf)?;
+            println!("Leyendo B: {:?}", rem_buf);
+        } else {
+            println!("ERROR 2");
+            let _ = std::io::stdout().flush();
         }
     }
     // Ahora junto las dos partes leídas, para obt mi msg original
@@ -126,11 +133,13 @@ fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
-    let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
+
+    // buffer, fixed_header, tipo
+    let mut fixed_header_info  = get_fixed_header_from_stream(stream)?;
     let ceros: &[u8; 2] = &[0; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
-        continue_with_conection(stream, subs_by_topic, fixed_header_info.0)?; // esta función lee UN mensaje.
+        continue_with_conection(stream, subs_by_topic, fixed_header_info)?; // esta función lee UN mensaje.
                                                                               // Leo para la siguiente iteración
         fixed_header_info = get_fixed_header_from_stream(stream)?;
         vacio = &fixed_header_info.0 == ceros;
@@ -232,6 +241,9 @@ fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resu
     if let Ok(mut s) = stream.lock() {
         let _ = s.write(msg_bytes)?;
         s.flush()?;
+    } else {
+        println!("ERROR 3");
+        let _ = std::io::stdout().flush();
     }
     Ok(())
 }
@@ -243,26 +255,27 @@ fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resu
 fn continue_with_conection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
-    fixed_header_bytes: [u8; 2],
+    fixed_header_info: ([u8; 2], FixedHeader),
 ) -> Result<(), Error> {
-    let fixed_header_info = get_fixed_header_from_stream(stream)?;
+    /*let fixed_header_info = get_fixed_header_from_stream(stream)?;
     println!("--------------------------");
     println!(
         "Recibo fixed header, tipo: {}, bytes de fixed header leidos: {:?}",
         fixed_header_info.2, fixed_header_info.1
-    );
+    );*/
+    let (fixed_header_bytes, fixed_header) = fixed_header_info;
 
     // Ahora sí ya puede haber diferentes tipos de mensaje.
-    match fixed_header_info.2 {
+    match fixed_header.get_message_type() {
         3 => {
-            let msg = process_publish(fixed_header_info.1, stream, &fixed_header_bytes)?;
+            let msg = process_publish(fixed_header, stream, &fixed_header_bytes)?;
 
             send_puback(&msg, stream)?;
 
             distribute_to_subscribers(&msg, subs_by_topic)?;
         }
         8 => {
-            let msg = process_subscribe(fixed_header_info.1, stream, &fixed_header_bytes)?;
+            let msg = process_subscribe(fixed_header, stream, &fixed_header_bytes)?;
 
             let return_codes = add_subscribers_to_topic(&msg, stream, subs_by_topic)?;
 
@@ -270,7 +283,7 @@ fn continue_with_conection(
         }
         _ => println!(
             "   ERROR: tipo desconocido: recibido: \n   {:?}",
-            fixed_header_info.1
+            fixed_header
         ),
     };
 
@@ -282,10 +295,11 @@ fn handle_client(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
-    let (fixed_header_buf, fixed_header, tipo) = get_fixed_header_from_stream(stream)?;
+    let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
+    println!("Server, leo rem len: {}", fixed_header.get_rem_len());
 
     // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
-    match tipo {
+    match fixed_header.get_message_type() {
         1 => {
             let _msg_bytes =
                 process_connect(fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
@@ -365,7 +379,6 @@ fn main() -> Result<(), Error> {
     // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
     // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
     let subs_by_topic: ShHashmapType = Arc::new(Mutex::new(HashMap::new()));
-    println!("Servidor iniciado. Esperando conexiones.");
 
     handle_incoming_connections(listener, subs_by_topic)?;
 
