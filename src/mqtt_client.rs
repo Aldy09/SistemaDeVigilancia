@@ -56,6 +56,7 @@ impl MQTTClient {
             s.flush()?;
         }
         println!("Envía connect: \n   {:?}", &connect_msg);
+        println!("   El Connect en bytes: {:?}", msg_bytes);
 
         // Más inicializaciones
         let (tx, rx) = mpsc::channel::<Vec<u8>>(); // [] que mande bytes, xq no hicimos un trait Message
