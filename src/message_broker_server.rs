@@ -72,7 +72,7 @@ fn process_connect(
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_buf: &[u8; 2],
     subs_by_topic: &ShHashmapType,
-) -> Result<Vec<u8>, Error> {
+) -> Result<(), Error> {
     // Continúa leyendo y reconstruye el mensaje recibido completo
     println!("Recibo mensaje tipo Connect");
     let msg_bytes =
@@ -94,8 +94,11 @@ fn process_connect(
 
     if is_authentic {
         handle_connection(stream, subs_by_topic)?;
-    };
-    Ok(msg_bytes)
+    } else {
+        println!("   ERROR: No se pudo autenticar al cliente.");
+    }
+
+    Ok(())
 }
 
 fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
@@ -289,8 +292,7 @@ fn handle_client(
     // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
     match fixed_header.get_message_type() {
         1 => {
-            let _msg_bytes =
-                process_connect(fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
+            process_connect(fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
