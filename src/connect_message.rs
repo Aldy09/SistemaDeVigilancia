@@ -58,18 +58,27 @@ impl<'a> ConnectMessage<'a> {
     }
 
     fn calculate_remaining_length(&self) -> u8 {
-        let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT", 1 byte for level, 1 byte for connect flags
+        let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT" (5=1+4), 1 byte for level, 1 byte for connect flags
+                                                // Payload: En el caso de los que pueden ser None se suma un length_string_u8 solamente si no es None.
         let length_string_u8 = 1;
         let payload_length = length_string_u8
             + self.payload.client_id.len()
-            + length_string_u8
-            + self.payload.will_topic.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.will_message.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.username.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.password.map_or(0, |s| s.len());
+            + self
+                .payload
+                .will_topic
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .will_message
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .username
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .password
+                .map_or(0, |s| s.len() + length_string_u8);
 
         (variable_header_length + payload_length) as u8
     }
@@ -84,6 +93,8 @@ impl<'a> ConnectMessage<'a> {
         bytes.push(self.fixed_header.remaining_length);
 
         // Variable Header
+        let protocol_name_len: u8 = self.variable_header.protocol_name.len() as u8;
+        bytes.push(protocol_name_len); // el valor 4, len de "MQTT".
         bytes.extend_from_slice(&self.variable_header.protocol_name);
         bytes.push(self.variable_header.protocol_level);
         let connect_flags = self.variable_header.connect_flags.to_byte();
@@ -120,18 +131,19 @@ impl<'a> ConnectMessage<'a> {
         };
 
         let variable_header = VariableHeader {
-            protocol_name: [bytes[2], bytes[3], bytes[4], bytes[5]],
-            protocol_level: bytes[6],
-            connect_flags: ConnectFlags::from_byte(bytes[7]),
+            // el byte 2 es el protocol_name_len, debería valer siempre 4 que es la len de "MQTT". []
+            protocol_name: [bytes[3], bytes[4], bytes[5], bytes[6]],
+            protocol_level: bytes[7],
+            connect_flags: ConnectFlags::from_byte(bytes[8]),
         };
 
-        // Indice donde comienza el payload
-        let payload_start_index = 8;
+        // Indice donde comienza el payload (son 2 bytes de fixed header y 7 bytes de var header)
+        let payload_start_index = 9;
 
         // Calcular la longitud del payload
-        let payload_length = fixed_header.remaining_length as usize - (5 + 1 + 1); // Total - 7 bytes de la cabecera fija y variable
-
-        // Extraer el payload del mensaje
+        let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
+        let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes del variable header
+                                                                                           // Extraer el payload del mensaje
         let payload_bytes = &bytes[payload_start_index..payload_start_index + payload_length];
 
         // Procesar el payload según los flags y su longitud
@@ -139,7 +151,7 @@ impl<'a> ConnectMessage<'a> {
 
         // Verificar que el tipo sea correcto, siempre debe valer 1
         // algo del estilo if message_type != 1 {return error tipo incorrecto al crear ConnectMessage },
-        // me va a cambiar la firma, lo dejo así ahora y dsp lo refactorizo []
+        // va a cambiar la firma, lo dejo así ahora y dsp lo refactorizo []
         // Construir y retornar el mensaje ConnectMessage completo
         ConnectMessage {
             fixed_header,
@@ -301,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_bytes_parsing_payload_get_user() {
+    fn test_from_bytes_parsing_payload_get_user_get_passwd() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
         let mut connect_message = ConnectMessage::new(
             "test_client",
@@ -327,5 +339,26 @@ mod tests {
             new_connect_message.get_passwd(),
             connect_message.get_passwd()
         );
+    }
+
+    #[test]
+    fn test_from_bytes_works_properly_with_none_fields() {
+        // Creamos una instancia de ConnectMessage con algunos valores en None
+        let mut connect_message = ConnectMessage::new(
+            "test_client",
+            None,
+            None,
+            Some("test_user"),
+            Some("test_password123"),
+        );
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert_eq!(connect_message.payload, new_connect_message.payload);
     }
 }

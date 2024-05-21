@@ -30,4 +30,3 @@ impl Properties {
         self.props.get(key)
     }
 }
-

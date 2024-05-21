@@ -5,7 +5,6 @@ use log::{error, info};
 
 use rustx::mqtt_client::MQTTClient;
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
-#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 fn main() {
     env_logger::init();
 
@@ -47,18 +46,10 @@ fn main() {
                 Err(e) => error!("Cliente: Error al hacer el publish {:?}", e),
             }
 
-            //  Que lea del topic al/os cual/es hizo subscribe, implementando [].
-            //let mqtt_client_c = Arc::new(Mutex::new(mqtt_client)); y habrá que usar lock... podemos esperar al hijo adentro?
+            // Que lea del topic al/os cual/es hizo subscribe, implementando [].
             let h = thread::spawn(move || {
-                // while condición de corte? así puedo hacer el finalizar abajo del loop
-                loop {
-                    let msg_bytes = mqtt_client.mqtt_receive_msg_from_subs_topic();
-                    match msg_bytes {
-                        Ok(msg_b) => println!("Cliente: Recibo estos msg_bytes: {:?}", msg_b),
-                        Err(e) => println!("Cliente: Error al recibir msg_bytes: {:?}", e),
-                    }
-                    // [] ToDo: aux: para que el compilador permita mandar un mensaje en vez de los bytes,
-                    // tenemos que hacer un trait Message y que todos los structs de los mensajes lo implementen
+                while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                    println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
                 }
 
                 // Cliente termina de utilizar mqtt
