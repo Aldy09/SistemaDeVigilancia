@@ -74,6 +74,7 @@ impl<'a> ConnectMessage<'a> {
         (variable_header_length + payload_length) as u8
     }
 
+    /// Pasa un ConnectMessage a bytes.
     pub fn to_bytes(&mut self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
@@ -111,6 +112,7 @@ impl<'a> ConnectMessage<'a> {
         bytes
     }
 
+    /// Parsea los bytes recibidos y devuelve un struct ConnectMessage.
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
         let fixed_header = FixedHeader {
             message_type: bytes[0],
@@ -146,6 +148,7 @@ impl<'a> ConnectMessage<'a> {
         }
     }
 
+    /// Parsea los bytes correspondientes al payload, a un struct payload con sus campos.
     pub fn process_payload(flags: &ConnectFlags, bytes_payload: &'a [u8]) -> Payload<'a> {
         let mut payload_start_index: usize = 0;
 
@@ -214,6 +217,16 @@ impl<'a> ConnectMessage<'a> {
             username,
             password,
         }
+    }
+
+    /// Devuelve el campo username del mensaje.
+    pub fn get_user(&self) -> Option<&str> {
+        self.payload.username
+    }
+
+    /// Devuelve el campo password del mensaje.
+    pub fn get_passwd(&self) -> Option<&str> {
+        self.payload.password
     }
 }
 
@@ -285,5 +298,34 @@ mod tests {
 
         // Comprobamos que los mensajes son iguales
         assert_eq!(connect_message.payload, new_connect_message.payload);
+    }
+
+    #[test]
+    fn test_from_bytes_parsing_payload_get_user() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = ConnectMessage::new(
+            "test_client",
+            Some("test/topic"),
+            Some("test message"),
+            Some("test_user"),
+            Some("test_password"),
+        );
+
+        // La función get_user obtiene el user del mensaje sin pasar a bytes
+        assert_eq!(connect_message.get_user().unwrap(), "test_user");
+        assert_eq!(connect_message.get_passwd().unwrap(), "test_password");
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // La función get_user obtiene el user del mensaje luego de convertirlo a mensaje desde bytes
+        assert_eq!(new_connect_message.get_user(), connect_message.get_user());
+        assert_eq!(
+            new_connect_message.get_passwd(),
+            connect_message.get_passwd()
+        );
     }
 }

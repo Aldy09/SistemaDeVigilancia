@@ -72,7 +72,9 @@ fn process_connect(
     fixed_header: FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_buf: &[u8; 2],
+    subs_by_topic: &ShHashmapType,
 ) -> Result<Vec<u8>, Error> {
+    // Continúa leyendo y reconstruye el mensaje recibido completo
     println!("Recibo mensaje tipo Connect");
     let msg_bytes =
         get_message_decoded_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
@@ -81,22 +83,39 @@ fn process_connect(
         "   Mensaje connect completo recibido: \n   {:?}",
         connect_msg
     );
+
+    // Procesa el mensaje connect
+    let (is_authentic, connack_response) = authenticate(connect_msg)?;
+
+    write_to_the_client(&connack_response, stream)?;
+    println!(
+        "   tipo connect: Enviado el ack: \n   {:?}",
+        connack_response
+    );
+
+    if is_authentic {
+        handle_connection(stream, subs_by_topic)?;
+    };
     Ok(msg_bytes)
 }
 
-fn authenticate(msg_bytes: Vec<u8>) -> Result<[u8; 4], Error> {
+fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
     let username = "sistema-monitoreo";
     let password = "rustx123";
-    let is_authentic: bool = msg_bytes
-        .windows(username.len() + password.len() + 2)
-        .any(|slice| slice == [username.as_bytes(), password.as_bytes(), &[0x00]].concat());
+
+    let mut is_authentic: bool = false;
+    if let Some(msg_user) = connect_msg.get_user() {
+        if let Some(msg_passwd) = connect_msg.get_passwd() {
+            is_authentic = msg_user == username && msg_passwd == password;
+        }
+    }
 
     let connack_response: [u8; 4] = if is_authentic {
         [0x20, 0x02, 0x00, 0x00] // CONNACK (0x20) con retorno 0x00
     } else {
         [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
     };
-    Ok(connack_response)
+    Ok((is_authentic, connack_response))
 }
 
 // A partir de ahora que ya se hizo el connect exitosamente,
@@ -268,21 +287,8 @@ fn handle_client(
     // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
     match tipo {
         1 => {
-            let msg_bytes = process_connect(fixed_header, stream, &fixed_header_buf)?;
-
-            let connack_response = authenticate(msg_bytes)?;
-
-            write_to_the_client(&connack_response, stream)?;
-            println!(
-                "   tipo connect: Enviado el ack: \n   {:?}",
-                connack_response
-            );
-
-            //if is_authentic { // ToDo: actuamente está dando siempre false, fijarse. []
-
-            handle_connection(stream, subs_by_topic)?;
-
-            //}; // (fin del if es authentic, está comentado por ahora pero debe conservarse).
+            let _msg_bytes =
+                process_connect(fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
