@@ -28,7 +28,7 @@ fn get_fixed_header_from_stream(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
-            let _res = s.read_exact(&mut fixed_header_buf)?;
+            let _res = s.read(&mut fixed_header_buf)?;
         }
     }
 
@@ -54,7 +54,7 @@ fn get_message_decoded_in_bytes_from_stream(
     {
         if let Ok(mut s) = stream.lock() {
             // si uso un if let, no nec el scope de afuera para dropear []
-            let _res = s.read_exact(&mut rem_buf)?;
+            let _res = s.read(&mut rem_buf)?;
         }
     }
     // Ahora junto las dos partes leídas, para obt mi msg original
@@ -125,14 +125,13 @@ fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
-
     // buffer, fixed_header, tipo
-    let mut fixed_header_info  = get_fixed_header_from_stream(stream)?;
+    let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
     let ceros: &[u8; 2] = &[0; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
         continue_with_conection(stream, subs_by_topic, fixed_header_info)?; // esta función lee UN mensaje.
-                                                                              // Leo para la siguiente iteración
+                                                                            // Leo para la siguiente iteración
         fixed_header_info = get_fixed_header_from_stream(stream)?;
         vacio = &fixed_header_info.0 == ceros;
     }

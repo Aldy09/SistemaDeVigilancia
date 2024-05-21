@@ -71,7 +71,7 @@ pub fn leer_fixed_header_de_stream_y_obt_tipo(
 
     {
         let mut s = stream.lock().unwrap();
-        let _res = s.read_exact(&mut fixed_header_buf)?;
+        let _res = s.read(&mut fixed_header_buf)?;
     }
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
@@ -97,7 +97,7 @@ pub fn continuar_leyendo_bytes_del_msg(
 
     {
         let mut s = stream.lock().unwrap();
-        let _res = s.read_exact(&mut rem_buf)?;
+        let _res = s.read(&mut rem_buf)?;
     }
 
     // Ahora junto las dos partes leídas, para obt mi msg original

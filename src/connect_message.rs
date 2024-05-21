@@ -35,7 +35,6 @@ impl<'a> ConnectMessage<'a> {
                 clean_session: true,
                 reserved: false,
             },
-            
         };
 
         let payload = Payload {
@@ -60,21 +59,32 @@ impl<'a> ConnectMessage<'a> {
 
     fn calculate_remaining_length(&self) -> u8 {
         let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT" (5=1+4), 1 byte for level, 1 byte for connect flags
-        // Payload: En el caso de los que pueden ser None se suma un length_string_u8 solamente si no es None.
+                                                // Payload: En el caso de los que pueden ser None se suma un length_string_u8 solamente si no es None.
         let length_string_u8 = 1;
         let payload_length = length_string_u8
             + self.payload.client_id.len()
-            + self.payload.will_topic.map_or(0, |s| s.len() + length_string_u8)
-            + self.payload.will_message.map_or(0, |s| s.len() + length_string_u8)
-            + self.payload.username.map_or(0, |s| s.len() + length_string_u8)
-            + self.payload.password.map_or(0, |s| s.len() + length_string_u8);
+            + self
+                .payload
+                .will_topic
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .will_message
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .username
+                .map_or(0, |s| s.len() + length_string_u8)
+            + self
+                .payload
+                .password
+                .map_or(0, |s| s.len() + length_string_u8);
 
         (variable_header_length + payload_length) as u8
     }
 
     /// Pasa un ConnectMessage a bytes.
     pub fn to_bytes(&mut self) -> Vec<u8> {
-        
         let mut bytes = Vec::new();
 
         // Fixed Header
@@ -115,7 +125,6 @@ impl<'a> ConnectMessage<'a> {
 
     /// Parsea los bytes recibidos y devuelve un struct ConnectMessage.
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
-        
         let fixed_header = FixedHeader {
             message_type: bytes[0],
             remaining_length: bytes[1],
@@ -134,9 +143,9 @@ impl<'a> ConnectMessage<'a> {
         // Calcular la longitud del payload
         let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
         let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes del variable header
-        // Extraer el payload del mensaje
+                                                                                           // Extraer el payload del mensaje
         let payload_bytes = &bytes[payload_start_index..payload_start_index + payload_length];
-        
+
         // Procesar el payload según los flags y su longitud
         let payload = Self::process_payload(&variable_header.connect_flags, payload_bytes);
 
@@ -212,7 +221,7 @@ impl<'a> ConnectMessage<'a> {
         } else {
             None
         };
-        
+
         Payload {
             client_id,
             will_topic,

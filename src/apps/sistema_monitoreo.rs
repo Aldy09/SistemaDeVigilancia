@@ -44,7 +44,7 @@ fn connect_and_subscribe() {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            // Cliente usa subscribe 
+            // Cliente usa subscribe
             let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"), 1)]);
             match res_sub {
                 Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
