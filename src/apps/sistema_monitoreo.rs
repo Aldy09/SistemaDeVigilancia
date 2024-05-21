@@ -5,8 +5,8 @@ use std::thread;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use rustx::mqtt_client::MQTTClient;
 use rustx::apps::properties::Properties;
+use rustx::mqtt_client::MQTTClient;
 
 fn main() {
     let hijo_connect = thread::spawn(move || {
@@ -32,9 +32,16 @@ fn main() {
 }
 
 fn connect_and_subscribe() {
-    let properties = Properties::new("sistema_monitoreo.properties").expect("Error al leer el archivo de properties");
-    let ip = properties.get("ip-server-mqtt").expect("No se encontró la propiedad 'ip-server-mqtt'");
-    let port = properties.get("port-server-mqtt").expect("No se encontró la propiedad 'port-server-mqtt'").parse::<i32>().expect("Error al parsear el puerto");
+    let properties = Properties::new("sistema_monitoreo.properties")
+        .expect("Error al leer el archivo de properties");
+    let ip = properties
+        .get("ip-server-mqtt")
+        .expect("No se encontró la propiedad 'ip-server-mqtt'");
+    let port = properties
+        .get("port-server-mqtt")
+        .expect("No se encontró la propiedad 'port-server-mqtt'")
+        .parse::<i32>()
+        .expect("Error al parsear el puerto");
 
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
@@ -58,8 +65,6 @@ fn connect_and_subscribe() {
             let h = thread::spawn(move || {
                 while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
                     println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-                    // [] ToDo: aux: para que el compilador permita mandar un mensaje en vez de los bytes,
-                    // tenemos que hacer un trait Message y que todos los structs de los mensajes lo implementen
                 }
 
                 // Cliente termina de utilizar mqtt

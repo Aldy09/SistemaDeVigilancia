@@ -252,12 +252,6 @@ fn continue_with_conection(
     subs_by_topic: &ShHashmapType,
     fixed_header_info: ([u8; 2], FixedHeader),
 ) -> Result<(), Error> {
-    /*let fixed_header_info = get_fixed_header_from_stream(stream)?;
-    println!("--------------------------");
-    println!(
-        "Recibo fixed header, tipo: {}, bytes de fixed header leidos: {:?}",
-        fixed_header_info.2, fixed_header_info.1
-    );*/
     let (fixed_header_bytes, fixed_header) = fixed_header_info;
 
     // Ahora sí ya puede haber diferentes tipos de mensaje.

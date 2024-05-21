@@ -50,8 +50,6 @@ fn main() {
             let h = thread::spawn(move || {
                 while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
                     println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-                    // [] ToDo: aux: para que el compilador permita mandar un mensaje en vez de los bytes,
-                    // tenemos que hacer un trait Message y que todos los structs de los mensajes lo implementen
                 }
 
                 // Cliente termina de utilizar mqtt
