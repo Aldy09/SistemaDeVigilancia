@@ -8,6 +8,7 @@ use std::{fs, thread};
 type ShareableCamType = Arc<Mutex<Camera>>;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
+use rustx::apps::properties::Properties;
 
 #[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 
@@ -35,8 +36,10 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
 }
 
 fn connect_and_publish(cameras: &mut ShCamerasType) {
-    let ip = "127.0.0.1".to_string();
-    let port = 9090;
+    let properties = Properties::new("sistema_camaras.properties").expect("Error al leer el archivo de properties");
+    let ip = properties.get("ip-server-mqtt").expect("No se encontró la propiedad 'ip-server-mqtt'");
+    let port = properties.get("port-server-mqtt").expect("No se encontró la propiedad 'port-server-mqtt'").parse::<i32>().expect("Error al parsear el puerto");
+
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
