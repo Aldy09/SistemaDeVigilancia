@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use crate::{
     connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_payload::Payload,
     connect_variable_header::VariableHeader,
@@ -37,7 +35,7 @@ impl<'a> ConnectMessage<'a> {
                 clean_session: true,
                 reserved: false,
             },
-            // [] falta un keep alive, 2 bytes
+            
         };
 
         let payload = Payload {
@@ -62,31 +60,21 @@ impl<'a> ConnectMessage<'a> {
 
     fn calculate_remaining_length(&self) -> u8 {
         let variable_header_length = 5 + 1 + 1; // 5 bytes for "MQTT" (5=1+4), 1 byte for level, 1 byte for connect flags
+        // Payload: En el caso de los que pueden ser None se suma un length_string_u8 solamente si no es None.
         let length_string_u8 = 1;
         let payload_length = length_string_u8
             + self.payload.client_id.len()
-            + length_string_u8
-            + self.payload.will_topic.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.will_message.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.username.map_or(0, |s| s.len())
-            + length_string_u8
-            + self.payload.password.map_or(0, |s| s.len());
-        
-        // EL BUG!!! En el caso de los que pueden ser None, y en particular en los will_* que son los que usamos en none al usarlo,
-        // se está sumando un length_string_u8 de todas formas!
-
-        let quick_fix = 3; // Le resto 3, xq veo que los tres bytes que me faltan en el msj siguiente, los leyó de más acá
-        // ToDo: revisar esta cuenta a ver de dónde son esos tres bytes que sobran. []
-        // Listo un byte de una len. Ahora es 2 el desfasaje: los none de will_*?.
+            + self.payload.will_topic.map_or(0, |s| s.len() + length_string_u8)
+            + self.payload.will_message.map_or(0, |s| s.len() + length_string_u8)
+            + self.payload.username.map_or(0, |s| s.len() + length_string_u8)
+            + self.payload.password.map_or(0, |s| s.len() + length_string_u8);
 
         (variable_header_length + payload_length) as u8
     }
 
     /// Pasa un ConnectMessage a bytes.
     pub fn to_bytes(&mut self) -> Vec<u8> {
-        println!("DEBUG: TO BYTES {:?}", self);
+        
         let mut bytes = Vec::new();
 
         // Fixed Header
@@ -122,20 +110,19 @@ impl<'a> ConnectMessage<'a> {
             bytes.extend_from_slice(password.as_bytes());
         }
 
-        println!("DEBUG: TO BYTES {:?}", bytes);
         bytes
     }
 
     /// Parsea los bytes recibidos y devuelve un struct ConnectMessage.
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
-        println!("DEBUG: FROM BYTES {:?}", bytes);
+        
         let fixed_header = FixedHeader {
             message_type: bytes[0],
             remaining_length: bytes[1],
         };
 
         let variable_header = VariableHeader {
-            // el byte 2 es el protocol_name_len, debería valer siempre 4 que es la len de "MQTT".
+            // el byte 2 es el protocol_name_len, debería valer siempre 4 que es la len de "MQTT". []
             protocol_name: [bytes[3], bytes[4], bytes[5], bytes[6]],
             protocol_level: bytes[7],
             connect_flags: ConnectFlags::from_byte(bytes[8]),
@@ -144,31 +131,24 @@ impl<'a> ConnectMessage<'a> {
         // Indice donde comienza el payload (son 2 bytes de fixed header y 7 bytes de var header)
         let payload_start_index = 9;
 
-        let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
         // Calcular la longitud del payload
-        // El payload length es rem_len - var header len ==> está bien, rem_len - 7 es correcto
-        //let payload_length = fixed_header.remaining_length as usize - (5 + 1 + 1); // Total - 7 bytes de la cabecera fija y variable
-        let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes de la cabecera fija y variable
-        println!("Leo rem len, leída de bytes: {}, payload len: {}", fixed_header.remaining_length, payload_length);
-
+        let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
+        let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes del variable header
         // Extraer el payload del mensaje
         let payload_bytes = &bytes[payload_start_index..payload_start_index + payload_length];
-        println!("Bytes del payload: {:?}", payload_bytes);
-
+        
         // Procesar el payload según los flags y su longitud
         let payload = Self::process_payload(&variable_header.connect_flags, payload_bytes);
 
         // Verificar que el tipo sea correcto, siempre debe valer 1
         // algo del estilo if message_type != 1 {return error tipo incorrecto al crear ConnectMessage },
-        // me va a cambiar la firma, lo dejo así ahora y dsp lo refactorizo []
+        // va a cambiar la firma, lo dejo así ahora y dsp lo refactorizo []
         // Construir y retornar el mensaje ConnectMessage completo
-        let msg = ConnectMessage {
+        ConnectMessage {
             fixed_header,
             variable_header,
             payload,
-        };
-        println!("DEBUG: FROM BYTES {:?}", msg);
-        msg
+        }
     }
 
     /// Parsea los bytes correspondientes al payload, a un struct payload con sus campos.
@@ -220,8 +200,6 @@ impl<'a> ConnectMessage<'a> {
             None
         };
 
-        println!("hola");
-        let _ = std::io::stdout().flush();
         // Extraer el password si los flags lo indican
         let password = if flags.password_flag {
             let password_length = bytes_payload[payload_start_index] as usize;
@@ -234,9 +212,7 @@ impl<'a> ConnectMessage<'a> {
         } else {
             None
         };
-        println!("no");
         
-
         Payload {
             client_id,
             will_topic,
@@ -324,12 +300,11 @@ mod tests {
         let new_connect_message = ConnectMessage::from_bytes(&bytes);
 
         // Comprobamos que los mensajes son iguales
-        //assert_eq!(connect_message.payload, new_connect_message.payload);
-        assert_eq!(1, 2);
+        assert_eq!(connect_message.payload, new_connect_message.payload);
     }
 
     #[test]
-    fn test_from_bytes_parsing_payload_get_user() {
+    fn test_from_bytes_parsing_payload_get_user_get_passwd() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
         let mut connect_message = ConnectMessage::new(
             "test_client",
@@ -355,5 +330,26 @@ mod tests {
             new_connect_message.get_passwd(),
             connect_message.get_passwd()
         );
+    }
+
+    #[test]
+    fn test_from_bytes_works_properly_with_none_fields() {
+        // Creamos una instancia de ConnectMessage con algunos valores en None
+        let mut connect_message = ConnectMessage::new(
+            "test_client",
+            None,
+            None,
+            Some("test_user"),
+            Some("test_password123"),
+        );
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert_eq!(connect_message.payload, new_connect_message.payload);
     }
 }
