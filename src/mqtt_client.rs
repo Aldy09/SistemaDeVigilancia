@@ -166,7 +166,7 @@ fn leer_desde_server(
     while !vacio {
         println!("Mqtt cliente leyendo: siguiente msj");
         leer_un_mensaje(&mut *stream, fixed_header_buf, tx)?; // esta función lee UN mensaje.
-        
+
         // Leo para la siguiente iteración
         fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
         vacio = &fixed_header_buf == ceros;
@@ -213,7 +213,7 @@ fn leer_un_mensaje(
             if let Some(_packet_id) = msg.get_packet_identifier() {
                 // Con el packet_id, marco en algún lado que recibí el ack.
             }
-            
+
             match tx.send(msg.to_bytes()) {
                 Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                 Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
@@ -227,7 +227,6 @@ fn leer_un_mensaje(
             // Entonces tengo el mensaje completo
             let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
             println!("   Mensaje pub ack completo recibido: {:?}", msg);
-                        
         }
         9 => {
             // SubAck

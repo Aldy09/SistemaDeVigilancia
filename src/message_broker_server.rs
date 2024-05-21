@@ -208,7 +208,7 @@ fn add_subscribers_to_topic(
     for (topic, _qos) in msg.get_topic_filters() {
         return_codes.push(SubscribeReturnCode::QoS1);
         let topic_s = topic.to_string();
-        
+
         // Guarda una referencia (arc clone) al stream, en el vector de suscriptores al topic en cuestión
         if let Ok(mut subs_b_t) = subs_by_topic.lock() {
             subs_b_t
