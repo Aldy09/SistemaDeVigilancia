@@ -29,10 +29,6 @@ fn get_fixed_header_from_stream(
     {
         if let Ok(mut s) = stream.lock() {
             let _res = s.read_exact(&mut fixed_header_buf)?;
-            println!("Leyendo A: {:?}", fixed_header_buf);
-        } else {
-            println!("ERROR 1");
-            let _ = std::io::stdout().flush();
         }
     }
 
@@ -57,21 +53,17 @@ fn get_message_decoded_in_bytes_from_stream(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
-            // [] si uso un if let, no nec el scope de afuera para dropear, no? (o sí?)
+            // si uso un if let, no nec el scope de afuera para dropear []
             let _res = s.read_exact(&mut rem_buf)?;
-            println!("Leyendo B: {:?}", rem_buf);
-        } else {
-            println!("ERROR 2");
-            let _ = std::io::stdout().flush();
         }
     }
     // Ahora junto las dos partes leídas, para obt mi msg original
     let mut buf = fixed_header_bytes.to_vec();
     buf.extend(rem_buf);
-    println!(
+    /*println!(
         "   Mensaje en bytes recibido, antes de hacerle from_bytes: {:?}",
         buf
-    );
+    );*/
     Ok(buf)
 }
 
@@ -241,9 +233,6 @@ fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resu
     if let Ok(mut s) = stream.lock() {
         let _ = s.write(msg_bytes)?;
         s.flush()?;
-    } else {
-        println!("ERROR 3");
-        let _ = std::io::stdout().flush();
     }
     Ok(())
 }
@@ -290,13 +279,12 @@ fn continue_with_conection(
     Ok(())
 }
 
-/// Procesa los mensajes entrantes de cada cliente.
+/// Procesa los mensajes entrantes de un dado cliente.
 fn handle_client(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
     let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
-    println!("Server, leo rem len: {}", fixed_header.get_rem_len());
 
     // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
     match fixed_header.get_message_type() {
@@ -306,9 +294,8 @@ fn handle_client(
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
-            println!("   recibido: {:?}", fixed_header_buf);
             println!("   recibido: {:?}", fixed_header);
-            // ToDo: Leer de la doc qué hacer en este caso, o si solo ignoramos.
+            // ToDo: Leer de la doc qué hacer en este caso, o si solo ignoramos. []
         }
     };
     Ok(())
