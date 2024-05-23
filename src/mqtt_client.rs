@@ -114,7 +114,7 @@ impl MQTTClient {
     pub fn mqtt_subscribe(
         &mut self,
         packet_id: u16,
-        topics_to_subscribe: Vec<(String, u8)>,
+        topics_to_subscribe: Vec<String>,
     ) -> Result<(), Error> {
         println!("-----------------");
         // Construyo subscribe

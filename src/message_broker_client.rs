@@ -33,7 +33,7 @@ fn main() {
             println!("Cliente: Conectado al broker MQTT.");
 
             // Cliente usa subscribe
-            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic3"), 1)]);
+            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic3"))]);
             match res_sub {
                 Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
                 Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),

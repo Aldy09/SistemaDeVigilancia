@@ -22,12 +22,13 @@ pub struct SubscribeMessage {
 }
 
 impl SubscribeMessage {
-    pub fn new(packet_id: u16, topics: Vec<(String, u8)>) -> Self {
+    pub fn new(packet_id: u16, topics: Vec<String>) -> Self {
         SubscribeMessage {
             message_type: 8,
             reserved_flags: 2,
             packet_identifier: packet_id,
-            topic_filters: topics,
+            topic_filters: topics.into_iter().map(|topic| (topic, 2)).collect(), // Convertimos cada tema en una tupla con QoS 2 
+            //No queremos mensajes duplicados y queremos que se exactamente 1 vez
         }
     }
 
