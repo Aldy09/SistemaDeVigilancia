@@ -87,7 +87,7 @@ impl MQTTClient {
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
         println!("-----------------");
         // Creo un msj publish
-        let flags = PublishFlags::new(0, 1, 0)?;
+        let flags = PublishFlags::new(0, 2, 0)?;
         let result = PublishMessage::new(3, flags, topic, Some(1), payload);
         let pub_msg = match result {
             Ok(msg) => {
