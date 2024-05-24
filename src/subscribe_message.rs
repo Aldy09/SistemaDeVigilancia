@@ -143,7 +143,7 @@ mod test {
     #[test]
     fn test_1_subscribe_msg_se_crea_con_tipo_y_flag_adecuados() {
         let packet_id: u16 = 1;
-        let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"), 1)];
+        let topics_to_subscribe: Vec<String> = vec![(String::from("topic1"))];
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
 
         // Estos valores siempre son 8 y 2 respectivamente, para este tipo de mensaje
@@ -154,7 +154,7 @@ mod test {
     #[test]
     fn test_2_subscribe_msg_se_pasa_a_bytes_y_se_interpreta_correctamente() {
         let packet_id: u16 = 1;
-        let topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"), 1)];
+        let topics_to_subscribe: Vec<String> = vec![(String::from("topic1"))];
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
 
         let bytes_msg = subscribe_msg.to_bytes();
@@ -166,9 +166,9 @@ mod test {
     #[test]
     fn test_3_subscribe_msg_se_pasa_a_bytes_e_interpreta_correctamente_con_varios_topics() {
         let packet_id: u16 = 1;
-        let mut topics_to_subscribe: Vec<(String, u8)> = vec![(String::from("topic1"), 1)];
-        topics_to_subscribe.push((String::from("topic2"), 0)); // agrego más topics al vector
-        topics_to_subscribe.push((String::from("topic3"), 1));
+        let mut topics_to_subscribe: Vec<String> = vec![String::from("topic1")];
+        topics_to_subscribe.push(String::from("topic2")); // agrego más topics al vector
+        topics_to_subscribe.push(String::from("topic3"));
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
 
         let bytes_msg = subscribe_msg.to_bytes();
