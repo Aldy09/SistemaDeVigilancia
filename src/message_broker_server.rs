@@ -1,5 +1,5 @@
-use config::{Config, File, FileFormat};
-use log::info;
+//use config::{Config, File, FileFormat};
+//use log::info;
 use rustx::connect_message::ConnectMessage;
 use rustx::fixed_header::FixedHeader;
 use rustx::puback_message::PubAckMessage;
@@ -8,7 +8,8 @@ use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
 use std::collections::HashMap;
-use std::io::{Error, Read, Write};
+use std::env::args;
+use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
@@ -303,6 +304,27 @@ fn handle_client(
     Ok(())
 }
 
+/// Lee el puerto por la consola, y devuelve la dirección IP y el puerto.
+fn load_port() -> Result<(String, u16), Error> {
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != 2 {
+        return Err(Error::new(ErrorKind::InvalidInput, "Cantidad de argumentos inválido. Debe ingresar el puerto en el que desea correr el servidor."));
+    }
+    let port = match argv[1].parse::<u16>() {
+        Ok(port) => port,
+        Err(_) => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "El puerto proporcionado no es válido",
+            ))
+        }
+    };
+    let localhost = "127.0.0.1".to_string();
+
+    Ok((localhost, port))
+}
+
+/*
 fn load_config() -> Result<(String, u16), Error> {
     info!("Leyendo archivo de configuración.");
     let mut config = Config::default();
@@ -319,6 +341,7 @@ fn load_config() -> Result<(String, u16), Error> {
     let port = config.get::<u16>("port").unwrap_or(9090);
     Ok((ip, port))
 }
+*/
 
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
@@ -333,13 +356,13 @@ fn handle_incoming_connections(
     println!("Servidor iniciado. Esperando conexiones.");
     let mut handles = vec![];
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
+    for stream_client in listener.incoming() {
+        match stream_client {
+            Ok(stream_client) => {
                 let subs_by_topic_clone: ShHashmapType = subs_by_topic.clone();
                 let handle = std::thread::spawn(move || {
-                    let stream = Arc::new(Mutex::new(stream));
-                    let _ = handle_client(&stream, &subs_by_topic_clone);
+                    let stream_client = Arc::new(Mutex::new(stream_client));
+                    let _ = handle_client(&stream_client, &subs_by_topic_clone);
                 });
                 handles.push(handle);
             }
@@ -361,7 +384,9 @@ fn handle_incoming_connections(
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let (ip, port) = load_config()?;
+    //let (ip, port) = load_config()?;
+
+    let (ip, port) = load_port()?;
 
     let listener = create_server(ip, port)?;
 
