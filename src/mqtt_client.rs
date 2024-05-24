@@ -25,7 +25,7 @@ use crate::suback_message::SubAckMessage;
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
-    rx: Receiver<PublishMessage>,
+    pub rx: Receiver<PublishMessage>,
 }
 
 impl MQTTClient {
