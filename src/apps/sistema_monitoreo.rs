@@ -5,33 +5,75 @@ use std::thread;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use rustx::apps::properties::Properties;
+//use rustx::apps::properties::Properties;
 use rustx::mqtt_client::MQTTClient;
+use std::env::args;
+use std::io::{Error, ErrorKind};
+use std::net::SocketAddr;
 
-fn main() {
+fn main(){
+
+    let (ip, port) = load_ip_and_port()?;
+
+    let broker_addr: Result<SocketAddr, _> = format!("{}:{}", ip, port).parse();
+    println!("Broker addr: {:?}", broker_addr);
+    let broker_addr = match broker_addr {
+        Ok(addr) => addr,
+        Err(_) => {
+            eprintln!("Dirección no válida");
+        }
+    };
+
     let hijo_connect = thread::spawn(move || {
-        connect_and_subscribe();
+        connect_and_subscribe(&broker_addr);
     });
 
     let hijo_ui = thread::spawn(move || {
         let application = gtk::Application::new(
             Some("fi.uba.sistemamonitoreo"),
             gio::ApplicationFlags::FLAGS_NONE,
-        )
-        .expect("Fallo en iniciar la aplicacion");
-        application.connect_activate(build_ui);
-        application.run(&[]);
+        );
+        match application {
+            Ok(app) => {
+                app.connect_activate(build_ui);
+                app.run(&[]);
+                Ok(())
+            },
+            Err(e) => Err(e),
+        }
     });
 
-    if hijo_connect.join().is_err() {
-        println!("Error al esperar a la conexión y suscripción.");
-    }
-    if hijo_ui.join().is_err() {
-        println!("Error al esperar a la ui.");
-    }
+    if let Err(_) = hijo_connect.join() {
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Error al esperar a hijo que conecta y subscribe"));
+    };
+    if let Err(_) = hijo_ui.join() {
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Error al esperar a hijo que crea la UI"));
+    };
+    
+
 }
 
-fn connect_and_subscribe() {
+fn load_ip_and_port()-> Result<(String, u16), Error>{
+
+   let argv = args().collect::<Vec<String>>();
+   if argv.len() != 3 {
+       return Err(Error::new(ErrorKind::InvalidInput, "Cantidad de argumentos inválido"));
+   }
+   let ip_client = match argv[1].parse::<String>() {
+       Ok(ip_client) => ip_client,
+       Err(_) => return Err(Error::new(ErrorKind::InvalidInput, "La dirección IP no es válida.")),
+   };
+   let port_server = match argv[2].parse::<u16>() {
+       Ok(port_server) => port_server,
+       Err(_) => return Err(Error::new(ErrorKind::InvalidInput, "El puerto del servidor no es válido.")),
+   };
+
+
+   Ok((ip_client, port_server))
+}
+
+fn connect_and_subscribe(&broker_addr: &SocketAddr) {
+    /* 
     let properties = Properties::new("sistema_monitoreo.properties")
         .expect("Error al leer el archivo de properties");
     let ip = properties
@@ -46,6 +88,10 @@ fn connect_and_subscribe() {
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
+    */
+
+    
+
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
