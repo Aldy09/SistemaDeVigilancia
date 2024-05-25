@@ -35,16 +35,18 @@ fn get_fixed_header_from_stream(
             //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
                 match set_read_timeout {
                     Ok(_) => {
-                        // Else, leer
+                        // Leer
                         let _res = s.read(&mut fixed_header_buf)?;
+                        let _ = s.set_read_timeout(None);
                     },
                     Err(e) => {
                         if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                            // Se utiliza desde afuera
                             return Err(Error::new(ErrorKind::Other, "No se leyó."));
-                        } else { // Rama para debugging
+                        } else {
+                            // Rama solamente para debugging
                             println!("OTRO ERROR, que no fue de timeout: {:?}",e);
                             return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
-                            //return Err(Error::new(ErrorKind::Other, "OTRO ERROR: {:?}", e));
                         }
                     },
             }
@@ -152,8 +154,8 @@ fn handle_connection(
     // buffer, fixed_header, tipo
     println!("Server esperando mensajes.");
     let fixed_header_info = get_fixed_header_from_stream(stream)?;
-    //let ceros: &[u8; 2] = &[0; 2];
-    let ceros: &[u8; 2] = &[32+64+128; 2];
+    let ceros: &[u8; 2] = &[0; 2];
+    //let ceros: &[u8; 2] = &[32+64+128; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
         continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.

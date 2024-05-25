@@ -174,7 +174,7 @@ fn leer_desde_server(
 ) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
     // pero la función que lee un mensaje lo procesa de manera diferente.
-    let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
+    let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?; // [] acá estamos
     let ceros: &[u8; 2] = &[0; 2];
     let mut vacio = &fixed_header_buf == ceros;
     while !vacio {
