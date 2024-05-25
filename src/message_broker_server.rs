@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::io::{Error, Read, Write, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::thread::{sleep, self};
 use std::time::Duration;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
@@ -29,7 +30,7 @@ fn get_fixed_header_from_stream(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
-            let set_read_timeout = s.set_read_timeout(Some(Duration::new(0, 1)));
+            let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
             if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
                 return Err(Error::new(ErrorKind::Other, "No se leyó."));
             }
@@ -74,7 +75,7 @@ fn get_message_decoded_in_bytes_from_stream(
 }
 
 fn process_connect(
-    fixed_header: FixedHeader,
+    fixed_header: &FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_buf: &[u8; 2],
     subs_by_topic: &ShHashmapType,
@@ -94,7 +95,7 @@ fn process_connect(
 
     write_to_the_client(&connack_response, stream)?;
     println!(
-        "   tipo connect: Enviado el ack: \n   {:?}",
+        "   tipo connect: Enviado el ack: {:?}",
         connack_response
     );
 
@@ -132,7 +133,7 @@ fn handle_connection(
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
     // buffer, fixed_header, tipo
-    let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
+    let fixed_header_info = get_fixed_header_from_stream(stream)?;
     //let ceros: &[u8; 2] = &[0; 2];
     let ceros: &[u8; 2] = &[32+64+128; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
@@ -163,11 +164,13 @@ fn handle_connection(
     
                 },
                 Err(_) => {
-                    println!("While: leí error de timeout.");
+                    //println!("While: leí error de timeout."); // no quiero printear, se llena de prints
                     // Acá me gustaría volver a leer, pero hasta cuándo.
                     // Es un loop. Cuando pudo leer sin error, hace break.
                 },
-            }
+            };
+            thread::sleep(Duration::from_millis(300));
+
 
         }
         
@@ -177,7 +180,7 @@ fn handle_connection(
 }
 
 fn process_publish(
-    fixed_header: FixedHeader,
+    fixed_header: &FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_bytes: &[u8; 2],
 ) -> Result<PublishMessage, Error> {
@@ -196,7 +199,7 @@ fn send_puback(msg: &PublishMessage, stream: &Arc<Mutex<TcpStream>>) -> Result<(
     let ack = PubAckMessage::new(packet_id, 0);
     let ack_msg_bytes = ack.to_bytes();
     write_to_the_client(&ack_msg_bytes, stream)?;
-    println!("   tipo publish: Enviado el ack: \n   {:?}", ack);
+    println!("   tipo publish: Enviado el ack: {:?}", ack);
     Ok(())
 }
 
@@ -266,7 +269,7 @@ fn send_suback(
     let ack = SubAckMessage::new(0, return_codes);
     let msg_bytes = ack.to_bytes();
     write_to_the_client(&msg_bytes, stream)?;
-    println!("   tipo subscribe: Enviado el ack: \n   {:?}", ack);
+    println!("   tipo subscribe: Enviado el ack: {:?}", ack);
     Ok(())
 }
 
@@ -328,7 +331,7 @@ fn handle_client(
     match fixed_header.get_message_type() {
         1 => {
             let _msg_bytes =
-                process_connect(fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
+                process_connect(&fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
