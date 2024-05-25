@@ -2,6 +2,9 @@
 //use log::info;
 use rustx::connect_message::ConnectMessage;
 use rustx::fixed_header::FixedHeader;
+use rustx::mqtt_server_client_utils::{
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client,
+};
 use rustx::puback_message::PubAckMessage;
 use rustx::publish_message::PublishMessage;
 use rustx::suback_message::SubAckMessage;
@@ -14,7 +17,6 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
-use rustx::mqtt_server_client_utils::{get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client};
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
@@ -30,19 +32,13 @@ fn process_connect(
     let msg_bytes =
         get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf, "connect")?;
     let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
-    println!(
-        "Mensaje connect completo recibido: \n   {:?}",
-        connect_msg
-    );
+    println!("Mensaje connect completo recibido: \n   {:?}", connect_msg);
 
     // Procesa el mensaje connect
     let (is_authentic, connack_response) = authenticate(connect_msg)?;
 
     write_to_the_client(&connack_response, stream)?;
-    println!(
-        "   tipo connect: Enviado el ack: {:?}",
-        connack_response
-    );
+    println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
     if is_authentic {
         handle_connection(stream, subs_by_topic)?;
@@ -86,19 +82,19 @@ fn handle_connection(
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
         continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
-                                                                            // Leo para la siguiente iteración
-        // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
-        // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+                                                                             // Leo para la siguiente iteración
+                                                                             // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
+                                                                             // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
         println!("Server esperando más mensajes.");
         loop {
-            if let Ok((fixed_h, fixed_h_buf)) = get_fixed_header_from_stream(stream) {   
+            if let Ok((fixed_h, fixed_h_buf)) = get_fixed_header_from_stream(stream) {
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h, fixed_h_buf);
                 vacio = &fixed_header_info.0 == ceros;
                 break;
             };
             thread::sleep(Duration::from_millis(300)); // []
-        };
+        }
     }
     Ok(())
 }
@@ -109,8 +105,12 @@ fn process_publish(
     fixed_header_bytes: &[u8; 2],
 ) -> Result<PublishMessage, Error> {
     println!("Recibo mensaje tipo Publish");
-    let msg_bytes =
-        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "publish")?;
+    let msg_bytes = get_whole_message_in_bytes_from_stream(
+        fixed_header,
+        stream,
+        fixed_header_bytes,
+        "publish",
+    )?;
     let msg = PublishMessage::from_bytes(msg_bytes)?;
     println!("   Mensaje publish completo recibido: {:?}", msg);
     Ok(msg)
@@ -157,8 +157,12 @@ fn process_subscribe(
     fixed_header_bytes: &[u8; 2],
 ) -> Result<SubscribeMessage, Error> {
     println!("Recibo mensaje tipo Subscribe");
-    let msg_bytes =
-        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "subscribe")?;
+    let msg_bytes = get_whole_message_in_bytes_from_stream(
+        fixed_header,
+        stream,
+        fixed_header_bytes,
+        "subscribe",
+    )?;
     let msg = SubscribeMessage::from_bytes(msg_bytes)?;
 
     Ok(msg)

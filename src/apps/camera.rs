@@ -158,5 +158,4 @@ impl Camera {
         self.deleted = true;
         self.sent = false;
     }
-
 }

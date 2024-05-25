@@ -1,7 +1,8 @@
 use std::{
-    io::{Error, Read, ErrorKind, Write},
+    io::{Error, ErrorKind, Read, Write},
     net::TcpStream,
-    sync::{Arc, Mutex}, time::Duration,
+    sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use crate::fixed_header::FixedHeader;
@@ -23,25 +24,25 @@ pub fn get_fixed_header_from_stream(
     if let Ok(mut s) = stream.lock() {
         // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
         let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
-            match set_read_timeout {
-                Ok(_) => {
-                    // Leer
-                    let _res = s.read(&mut fixed_header_buf)?;
-                    // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
-                    let _ = s.set_read_timeout(None);
-                },
-                Err(e) => {
-                    if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
-                        // Este tipo de error es esperable, se utiliza desde afuera
-                        return Err(Error::new(ErrorKind::Other, "No se leyó."));
-                    } else {
-                        // Rama solamente para debugging, éste es un error real
-                        println!("OTRO ERROR, que no fue de timeout: {:?}", e);
-                        return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
-                    }
-                },
+        match set_read_timeout {
+            Ok(_) => {
+                // Leer
+                let _res = s.read(&mut fixed_header_buf)?;
+                // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
+                let _ = s.set_read_timeout(None);
+            }
+            Err(e) => {
+                if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                    // Este tipo de error es esperable, se utiliza desde afuera
+                    return Err(Error::new(ErrorKind::Other, "No se leyó."));
+                } else {
+                    // Rama solamente para debugging, éste es un error real
+                    println!("OTRO ERROR, que no fue de timeout: {:?}", e);
+                    return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
+                }
+            }
         }
-    }  
+    }
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());

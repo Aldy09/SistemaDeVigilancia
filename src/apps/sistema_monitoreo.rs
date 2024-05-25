@@ -60,7 +60,7 @@ fn subscribe_to_topics(mut mqtt_client: MQTTClient) {
         while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
             println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
             // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
-            //let camera_recibida = Camera::from_bytes(&msg.get_payload()); 
+            //let camera_recibida = Camera::from_bytes(&msg.get_payload());
             //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
         }
 

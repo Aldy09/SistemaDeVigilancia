@@ -1,6 +1,8 @@
 use crate::connect_message::ConnectMessage;
 use crate::mqtt_client::io::ErrorKind;
-use crate::mqtt_server_client_utils::{get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client};
+use crate::mqtt_server_client_utils::{
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client,
+};
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
 use crate::subscribe_message::SubscribeMessage;
@@ -47,7 +49,7 @@ impl MQTTClient {
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
-        write_to_the_client(&msg_bytes, &stream)?;        
+        write_to_the_client(&msg_bytes, &stream)?;
         println!("Envía connect: \n   {:?}", &connect_msg);
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
@@ -85,7 +87,7 @@ impl MQTTClient {
             }
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
-        
+
         // Lo envío
         let bytes_msg = pub_msg.to_bytes();
         write_to_the_client(&bytes_msg, &self.stream)?;
@@ -106,10 +108,10 @@ impl MQTTClient {
         // Construyo subscribe
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
         println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
-        
+
         // Lo envío
         let subs_bytes = subscribe_msg.to_bytes();
-        write_to_the_client(&subs_bytes, &self.stream)?;        
+        write_to_the_client(&subs_bytes, &self.stream)?;
         println!(
             "Mqtt subscribe: enviado mensaje en bytes: \n   {:?}",
             subs_bytes
@@ -153,16 +155,15 @@ fn leer_desde_server(
         // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
-            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()){
-                
-                    println!("While: leí bien.");
-                    // Guardo lo leído y comparo para siguiente vuelta del while
-                    fixed_header_info = (fixed_h_buf, fixed_h);
-                    vacio = &fixed_header_info.0 == ceros;
-                    break;
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+                println!("While: leí bien.");
+                // Guardo lo leído y comparo para siguiente vuelta del while
+                fixed_header_info = (fixed_h_buf, fixed_h);
+                vacio = &fixed_header_info.0 == ceros;
+                break;
             };
             thread::sleep(Duration::from_millis(300)); // []
-        };
+        }
     }
     Ok(())
 }
@@ -177,14 +178,18 @@ fn leer_un_mensaje(
     let (fixed_header_bytes, fixed_header) = fixed_header_info;
     // Soy client, siempre inicio yo la conexión, puedo recibir distintos tipos de mensaje.
     let tipo = fixed_header.get_message_type();
-    let msg_bytes: Vec<u8>;   
-    
+    let msg_bytes: Vec<u8>;
+
     match tipo {
         2 => {
             // ConnAck
             println!("Mqtt cliente leyendo: recibo conn ack");
-            msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "conn ack")?;
+            msg_bytes = get_whole_message_in_bytes_from_stream(
+                fixed_header,
+                stream,
+                fixed_header_bytes,
+                "conn ack",
+            )?;
             // Entonces tengo el mensaje completo
             let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
             println!("   Mensaje conn ack completo recibido: {:?}", msg);
@@ -193,8 +198,12 @@ fn leer_un_mensaje(
             // Publish
             println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
             // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
-            msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "publish")?;
+            msg_bytes = get_whole_message_in_bytes_from_stream(
+                fixed_header,
+                stream,
+                fixed_header_bytes,
+                "publish",
+            )?;
             // Entonces tengo el mensaje completo
             let msg = PublishMessage::from_bytes(msg_bytes)?;
             //println!("   Mensaje publish completo recibido: {:?}", msg);
@@ -212,8 +221,12 @@ fn leer_un_mensaje(
         4 => {
             // PubAck
             println!("Mqtt cliente leyendo: recibo pub ack");
-            msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "pub ack")?;
+            msg_bytes = get_whole_message_in_bytes_from_stream(
+                fixed_header,
+                stream,
+                fixed_header_bytes,
+                "pub ack",
+            )?;
             // Entonces tengo el mensaje completo
             let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
             println!("   Mensaje pub ack completo recibido: {:?}", msg);
@@ -221,8 +234,12 @@ fn leer_un_mensaje(
         9 => {
             // SubAck
             println!("Mqtt cliente leyendo: recibo sub ack");
-            msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "sub ack")?;
+            msg_bytes = get_whole_message_in_bytes_from_stream(
+                fixed_header,
+                stream,
+                fixed_header_bytes,
+                "sub ack",
+            )?;
             // Entonces tengo el mensaje completo
             let msg = SubAckMessage::from_bytes(msg_bytes)?;
             println!("   Mensaje sub ack completo recibido: {:?}", msg);
