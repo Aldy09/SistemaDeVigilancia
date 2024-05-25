@@ -1,4 +1,3 @@
-
 use crate::connect_message::ConnectMessage;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
@@ -20,17 +19,35 @@ use std::thread::{self};
 use std::time::Duration;
 
 use std::path::Path;
+use std::vec;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
+type ShareableStreams = Arc<Mutex<Vec<ShareableStream>>>;
 
 #[allow(dead_code)]
 pub struct MQTTServer {
-    stream: ShareableStream,
+    streams: ShareableStreams,
     subs_by_topic: ShHashmapType,
 }
 
 impl MQTTServer {
+    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+        let mqtt_server = Self {
+            streams: Arc::new(Mutex::new(vec![])),
+            subs_by_topic: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let listener = create_server(ip, port)?;
+
+        // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
+        // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
+        let subs_by_topic: ShHashmapType = Arc::new(Mutex::new(HashMap::new()));
+
+        mqtt_server.handle_incoming_connections(listener, subs_by_topic)?;
+
+        Ok((mqtt_server))
+    }
+
     fn process_connect(
         &self,
         fixed_header: &FixedHeader,
@@ -286,15 +303,15 @@ impl MQTTServer {
     }
 
     /// Procesa los mensajes entrantes de un dado cliente.
-    fn handle_client(&self) -> Result<(), Error> {
-        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(&self.stream)?;
+    fn handle_client(&self, stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
 
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
         match fixed_header.get_message_type() {
             1 => {
                 self.process_connect(
                     &fixed_header,
-                    &self.stream,
+                    stream,
                     &fixed_header_buf,
                     &self.subs_by_topic,
                 )?;
@@ -308,35 +325,9 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Lee el puerto por la consola, y devuelve la dirección IP y el puerto.
-    pub fn load_port() -> Result<(String, u16), Error> {
-        let argv = args().collect::<Vec<String>>();
-        if argv.len() != 2 {
-            return Err(Error::new(ErrorKind::InvalidInput, "Cantidad de argumentos inválido. Debe ingresar el puerto en el que desea correr el servidor."));
-        }
-        let port = match argv[1].parse::<u16>() {
-            Ok(port) => port,
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "El puerto proporcionado no es válido",
-                ))
-            }
-        };
-        let localhost = "127.0.0.1".to_string();
-
-        Ok((localhost, port))
-    }
-
-    pub fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
-        let listener =
-            TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
-        Ok(listener)
-    }
-
     fn clone_ref(&self) -> Self {
         Self {
-            stream: self.stream.clone(),
+            streams: self.streams.clone(),
             subs_by_topic: self.subs_by_topic.clone(),
         }
     }
@@ -352,13 +343,11 @@ impl MQTTServer {
         for stream_client in listener.incoming() {
             match stream_client {
                 Ok(stream_client) => {
-                    Self {
-                        stream: Arc::new(Mutex::new(stream_client)),
-                        subs_by_topic: subs_by_topic.clone(),
-                    };
+                    let stream_client_sh = Arc::new(Mutex::new(stream_client));
                     let self_hijo = self.clone_ref();
+                    self_hijo.add_stream_to_vec(stream_client_sh.clone());
                     let handle = std::thread::spawn(move || {
-                        let _ = self_hijo.handle_client();
+                        let _ = self_hijo.handle_client(&stream_client_sh);
                     });
                     handles.push(handle);
                 }
@@ -376,4 +365,16 @@ impl MQTTServer {
 
         Ok(())
     }
+
+    fn add_stream_to_vec(&self, stream: ShareableStream) {
+        if let Ok(mut streams) = self.streams.lock() {
+            streams.push(stream);
+        }
+    }
+}
+
+fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
+    let listener =
+        TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
+    Ok(listener)
 }
