@@ -1,7 +1,7 @@
 use std::{
-    io::{Error, Read},
+    io::{Error, Read, ErrorKind},
     net::TcpStream,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, time::Duration,
 };
 
 use crate::fixed_header::FixedHeader;
@@ -69,10 +69,44 @@ pub fn leer_fixed_header_de_stream_y_obt_tipo(
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
+    // Tomo lock y leo del stream
     {
+        if let Ok(mut s) = stream.lock() {
+            let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
+            //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
+                match set_read_timeout {
+                    Ok(_) => {
+                        // Leer
+                        let _res = s.read(&mut fixed_header_buf)?;
+                        let _ = s.set_read_timeout(None);
+                    },
+                    Err(e) => {
+                        if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                            // Se utiliza desde afuera
+                            return Err(Error::new(ErrorKind::Other, "No se leyó."));
+                        } else {
+                            // Rama solamente para debugging
+                            println!("OTRO ERROR, que no fue de timeout: {:?}",e);
+                            return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
+                        }
+                    },
+            }
+            // Else, leer
+            //let _res = s.read(&mut fixed_header_buf)?;
+        }
+    }
+
+    // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
+    //let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
+
+    
+    
+    /////
+    /*{
+        // Aux: implementación anterior
         let mut s = stream.lock().unwrap();
         let _res = s.read(&mut fixed_header_buf)?;
-    }
+    }*/
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     //let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());

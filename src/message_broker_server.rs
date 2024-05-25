@@ -153,7 +153,7 @@ fn handle_connection(
 ) -> Result<(), Error> {
     // buffer, fixed_header, tipo
     println!("Server esperando mensajes.");
-    let fixed_header_info = get_fixed_header_from_stream(stream)?;
+    let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
     let ceros: &[u8; 2] = &[0; 2];
     //let ceros: &[u8; 2] = &[32+64+128; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
@@ -177,8 +177,10 @@ fn handle_connection(
         println!("Server esperando más mensajes.");
         loop {
             match get_fixed_header_from_stream(stream){
-                Ok(_) => {
+                Ok((fixed_h, fixed_h_buf)) => {
                     println!("While: leí bien.");
+                    // Guardo lo leído y comparo para siguiente vuelta del while
+                    fixed_header_info = (fixed_h, fixed_h_buf);
                     vacio = &fixed_header_info.0 == ceros;
                     break;
     
