@@ -11,8 +11,7 @@ use crate::suback_message::SubAckMessage;
 use crate::subscribe_message::SubscribeMessage;
 use crate::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
-use std::env::args;
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
@@ -39,13 +38,9 @@ impl MQTTServer {
         };
         let listener = create_server(ip, port)?;
 
-        // Creo estructura subs_by_topic a usar (es un "Hashmap<topic, vec de subscribers>")
-        // No es único hilo! al subscribe y al publish en cuestión lo hacen dos clientes diferentes! :)
-        let subs_by_topic: ShHashmapType = Arc::new(Mutex::new(HashMap::new()));
+        mqtt_server.handle_incoming_connections(listener)?;
 
-        mqtt_server.handle_incoming_connections(listener, subs_by_topic)?;
-
-        Ok((mqtt_server))
+        Ok(mqtt_server)
     }
 
     fn process_connect(
@@ -334,8 +329,7 @@ impl MQTTServer {
 
     pub fn handle_incoming_connections(
         &self,
-        listener: TcpListener,
-        subs_by_topic: ShHashmapType,
+        listener: TcpListener
     ) -> Result<(), Error> {
         println!("Servidor iniciado. Esperando conexiones.");
         let mut handles = vec![];
