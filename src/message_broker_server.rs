@@ -31,5 +31,6 @@ fn main() -> Result<(), Error> {
 
     let _mqtt_server = mqtt_server::MQTTServer::new(ip, port);
 
+
     Ok(())
 }
