@@ -1,5 +1,5 @@
-use config::{Config, File, FileFormat};
-use log::info;
+//use config::{Config, File, FileFormat};
+//use log::info;
 use rustx::connect_message::ConnectMessage;
 use rustx::fixed_header::FixedHeader;
 use rustx::puback_message::PubAckMessage;
@@ -8,7 +8,8 @@ use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
 use std::collections::HashMap;
-use std::io::{Error, Read, Write, ErrorKind};
+use std::env::args;
+use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{sleep, self};
@@ -79,7 +80,7 @@ fn process_connect(
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_buf: &[u8; 2],
     subs_by_topic: &ShHashmapType,
-) -> Result<Vec<u8>, Error> {
+) -> Result<(), Error> {
     // Continúa leyendo y reconstruye el mensaje recibido completo
     println!("Recibo mensaje tipo Connect");
     let msg_bytes =
@@ -101,8 +102,11 @@ fn process_connect(
 
     if is_authentic {
         handle_connection(stream, subs_by_topic)?;
-    };
-    Ok(msg_bytes)
+    } else {
+        println!("   ERROR: No se pudo autenticar al cliente.");
+    }
+
+    Ok(())
 }
 
 fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
@@ -330,8 +334,7 @@ fn handle_client(
     // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
     match fixed_header.get_message_type() {
         1 => {
-            let _msg_bytes =
-                process_connect(&fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
+            process_connect(&fixed_header, stream, &fixed_header_buf, subs_by_topic)?;
         }
         _ => {
             println!("Error, el primer mensaje recibido DEBE ser un connect.");
@@ -342,21 +345,24 @@ fn handle_client(
     Ok(())
 }
 
-fn load_config() -> Result<(String, u16), Error> {
-    info!("Leyendo archivo de configuración.");
-    let mut config = Config::default();
-    config
-        .merge(File::new(
-            "message_broker_server_config.properties",
-            FileFormat::Toml,
-        ))
-        .unwrap();
+/// Lee el puerto por la consola, y devuelve la dirección IP y el puerto.
+fn load_port() -> Result<(String, u16), Error> {
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != 2 {
+        return Err(Error::new(ErrorKind::InvalidInput, "Cantidad de argumentos inválido. Debe ingresar el puerto en el que desea correr el servidor."));
+    }
+    let port = match argv[1].parse::<u16>() {
+        Ok(port) => port,
+        Err(_) => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "El puerto proporcionado no es válido",
+            ))
+        }
+    };
+    let localhost = "127.0.0.1".to_string();
 
-    let ip = config
-        .get::<String>("ip")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = config.get::<u16>("port").unwrap_or(9090);
-    Ok((ip, port))
+    Ok((localhost, port))
 }
 
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
@@ -372,13 +378,13 @@ fn handle_incoming_connections(
     println!("Servidor iniciado. Esperando conexiones.");
     let mut handles = vec![];
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
+    for stream_client in listener.incoming() {
+        match stream_client {
+            Ok(stream_client) => {
                 let subs_by_topic_clone: ShHashmapType = subs_by_topic.clone();
                 let handle = std::thread::spawn(move || {
-                    let stream = Arc::new(Mutex::new(stream));
-                    let _ = handle_client(&stream, &subs_by_topic_clone);
+                    let stream_client = Arc::new(Mutex::new(stream_client));
+                    let _ = handle_client(&stream_client, &subs_by_topic_clone);
                 });
                 handles.push(handle);
             }
@@ -400,7 +406,7 @@ fn handle_incoming_connections(
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let (ip, port) = load_config()?;
+    let (ip, port) = load_port()?;
 
     let listener = create_server(ip, port)?;
 

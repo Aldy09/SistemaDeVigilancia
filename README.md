@@ -14,7 +14,8 @@ En mac:
 
 ## Cómo usar
 En dos terminales diferentes, en este orden:
-- cargo run --bin message_broker_server
+puerto_servidor = 9090
+- cargo run --bin message_broker_server puerto_servidor 
 - cargo run --bin message_broker_client
 
 ## Cómo testear
