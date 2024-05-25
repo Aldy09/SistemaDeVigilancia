@@ -72,7 +72,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                         match camera.lock() {
                             // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
                             Ok(mut cam) => {
-                                if !(cam.sent) {
+                                if cam.modified_after_last_sent(){
                                     //println!("Sist-Camara: por hacer publish de la cámara: {:?}", cam.display()); // Debug []
                                     println!("Sist-Camara: por hacer publish de la cámara: {:?}", cam); // Debug []
                                     let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
@@ -81,7 +81,8 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                                             println!(
                                                 "Sistema-Camara: Hecho un publish exitosamente"
                                             );
-                                            cam.sent = true;
+
+                                            cam.marked_as_sent();
                                         }
                                         Err(e) => println!(
                                             "Sistema-Camara: Error al hacer el publish {:?}",
@@ -326,7 +327,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                                 match camera.lock() {
                                     Ok(cam) => {
                                         // Si no está marcada borrada, mostrarla
-                                        if !cam.deleted {
+                                        if cam.is_not_deleted(){
                                             cam.display();
                                         };
                                     }
@@ -354,8 +355,9 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                         match cams[&id].lock() {
                             Ok(mut cam_a_eliminar) => {
                                 // Si ya estaba deleted, no hago nada, tampoco es error; else, la marco deleted
-                                if !cam_a_eliminar.deleted {
-                                    cam_a_eliminar.deleted = true;
+                                if cam_a_eliminar.is_not_deleted(){
+                                    cam_a_eliminar.delete_camera();
+                                
                                 };
                                 println!("Cámara eliminada con éxito.\n");
                             }
