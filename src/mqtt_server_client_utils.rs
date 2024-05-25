@@ -83,7 +83,10 @@ pub fn get_whole_message_in_bytes_from_stream(
 
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
 /// Puede devolver error si falla la escritura o el flush.
-pub fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+pub fn write_message_to_stream(
+    msg_bytes: &[u8],
+    stream: &Arc<Mutex<TcpStream>>,
+) -> Result<(), Error> {
     // [] si hubiera un trait Message, podríamos recibir msg y hacer el msg.to_bytes() acá adentro.
     if let Ok(mut s) = stream.lock() {
         let _ = s.write(msg_bytes)?;

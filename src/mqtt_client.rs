@@ -1,7 +1,7 @@
 use crate::connect_message::ConnectMessage;
 use crate::mqtt_client::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
@@ -49,7 +49,7 @@ impl MQTTClient {
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
-        write_to_the_client(&msg_bytes, &stream)?;
+        write_message_to_stream(&msg_bytes, &stream)?;
         println!("Envía connect: \n   {:?}", &connect_msg);
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
@@ -90,7 +90,7 @@ impl MQTTClient {
 
         // Lo envío
         let bytes_msg = pub_msg.to_bytes();
-        write_to_the_client(&bytes_msg, &self.stream)?;
+        write_message_to_stream(&bytes_msg, &self.stream)?;
         println!("Mqtt publish: envío bytes publish: \n   {:?}", bytes_msg);
 
         Ok(())
@@ -111,7 +111,7 @@ impl MQTTClient {
 
         // Lo envío
         let subs_bytes = subscribe_msg.to_bytes();
-        write_to_the_client(&subs_bytes, &self.stream)?;
+        write_message_to_stream(&subs_bytes, &self.stream)?;
         println!(
             "Mqtt subscribe: enviado mensaje en bytes: \n   {:?}",
             subs_bytes
