@@ -324,25 +324,6 @@ fn load_port() -> Result<(String, u16), Error> {
     Ok((localhost, port))
 }
 
-/*
-fn load_config() -> Result<(String, u16), Error> {
-    info!("Leyendo archivo de configuración.");
-    let mut config = Config::default();
-    config
-        .merge(File::new(
-            "message_broker_server_config.properties",
-            FileFormat::Toml,
-        ))
-        .unwrap();
-
-    let ip = config
-        .get::<String>("ip")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = config.get::<u16>("port").unwrap_or(9090);
-    Ok((ip, port))
-}
-*/
-
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
         TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
@@ -383,8 +364,6 @@ fn handle_incoming_connections(
 
 fn main() -> Result<(), Error> {
     env_logger::init();
-
-    //let (ip, port) = load_config()?;
 
     let (ip, port) = load_port()?;
 

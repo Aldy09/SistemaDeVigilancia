@@ -25,7 +25,7 @@ use crate::suback_message::SubAckMessage;
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
-    pub rx: Receiver<PublishMessage>,
+    rx: Receiver<PublishMessage>,
 }
 
 impl MQTTClient {
@@ -122,7 +122,7 @@ impl MQTTClient {
         let subs_bytes = subscribe_msg.to_bytes();
         println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
         // Lo envío
-        thread::sleep(Duration::from_secs(3)); // [] aux, probando MIÁ QUÉ INTERESANTE
+        //thread::sleep(Duration::from_secs(3)); // [] aux, probando MIrÁ QUÉ INTERESANTE
         {
             let mut s = self.stream.lock().unwrap();
             let _ = s.write(&subs_bytes)?;
@@ -159,7 +159,7 @@ fn leer_desde_server(
     tx: &Sender<PublishMessage>,
 ) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
-    // pero la función que lee Un mensaje loo procesa de manera diferente.
+    // pero la función que lee un mensaje lo procesa de manera diferente.
     let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
     let ceros: &[u8; 2] = &[0; 2];
     let mut vacio = &fixed_header_buf == ceros;
