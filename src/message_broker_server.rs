@@ -153,35 +153,25 @@ fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
-    // buffer, fixed_header, tipo
     println!("Server esperando mensajes.");
     let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
     let ceros: &[u8; 2] = &[0; 2];
-    //let ceros: &[u8; 2] = &[32+64+128; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
         continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                             // Leo para la siguiente iteración
-        // Leo fixed header para la siguiente iteración del while
+        // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
+        // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
         println!("Server esperando más mensajes.");
         loop {
-            match get_fixed_header_from_stream(stream){ // <--- [] cambiable a if let ok.
-                Ok((fixed_h, fixed_h_buf)) => {
-                    println!("While: leí bien.");
-                    // Guardo lo leído y comparo para siguiente vuelta del while
-                    fixed_header_info = (fixed_h, fixed_h_buf);
-                    vacio = &fixed_header_info.0 == ceros;
-                    break;
-    
-                },
-                Err(_) => {
-                    //println!("While: leí error de timeout."); // no quiero printear, se llena de prints
-                    // Continúo leyendo.
-                },
+            if let Ok((fixed_h, fixed_h_buf)) = get_fixed_header_from_stream(stream) {   
+                // Guardo lo leído y comparo para siguiente vuelta del while
+                fixed_header_info = (fixed_h, fixed_h_buf);
+                vacio = &fixed_header_info.0 == ceros;
+                break;
             };
-            thread::sleep(Duration::from_millis(300));
+            thread::sleep(Duration::from_millis(300)); // []
         };
-        println!("Server aux: abajo del loop, logré leer.");
     }
     Ok(())
 }
@@ -305,14 +295,14 @@ fn continue_with_conection(
     // Ahora sí ya puede haber diferentes tipos de mensaje.
     match fixed_header.get_message_type() {
         3 => {
-            let msg = process_publish(fixed_header, stream, &fixed_header_bytes)?;
+            let msg = process_publish(fixed_header, stream, fixed_header_bytes)?;
 
             send_puback(&msg, stream)?;
 
             distribute_to_subscribers(&msg, subs_by_topic)?;
         }
         8 => {
-            let msg = process_subscribe(fixed_header, stream, &fixed_header_bytes)?;
+            let msg = process_subscribe(fixed_header, stream, fixed_header_bytes)?;
 
             let return_codes = add_subscribers_to_topic(&msg, stream, subs_by_topic)?;
 
