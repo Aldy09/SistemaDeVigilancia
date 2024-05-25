@@ -166,6 +166,10 @@ impl<'a> PublishMessage {
     pub fn get_topic(&self) -> String {
         self.variable_header.topic_name.to_string()
     }
+
+    pub fn get_payload(&self) -> Vec<u8> {
+        self.payload.content.to_vec()
+    }
 }
 
 #[cfg(test)]

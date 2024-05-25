@@ -65,21 +65,28 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            if let Ok(cams) = cameras.lock() {
-                // [] <--
-                loop {
+            loop {
+                if let Ok(cams) = cameras.lock() {
+                    // [] <--
+
                     for (_, camera) in cams.iter() {
                         match camera.lock() {
                             // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
                             Ok(mut cam) => {
-                                if !(cam.sent) {
+                                if cam.modified_after_last_sent() {
+                                    //println!("Sist-Camara: por hacer publish de la cámara: {:?}", cam.display()); // Debug []
+                                    println!(
+                                        "Sist-Camara: por hacer publish de la cámara: {:?}",
+                                        cam
+                                    ); // Debug []
                                     let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
                                     match res {
                                         Ok(_) => {
                                             println!(
                                                 "Sistema-Camara: Hecho un publish exitosamente"
                                             );
-                                            cam.sent = true;
+
+                                            cam.marked_as_sent();
                                         }
                                         Err(e) => println!(
                                             "Sistema-Camara: Error al hacer el publish {:?}",
@@ -94,11 +101,11 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                             ),
                         };
                     }
+                };
 
-                    // Esperamos, para publicar los cambios "periódicamente"
-                    sleep(Duration::from_secs(publish_interval));
-                }
-            };
+                // Esperamos, para publicar los cambios "periódicamente"
+                sleep(Duration::from_secs(publish_interval));
+            }
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
@@ -111,6 +118,11 @@ fn main() {
     let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
     let mut cameras_cloned_2 = shareable_cameras.clone();
+
+    // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
+    // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
+    sleep(Duration::from_secs(2));
+
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut shareable_cameras);
@@ -318,7 +330,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                                 match camera.lock() {
                                     Ok(cam) => {
                                         // Si no está marcada borrada, mostrarla
-                                        if !cam.deleted {
+                                        if cam.is_not_deleted() {
                                             cam.display();
                                         };
                                     }
@@ -346,8 +358,8 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                         match cams[&id].lock() {
                             Ok(mut cam_a_eliminar) => {
                                 // Si ya estaba deleted, no hago nada, tampoco es error; else, la marco deleted
-                                if !cam_a_eliminar.deleted {
-                                    cam_a_eliminar.deleted = true;
+                                if cam_a_eliminar.is_not_deleted() {
+                                    cam_a_eliminar.delete_camera();
                                 };
                                 println!("Cámara eliminada con éxito.\n");
                             }
