@@ -11,6 +11,7 @@ pub mod connect_return_code;
 pub mod connect_variable_header;
 pub mod disconnect_fixed_header;
 pub mod disconnect_message;
+pub mod file_helper;
 pub mod fixed_header;
 pub mod mqtt_client;
 pub mod mqtt_server;

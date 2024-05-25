@@ -1,9 +1,10 @@
 //use config::{Config, File, FileFormat};
 //use log::info;
 use rustx::connect_message::ConnectMessage;
+use rustx::file_helper::read_lines;
 use rustx::fixed_header::FixedHeader;
 use rustx::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
 use rustx::puback_message::PubAckMessage;
 use rustx::publish_message::PublishMessage;
@@ -17,6 +18,8 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
+
+use std::path::Path;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
@@ -35,9 +38,9 @@ fn process_connect(
     println!("Mensaje connect completo recibido: \n   {:?}", connect_msg);
 
     // Procesa el mensaje connect
-    let (is_authentic, connack_response) = authenticate(connect_msg)?;
+    let (is_authentic, connack_response) = was_the_session_created_succesfully(connect_msg)?;
 
-    write_to_the_client(&connack_response, stream)?;
+    write_message_to_stream(&connack_response, stream)?;
     println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
     if is_authentic {
@@ -49,29 +52,48 @@ fn process_connect(
     Ok(())
 }
 
-fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
-    let username = "sistema-monitoreo";
-    let password = "rustx123";
-
-    let mut is_authentic: bool = false;
-    if let Some(msg_user) = connect_msg.get_user() {
-        if let Some(msg_passwd) = connect_msg.get_passwd() {
-            is_authentic = msg_user == username && msg_passwd == password;
-        }
-    }
-
-    let connack_response: [u8; 4] = if is_authentic {
-        [0x20, 0x02, 0x00, 0x00] // CONNACK (0x20) con retorno 0x00
-    } else {
-        [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
-    };
-    Ok((is_authentic, connack_response))
+fn is_guest_mode_active(user: Option<&str>, passwd: Option<&str>) -> bool {
+    user.is_none() && passwd.is_none()
 }
 
-// A partir de ahora que ya se hizo el connect exitosamente,
-// se puede empezar a recibir publish y subscribe de ese cliente.
-// Como un mismo cliente puede enviarme múltiples mensajes, no solamente uno, va un loop.               14,15,45,451548,4,4,445,
-// Leo, y le paso lo leído a la función hasta que lea [0, 0].
+fn authenticate(user: Option<&str>, passwd: Option<&str>) -> bool {
+    let mut is_authentic: bool = false;
+    let credentials_path = Path::new("credentials.txt");
+    if let Ok(lines) = read_lines(credentials_path) {
+        for line in lines.map_while(Result::ok) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() != 2 {
+                continue;
+            }
+            let username = parts[0]; // username
+            let password = parts[1]; // password
+            if let Some(msg_user) = user {
+                if let Some(msg_passwd) = passwd {
+                    is_authentic = msg_user == username && msg_passwd == password;
+                    if is_authentic {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    is_authentic
+}
+
+fn was_the_session_created_succesfully(
+    connect_msg: ConnectMessage,
+) -> Result<(bool, [u8; 4]), Error> {
+    if is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
+        || authenticate(connect_msg.get_user(), connect_msg.get_passwd())
+    {
+        let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
+        Ok((true, connack_response))
+    } else {
+        let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
+        Ok((false, connack_response))
+    }
+}
+
 fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
@@ -122,7 +144,7 @@ fn send_puback(msg: &PublishMessage, stream: &Arc<Mutex<TcpStream>>) -> Result<(
 
     let ack = PubAckMessage::new(packet_id, 0);
     let ack_msg_bytes = ack.to_bytes();
-    write_to_the_client(&ack_msg_bytes, stream)?;
+    write_message_to_stream(&ack_msg_bytes, stream)?;
     println!("   tipo publish: Enviado el ack: {:?}", ack);
     Ok(())
 }
@@ -142,7 +164,7 @@ fn distribute_to_subscribers(
             );
             //println!("Debug 1, pre for");
             for subscriber in topic_subscribers {
-                write_to_the_client(&msg_bytes, subscriber)?;
+                write_message_to_stream(&msg_bytes, subscriber)?;
                 println!("      enviado mensaje publish a subscriber");
             }
             //println!("Debug 2, afuera del for");
@@ -197,7 +219,7 @@ fn send_suback(
 ) -> Result<(), Error> {
     let ack = SubAckMessage::new(0, return_codes);
     let msg_bytes = ack.to_bytes();
-    write_to_the_client(&msg_bytes, stream)?;
+    write_message_to_stream(&msg_bytes, stream)?;
     println!("   tipo subscribe: Enviado el ack: {:?}", ack);
     Ok(())
 }
