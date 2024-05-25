@@ -181,13 +181,10 @@ fn leer_desde_server(
         println!("Mqtt cliente leyendo: siguiente msj");
         leer_un_mensaje(&mut *stream, fixed_header_buf, tx)?; // esta función lee UN mensaje.
 
-        // Leo para la siguiente iteración
-        //fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?;
-        //vacio = &fixed_header_buf == ceros;
-
+        // Leo fixed header para la siguiente iteración del while
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
-            match leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone()){
+            match leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone()){ // <--- [] cambiable a if let ok.
                 Ok(fixed_h_buf) => {
                     println!("While: leí bien.");
                     // Guardo lo leído y comparo para siguiente vuelta del while
@@ -198,8 +195,7 @@ fn leer_desde_server(
                 },
                 Err(_) => {
                     //println!("While: leí error de timeout."); // no quiero printear, se llena de prints
-                    // Acá me gustaría volver a leer, pero hasta cuándo.
-                    // Es un loop. Cuando pudo leer sin error, hace break.
+                    // Continúo leyendo
                 },
             };
             thread::sleep(Duration::from_millis(300));

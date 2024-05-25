@@ -12,7 +12,7 @@ use std::env::args;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::thread::{sleep, self};
+use std::thread::{self};
 use std::time::Duration;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
@@ -31,12 +31,14 @@ fn get_fixed_header_from_stream(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
+            // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
             let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
             //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
                 match set_read_timeout {
                     Ok(_) => {
                         // Leer
                         let _res = s.read(&mut fixed_header_buf)?;
+                        // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
                         let _ = s.set_read_timeout(None);
                     },
                     Err(e) => {
@@ -145,7 +147,7 @@ fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
 
 // A partir de ahora que ya se hizo el connect exitosamente,
 // se puede empezar a recibir publish y subscribe de ese cliente.
-// Cono un mismo cliente puede enviarme múltiples mensajes, no solamente uno, va un loop.               14,15,45,451548,4,4,445,
+// Como un mismo cliente puede enviarme múltiples mensajes, no solamente uno, va un loop.               14,15,45,451548,4,4,445,
 // Leo, y le paso lo leído a la función hasta que lea [0, 0].
 fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
@@ -160,23 +162,10 @@ fn handle_connection(
     while !vacio {
         continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                             // Leo para la siguiente iteración
-        //fixed_header_info = get_fixed_header_from_stream(stream)?;
-        //vacio = &fixed_header_info.0 == ceros;
-        /*match get_fixed_header_from_stream(stream){
-            Ok(_) => {
-                println!("While: leí bien.");
-                vacio = &fixed_header_info.0 == ceros;
-
-            },
-            Err(_) => {
-                println!("While: leí error de timeout.");
-                // Acá me gustaría volver a leer, pero hasta cuándo.
-                // Es un loop. Cuando pudo leer sin error, hace break.
-            },
-        }*/
+        // Leo fixed header para la siguiente iteración del while
         println!("Server esperando más mensajes.");
         loop {
-            match get_fixed_header_from_stream(stream){
+            match get_fixed_header_from_stream(stream){ // <--- [] cambiable a if let ok.
                 Ok((fixed_h, fixed_h_buf)) => {
                     println!("While: leí bien.");
                     // Guardo lo leído y comparo para siguiente vuelta del while
@@ -187,8 +176,7 @@ fn handle_connection(
                 },
                 Err(_) => {
                     //println!("While: leí error de timeout."); // no quiero printear, se llena de prints
-                    // Acá me gustaría volver a leer, pero hasta cuándo.
-                    // Es un loop. Cuando pudo leer sin error, hace break.
+                    // Continúo leyendo.
                 },
             };
             thread::sleep(Duration::from_millis(300));

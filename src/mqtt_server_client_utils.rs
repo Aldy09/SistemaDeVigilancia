@@ -72,12 +72,14 @@ pub fn leer_fixed_header_de_stream_y_obt_tipo(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
+            // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
             let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
             //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
                 match set_read_timeout {
                     Ok(_) => {
                         // Leer
                         let _res = s.read(&mut fixed_header_buf)?;
+                        // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
                         let _ = s.set_read_timeout(None);
                     },
                     Err(e) => {
@@ -97,17 +99,9 @@ pub fn leer_fixed_header_de_stream_y_obt_tipo(
     }
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
-    //let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
-
-    
-    
+    //let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());   
     /////
-    /*{
-        // Aux: implementación anterior
-        let mut s = stream.lock().unwrap();
-        let _res = s.read(&mut fixed_header_buf)?;
-    }*/
-
+    
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     //let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
     //let tipo = fixed_header.get_tipo();
