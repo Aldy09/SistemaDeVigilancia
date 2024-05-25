@@ -18,6 +18,10 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
 
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
+
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
 
@@ -49,10 +53,52 @@ fn process_connect(
     Ok(())
 }
 
+
+fn authenticate(connect_msg: ConnectMessage) -> io::Result<(bool, [u8; 4])> {
+    let mut is_authentic: bool = false;
+    let credentials_path = Path::new("credentials.txt");
+    if let Ok(lines) = read_lines(credentials_path) {
+        for line in lines {
+            if let Ok(cred) = line {
+                let parts: Vec<&str> = cred.split_whitespace().collect();
+                if parts.len() != 2 {
+                    continue;
+                }
+                let username = parts[0]; // username
+                let password = parts[1]; // password
+                if let Some(msg_user) = connect_msg.get_user() {
+                    if let Some(msg_passwd) = connect_msg.get_passwd() {
+                        is_authentic = msg_user == username && msg_passwd == password;
+                        if is_authentic {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let connack_response: [u8; 4] = if is_authentic {
+        [0x20, 0x02, 0x00, 0x00] // CONNACK (0x20) con retorno 0x00
+    } else {
+        println!("ERROR: No se pudo autenticar al cliente.");
+        //Disconnect
+        [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
+    };
+    Ok((is_authentic, connack_response))
+}
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}
+
+/* 
 fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
     let username = "sistema-monitoreo";
     let password = "rustx123";
-
+    //verifica si el user y pass son correctos leyendo del mensaje y connect y del archivo credentials.txt
     let mut is_authentic: bool = false;
     if let Some(msg_user) = connect_msg.get_user() {
         if let Some(msg_passwd) = connect_msg.get_passwd() {
@@ -67,6 +113,8 @@ fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
     };
     Ok((is_authentic, connack_response))
 }
+
+*/
 
 // A partir de ahora que ya se hizo el connect exitosamente,
 // se puede empezar a recibir publish y subscribe de ese cliente.
