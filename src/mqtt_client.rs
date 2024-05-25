@@ -1,7 +1,7 @@
 use crate::connect_message::ConnectMessage;
 use crate::mqtt_client::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
-    continuar_leyendo_bytes_del_msg, leer_fixed_header_de_stream_y_obt_tipo,
+    continuar_leyendo_bytes_del_msg, get_fixed_header_from_stream,
 };
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
@@ -174,23 +174,23 @@ fn leer_desde_server(
 ) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
     // pero la función que lee un mensaje lo procesa de manera diferente.
-    let mut fixed_header_buf = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone())?; // [] acá estamos
+    let mut fixed_header_info = get_fixed_header_from_stream(&mut stream.clone())?; // [] acá estamos
     let ceros: &[u8; 2] = &[0; 2];
-    let mut vacio = &fixed_header_buf == ceros;
+    let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
         println!("Mqtt cliente leyendo: siguiente msj");
-        leer_un_mensaje(&mut *stream, fixed_header_buf, tx)?; // esta función lee UN mensaje.
+        leer_un_mensaje(&mut *stream, &fixed_header_info, tx)?; // esta función lee UN mensaje.
 
         // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
         // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
-            if let Ok(fixed_h_buf) = leer_fixed_header_de_stream_y_obt_tipo(&mut stream.clone()){
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&mut stream.clone()){
                 
                     println!("While: leí bien.");
                     // Guardo lo leído y comparo para siguiente vuelta del while
-                    fixed_header_buf = fixed_h_buf;
-                    vacio = &fixed_header_buf == ceros;
+                    fixed_header_info = (fixed_h_buf, fixed_h);
+                    vacio = &fixed_header_info.0 == ceros;
                     break;
             };
             thread::sleep(Duration::from_millis(300)); // []
@@ -202,18 +202,15 @@ fn leer_desde_server(
 /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
 fn leer_un_mensaje(
     stream: &mut Arc<Mutex<TcpStream>>,
-    fixed_header_bytes: [u8; 2],
+    fixed_header_info: &([u8; 2], FixedHeader),
     tx: &Sender<PublishMessage>,
 ) -> Result<(), Error> {
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
-    let fixed_header = FixedHeader::from_bytes(fixed_header_bytes.to_vec());
+    let (fixed_header_bytes, fixed_header) = fixed_header_info;
+    // Ahora sí ya puede haber diferentes tipos de mensaje.
     let tipo = fixed_header.get_message_type();
-    println!("--------------------------");
-    println!(
-        "Mqtt cliente leyendo: Recibo fixed header, tipo: {}, bytes de fixed header leidos: {:?}",
-        tipo, fixed_header
-    );
-    let msg_bytes: Vec<u8>;
+    let msg_bytes: Vec<u8>;   
+    
     match tipo {
         2 => {
             // ConnAck
