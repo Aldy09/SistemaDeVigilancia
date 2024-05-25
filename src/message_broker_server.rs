@@ -9,88 +9,15 @@ use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
 use std::collections::HashMap;
 use std::env::args;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
+use rustx::mqtt_server_client_utils::{get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_to_the_client};
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
-
-/// Lee `fixed_header` bytes del `stream`, sabe cuántos son por ser de tamaño fijo el fixed_header.
-/// Determina el tipo del mensaje recibido que inicia por `fixed_header`.
-/// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
-/// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
-fn get_fixed_header_from_stream(
-    stream: &Arc<Mutex<TcpStream>>,
-) -> Result<([u8; 2], FixedHeader), Error> {
-    const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
-    let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
-
-    // Tomo lock y leo del stream
-    {
-        if let Ok(mut s) = stream.lock() {
-            // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
-            let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
-            //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
-                match set_read_timeout {
-                    Ok(_) => {
-                        // Leer
-                        let _res = s.read(&mut fixed_header_buf)?;
-                        // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
-                        let _ = s.set_read_timeout(None);
-                    },
-                    Err(e) => {
-                        if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
-                            // Se utiliza desde afuera
-                            return Err(Error::new(ErrorKind::Other, "No se leyó."));
-                        } else {
-                            // Rama solamente para debugging
-                            println!("OTRO ERROR, que no fue de timeout: {:?}",e);
-                            return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
-                        }
-                    },
-            }
-            // Else, leer
-            //let _res = s.read(&mut fixed_header_buf)?;
-        }
-    }
-
-    // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
-    let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
-
-    Ok((fixed_header_buf, fixed_header))
-}
-
-/// Una vez leídos los dos bytes del fixed header de un mensaje desde el stream,
-/// lee los siguientes `remaining length` bytes indicados en el fixed header.
-/// Concatena ambos grupos de bytes leídos para conformar los bytes totales del mensaje leído.
-/// (Podría hacer fixed_header.to_bytes(), se aprovecha que ya se leyó fixed_header_bytes).
-fn get_message_decoded_in_bytes_from_stream(
-    fixed_header: &FixedHeader,
-    stream: &Arc<Mutex<TcpStream>>,
-    fixed_header_bytes: &[u8; 2],
-) -> Result<Vec<u8>, Error> {
-    // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
-    let msg_rem_len: usize = fixed_header.get_rem_len();
-    let mut rem_buf = vec![0; msg_rem_len];
-    // Tomo lock y leo del stream
-    {
-        if let Ok(mut s) = stream.lock() {
-            // si uso un if let, no nec el scope de afuera para dropear []
-            let _res = s.read(&mut rem_buf)?;
-        }
-    }
-    // Ahora junto las dos partes leídas, para obt mi msg original
-    let mut buf = fixed_header_bytes.to_vec();
-    buf.extend(rem_buf);
-    /*println!(
-        "   Mensaje en bytes recibido, antes de hacerle from_bytes: {:?}",
-        buf
-    );*/
-    Ok(buf)
-}
 
 fn process_connect(
     fixed_header: &FixedHeader,
@@ -101,7 +28,7 @@ fn process_connect(
     // Continúa leyendo y reconstruye el mensaje recibido completo
     println!("Recibo mensaje tipo Connect");
     let msg_bytes =
-        get_message_decoded_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
     let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
     println!(
         "   Mensaje connect completo recibido: \n   {:?}",
@@ -183,7 +110,7 @@ fn process_publish(
 ) -> Result<PublishMessage, Error> {
     println!("Recibo mensaje tipo Publish");
     let msg_bytes =
-        get_message_decoded_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     let msg = PublishMessage::from_bytes(msg_bytes)?;
     println!("   Mensaje publish completo recibido: {:?}", msg);
     Ok(msg)
@@ -231,7 +158,7 @@ fn process_subscribe(
 ) -> Result<SubscribeMessage, Error> {
     println!("Recibo mensaje tipo Subscribe");
     let msg_bytes =
-        get_message_decoded_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     let msg = SubscribeMessage::from_bytes(msg_bytes)?;
     Ok(msg)
 }
@@ -267,17 +194,6 @@ fn send_suback(
     let msg_bytes = ack.to_bytes();
     write_to_the_client(&msg_bytes, stream)?;
     println!("   tipo subscribe: Enviado el ack: {:?}", ack);
-    Ok(())
-}
-
-/// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
-/// Puede devolver error si falla la escritura o el flush.
-fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
-    //println!("Debug 1.5, adentro de write");
-    if let Ok(mut s) = stream.lock() {
-        let _ = s.write(msg_bytes)?;
-        s.flush()?;
-    }
     Ok(())
 }
 
