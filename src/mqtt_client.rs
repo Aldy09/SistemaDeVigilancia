@@ -37,6 +37,7 @@ impl MQTTClient {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
         let stream = Arc::new(Mutex::new(stream_tcp));
+        println!("cREADO EL STREAM: {:?}", stream); // [] 
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
@@ -49,12 +50,24 @@ impl MQTTClient {
         let msg_bytes = connect_msg.to_bytes();
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
-        {
-            let mut s = stream.lock().unwrap();
-            s.write(&msg_bytes)
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
-            s.flush()?;
-        }
+        //{
+            match stream.lock(){
+                Ok(mut s) => {
+                    s.write(&msg_bytes)
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+                    s.flush()?;
+                    drop(s); // [] aux: esta línea debería ser irrelevante, xq igualmente "s" deja de existir afuera de este match.
+                },
+                Err(_) => {
+                    println!("Error al tomar lock para hacer connect.");
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "Error al tomar lock para conectarse a server",
+                    ))
+                },
+            }
+        //}
+        
         println!("Envía connect: \n   {:?}", &connect_msg);
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
@@ -97,6 +110,7 @@ impl MQTTClient {
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
         let bytes_msg = pub_msg.to_bytes();
+        println!("POR TOMAR LOCK P ENVIAR, DE STREAM: {:?}", self.stream); // [] Por qué cuelga acá si... no tiene sentido
         // Lo envío
         {
             let mut s = self.stream.lock().unwrap();

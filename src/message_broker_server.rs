@@ -32,11 +32,24 @@ fn get_fixed_header_from_stream(
     {
         if let Ok(mut s) = stream.lock() {
             let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
-            if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
-                return Err(Error::new(ErrorKind::Other, "No se leyó."));
+            //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
+                match set_read_timeout {
+                    Ok(_) => {
+                        // Else, leer
+                        let _res = s.read(&mut fixed_header_buf)?;
+                    },
+                    Err(e) => {
+                        if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                            return Err(Error::new(ErrorKind::Other, "No se leyó."));
+                        } else { // Rama para debugging
+                            println!("OTRO ERROR, que no fue de timeout: {:?}",e);
+                            return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
+                            //return Err(Error::new(ErrorKind::Other, "OTRO ERROR: {:?}", e));
+                        }
+                    },
             }
             // Else, leer
-            let _res = s.read(&mut fixed_header_buf)?;
+            //let _res = s.read(&mut fixed_header_buf)?;
         }
     }
 
@@ -137,6 +150,7 @@ fn handle_connection(
     subs_by_topic: &ShHashmapType,
 ) -> Result<(), Error> {
     // buffer, fixed_header, tipo
+    println!("Server esperando mensajes.");
     let fixed_header_info = get_fixed_header_from_stream(stream)?;
     //let ceros: &[u8; 2] = &[0; 2];
     let ceros: &[u8; 2] = &[32+64+128; 2];
@@ -158,7 +172,7 @@ fn handle_connection(
                 // Es un loop. Cuando pudo leer sin error, hace break.
             },
         }*/
-
+        println!("Server esperando más mensajes.");
         loop {
             match get_fixed_header_from_stream(stream){
                 Ok(_) => {
@@ -174,11 +188,8 @@ fn handle_connection(
                 },
             };
             thread::sleep(Duration::from_millis(300));
-
-
-        }
-        
-        
+        };
+        println!("Server aux: abajo del loop, logré leer.");
     }
     Ok(())
 }
