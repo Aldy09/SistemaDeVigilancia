@@ -1,6 +1,7 @@
 //use config::{Config, File, FileFormat};
 //use log::info;
 use rustx::connect_message::ConnectMessage;
+use rustx::file_helper::read_lines;
 use rustx::fixed_header::FixedHeader;
 use rustx::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
@@ -10,7 +11,6 @@ use rustx::publish_message::PublishMessage;
 use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
-use rustx::file_helper::read_lines;
 use std::collections::HashMap;
 use std::env::args;
 use std::io::{Error, ErrorKind};
@@ -18,7 +18,6 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
-
 
 use std::path::Path;
 
@@ -84,46 +83,17 @@ fn authenticate(user: Option<&str>, passwd: Option<&str>) -> bool {
 fn was_the_session_created_succesfully(
     connect_msg: ConnectMessage,
 ) -> Result<(bool, [u8; 4]), Error> {
-    if is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd()) {
+    if is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
+        || authenticate(connect_msg.get_user(), connect_msg.get_passwd())
+    {
         let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
         Ok((true, connack_response))
-    } else if authenticate(connect_msg.get_user(), connect_msg.get_passwd()) {
-        let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
-        Ok((true, connack_response))       
     } else {
         let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
         Ok((false, connack_response))
     }
 }
 
-
-
-/*
-fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
-    let username = "sistema-monitoreo";
-    let password = "rustx123";
-    //verifica si el user y pass son correctos leyendo del mensaje y connect y del archivo credentials.txt
-    let mut is_authentic: bool = false;
-    if let Some(msg_user) = connect_msg.get_user() {
-        if let Some(msg_passwd) = connect_msg.get_passwd() {
-            is_authentic = msg_user == username && msg_passwd == password;
-        }
-    }
-
-    let connack_response: [u8; 4] = if is_authentic {
-        [0x20, 0x02, 0x00, 0x00] // CONNACK (0x20) con retorno 0x00
-    } else {
-        [0x20, 0x02, 0x00, 0x05] // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
-    };
-    Ok((is_authentic, connack_response))
-}
-
-*/
-
-// A partir de ahora que ya se hizo el connect exitosamente,
-// se puede empezar a recibir publish y subscribe de ese cliente.
-// Como un mismo cliente puede enviarme múltiples mensajes, no solamente uno, va un loop.               14,15,45,451548,4,4,445,
-// Leo, y le paso lo leído a la función hasta que lea [0, 0].
 fn handle_connection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
