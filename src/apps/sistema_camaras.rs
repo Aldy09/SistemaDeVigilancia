@@ -115,7 +115,10 @@ fn main() {
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
     let mut cameras_cloned_2 = shareable_cameras.clone();
 
-    sleep(Duration::from_secs(10)); // [] aux, probando, para que empiece todo 'a la vez', y me dé tiempo a levantar shells
+    // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
+    // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
+    sleep(Duration::from_secs(2));
+
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut shareable_cameras);

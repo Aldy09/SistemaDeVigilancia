@@ -28,10 +28,10 @@ fn process_connect(
     // Continúa leyendo y reconstruye el mensaje recibido completo
     println!("Recibo mensaje tipo Connect");
     let msg_bytes =
-        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf, "connect")?;
     let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
     println!(
-        "   Mensaje connect completo recibido: \n   {:?}",
+        "Mensaje connect completo recibido: \n   {:?}",
         connect_msg
     );
 
@@ -110,7 +110,7 @@ fn process_publish(
 ) -> Result<PublishMessage, Error> {
     println!("Recibo mensaje tipo Publish");
     let msg_bytes =
-        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "publish")?;
     let msg = PublishMessage::from_bytes(msg_bytes)?;
     println!("   Mensaje publish completo recibido: {:?}", msg);
     Ok(msg)
@@ -158,8 +158,9 @@ fn process_subscribe(
 ) -> Result<SubscribeMessage, Error> {
     println!("Recibo mensaje tipo Subscribe");
     let msg_bytes =
-        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "subscribe")?;
     let msg = SubscribeMessage::from_bytes(msg_bytes)?;
+
     Ok(msg)
 }
 

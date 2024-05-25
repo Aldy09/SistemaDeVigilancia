@@ -35,7 +35,6 @@ impl MQTTClient {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
         let stream = Arc::new(Mutex::new(stream_tcp));
-        println!("cREADO EL STREAM: {:?}", stream); // [] 
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
@@ -57,10 +56,6 @@ impl MQTTClient {
         let mut stream_para_hijo = stream.clone();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
         let h = thread::spawn(move || {
-            /*loop {
-                // no hace nada, probando
-            }*/
-            thread::sleep(Duration::from_secs(3)); // [] aux, probando
             leer_desde_server(&mut stream_para_hijo, &tx) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
         });
         let mqtt = MQTTClient {
@@ -91,7 +86,6 @@ impl MQTTClient {
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
         
-        //println!("POR TOMAR LOCK P ENVIAR, DE STREAM: {:?}", self.stream); // [] Por qué cuelga acá si... no tiene sentido
         // Lo envío
         let bytes_msg = pub_msg.to_bytes();
         write_to_the_client(&bytes_msg, &self.stream)?;
@@ -190,7 +184,7 @@ fn leer_un_mensaje(
             // ConnAck
             println!("Mqtt cliente leyendo: recibo conn ack");
             msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "conn ack")?;
             // Entonces tengo el mensaje completo
             let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
             println!("   Mensaje conn ack completo recibido: {:?}", msg);
@@ -200,10 +194,10 @@ fn leer_un_mensaje(
             println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
             // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
             msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "publish")?;
             // Entonces tengo el mensaje completo
             let msg = PublishMessage::from_bytes(msg_bytes)?;
-            println!("   Mensaje publish completo recibido: {:?}", msg);
+            //println!("   Mensaje publish completo recibido: {:?}", msg);
 
             // Ahora ¿tengo que mandarle un PubAck? [] ver, imagino que sí
             if let Some(_packet_id) = msg.get_packet_identifier() {
@@ -219,7 +213,7 @@ fn leer_un_mensaje(
             // PubAck
             println!("Mqtt cliente leyendo: recibo pub ack");
             msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "pub ack")?;
             // Entonces tengo el mensaje completo
             let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
             println!("   Mensaje pub ack completo recibido: {:?}", msg);
@@ -228,7 +222,7 @@ fn leer_un_mensaje(
             // SubAck
             println!("Mqtt cliente leyendo: recibo sub ack");
             msg_bytes =
-                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+                get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes, "sub ack")?;
             // Entonces tengo el mensaje completo
             let msg = SubAckMessage::from_bytes(msg_bytes)?;
             println!("   Mensaje sub ack completo recibido: {:?}", msg);

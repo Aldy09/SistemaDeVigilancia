@@ -20,33 +20,28 @@ pub fn get_fixed_header_from_stream(
     let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 
     // Tomo lock y leo del stream
-    {
-        if let Ok(mut s) = stream.lock() {
-            // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
-            let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
-            //if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
-                match set_read_timeout {
-                    Ok(_) => {
-                        // Leer
-                        let _res = s.read(&mut fixed_header_buf)?;
-                        // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
-                        let _ = s.set_read_timeout(None);
-                    },
-                    Err(e) => {
-                        if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
-                            // Se utiliza desde afuera
-                            return Err(Error::new(ErrorKind::Other, "No se leyó."));
-                        } else {
-                            // Rama solamente para debugging
-                            println!("OTRO ERROR, que no fue de timeout: {:?}",e);
-                            return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
-                        }
-                    },
-            }
-            // Else, leer
-            //let _res = s.read(&mut fixed_header_buf)?;
+    if let Ok(mut s) = stream.lock() {
+        // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
+        let set_read_timeout = s.set_read_timeout(Some(Duration::from_millis(300)));
+            match set_read_timeout {
+                Ok(_) => {
+                    // Leer
+                    let _res = s.read(&mut fixed_header_buf)?;
+                    // Unset del timeout, ya que como hubo fixed header, es 100% seguro que seguirá el resto del mensaje
+                    let _ = s.set_read_timeout(None);
+                },
+                Err(e) => {
+                    if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                        // Este tipo de error es esperable, se utiliza desde afuera
+                        return Err(Error::new(ErrorKind::Other, "No se leyó."));
+                    } else {
+                        // Rama solamente para debugging, éste es un error real
+                        println!("OTRO ERROR, que no fue de timeout: {:?}", e);
+                        return Err(Error::new(ErrorKind::Other, "OTRO ERROR"));
+                    }
+                },
         }
-    }
+    }  
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
@@ -62,6 +57,7 @@ pub fn get_whole_message_in_bytes_from_stream(
     fixed_header: &FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_bytes: &[u8; 2],
+    _msg_type_debug_string: &str,
 ) -> Result<Vec<u8>, Error> {
     // Instancio un buffer para leer los bytes restantes, siguientes a los de fixed header
     let msg_rem_len: usize = fixed_header.get_rem_len();
@@ -77,16 +73,17 @@ pub fn get_whole_message_in_bytes_from_stream(
     let mut buf = fixed_header_bytes.to_vec();
     buf.extend(rem_buf);
     /*println!(
-        "   Mensaje en bytes recibido, antes de hacerle from_bytes: {:?}",
-        buf
+        "   Mensaje {} completo recibido, antes de hacerle from bytes: \n   {:?}",
+        msg_type_debug_string, buf
     );*/
+    //[] si hubiera un trait Message, podríamos hacerle el buf.from_bytes() acá mismo y devolver msg en vez de bytes.
     Ok(buf)
 }
 
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
 /// Puede devolver error si falla la escritura o el flush.
 pub fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
-    //println!("Debug 1.5, adentro de write");
+    // [] si hubiera un trait Message, podríamos recibir msg y hacer el msg.to_bytes() acá adentro.
     if let Ok(mut s) = stream.lock() {
         let _ = s.write(msg_bytes)?;
         s.flush()?;
@@ -94,8 +91,7 @@ pub fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> 
         return Err(Error::new(
             ErrorKind::Other,
             "Error al tomar lock para hacer write.",
-        ))
-
+        ));
     }
     Ok(())
 }
