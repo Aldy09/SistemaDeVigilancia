@@ -19,7 +19,7 @@ pub struct Camera {
     range: u8,
     border_cameras: Vec<u8>,
     sent: bool, // false si se modificó, true al enviarla
-    pub deleted: bool,
+    deleted: bool,
     incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
 }
 

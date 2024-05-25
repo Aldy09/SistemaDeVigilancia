@@ -2,6 +2,7 @@ extern crate gio;
 extern crate gtk;
 use gio::prelude::*;
 use gtk::prelude::*;
+//use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 use std::env::args;
 use std::error::Error;
@@ -58,6 +59,9 @@ fn subscribe_to_topics(mut mqtt_client: MQTTClient) {
     let h = thread::spawn(move || {
         while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
             println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
+            // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
+            //let camera_recibida = Camera::from_bytes(&msg.get_payload()); 
+            //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
         }
 
         // Cliente termina de utilizar mqtt
