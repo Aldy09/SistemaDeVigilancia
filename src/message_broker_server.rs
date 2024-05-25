@@ -10,6 +10,7 @@ use rustx::publish_message::PublishMessage;
 use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
+use rustx::file_helper::read_lines;
 use std::collections::HashMap;
 use std::env::args;
 use std::io::{Error, ErrorKind};
@@ -18,8 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
 
-use std::fs::File;
-use std::io::{self, BufRead};
+
 use std::path::Path;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
@@ -89,20 +89,14 @@ fn was_the_session_created_succesfully(
         Ok((true, connack_response))
     } else if authenticate(connect_msg.get_user(), connect_msg.get_passwd()) {
         let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
-        Ok((true, connack_response))
+        Ok((true, connack_response))       
     } else {
         let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
         Ok((false, connack_response))
     }
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
+
 
 /*
 fn authenticate(connect_msg: ConnectMessage) -> Result<(bool, [u8; 4]), Error> {
