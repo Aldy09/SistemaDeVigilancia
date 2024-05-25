@@ -201,7 +201,8 @@ fn leer_un_mensaje(
         }
         3 => {
             // Publish
-            println!("Mqtt cliente leyendo: recibo mensaje tipo Publish");
+            //println!("Mqtt cliente leyendo: recibo mensaje tipo Publish");
+            println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
             // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
             msg_bytes =
                 continuar_leyendo_bytes_del_msg(fixed_header, &mut *stream, &fixed_header_bytes)?;

@@ -65,9 +65,9 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            if let Ok(cams) = cameras.lock() {
-                // [] <--
-                loop {
+            loop {
+                if let Ok(cams) = cameras.lock() { // [] <--
+
                     for (_, camera) in cams.iter() {
                         match camera.lock() {
                             // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
@@ -94,10 +94,11 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
                             ),
                         };
                     }
+                };
 
-                    // Esperamos, para publicar los cambios "periódicamente"
-                    sleep(Duration::from_secs(publish_interval));
-                }
+                // Esperamos, para publicar los cambios "periódicamente"
+                sleep(Duration::from_secs(publish_interval));
+                
             };
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
@@ -111,6 +112,8 @@ fn main() {
     let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
     let mut cameras_cloned_2 = shareable_cameras.clone();
+
+    sleep(Duration::from_secs(10)); // [] aux, probando, para que empiece todo 'a la vez', y me dé tiempo a levantar shells
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut shareable_cameras);
