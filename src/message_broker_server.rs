@@ -8,9 +8,10 @@ use rustx::suback_message::SubAckMessage;
 use rustx::subscribe_message::SubscribeMessage;
 use rustx::subscribe_return_code::SubscribeReturnCode;
 use std::collections::HashMap;
-use std::io::{Error, Read, Write};
+use std::io::{Error, Read, Write, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
@@ -28,6 +29,11 @@ fn get_fixed_header_from_stream(
     // Tomo lock y leo del stream
     {
         if let Ok(mut s) = stream.lock() {
+            let set_read_timeout = s.set_read_timeout(Some(Duration::new(0, 1)));
+            if set_read_timeout.is_err_and(|e| e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) {
+                return Err(Error::new(ErrorKind::Other, "No se leyó."));
+            }
+            // Else, leer
             let _res = s.read(&mut fixed_header_buf)?;
         }
     }
@@ -43,7 +49,7 @@ fn get_fixed_header_from_stream(
 /// Concatena ambos grupos de bytes leídos para conformar los bytes totales del mensaje leído.
 /// (Podría hacer fixed_header.to_bytes(), se aprovecha que ya se leyó fixed_header_bytes).
 fn get_message_decoded_in_bytes_from_stream(
-    fixed_header: FixedHeader,
+    fixed_header: &FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_bytes: &[u8; 2],
 ) -> Result<Vec<u8>, Error> {
@@ -127,13 +133,45 @@ fn handle_connection(
 ) -> Result<(), Error> {
     // buffer, fixed_header, tipo
     let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
-    let ceros: &[u8; 2] = &[0; 2];
+    //let ceros: &[u8; 2] = &[0; 2];
+    let ceros: &[u8; 2] = &[32+64+128; 2];
     let mut vacio = &fixed_header_info.0 == ceros;
     while !vacio {
-        continue_with_conection(stream, subs_by_topic, fixed_header_info)?; // esta función lee UN mensaje.
+        continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                             // Leo para la siguiente iteración
-        fixed_header_info = get_fixed_header_from_stream(stream)?;
-        vacio = &fixed_header_info.0 == ceros;
+        //fixed_header_info = get_fixed_header_from_stream(stream)?;
+        //vacio = &fixed_header_info.0 == ceros;
+        /*match get_fixed_header_from_stream(stream){
+            Ok(_) => {
+                println!("While: leí bien.");
+                vacio = &fixed_header_info.0 == ceros;
+
+            },
+            Err(_) => {
+                println!("While: leí error de timeout.");
+                // Acá me gustaría volver a leer, pero hasta cuándo.
+                // Es un loop. Cuando pudo leer sin error, hace break.
+            },
+        }*/
+
+        loop {
+            match get_fixed_header_from_stream(stream){
+                Ok(_) => {
+                    println!("While: leí bien.");
+                    vacio = &fixed_header_info.0 == ceros;
+                    break;
+    
+                },
+                Err(_) => {
+                    println!("While: leí error de timeout.");
+                    // Acá me gustaría volver a leer, pero hasta cuándo.
+                    // Es un loop. Cuando pudo leer sin error, hace break.
+                },
+            }
+
+        }
+        
+        
     }
     Ok(())
 }
@@ -187,7 +225,7 @@ fn distribute_to_subscribers(
 }
 
 fn process_subscribe(
-    fixed_header: FixedHeader,
+    fixed_header: &FixedHeader,
     stream: &Arc<Mutex<TcpStream>>,
     fixed_header_bytes: &[u8; 2],
 ) -> Result<SubscribeMessage, Error> {
@@ -250,7 +288,7 @@ fn write_to_the_client(msg_bytes: &[u8], stream: &Arc<Mutex<TcpStream>>) -> Resu
 fn continue_with_conection(
     stream: &Arc<Mutex<TcpStream>>,
     subs_by_topic: &ShHashmapType,
-    fixed_header_info: ([u8; 2], FixedHeader),
+    fixed_header_info: &([u8; 2], FixedHeader),
 ) -> Result<(), Error> {
     let (fixed_header_bytes, fixed_header) = fixed_header_info;
 
