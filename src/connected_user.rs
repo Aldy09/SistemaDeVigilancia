@@ -51,7 +51,7 @@ impl User {
         self.username = username;
     }
 
-    pub fn add_to_topics(&mut self, topic:String) {
+    pub fn add_to_topics(&mut self, topic: String) {
         self.topics.push(topic);
     }
 
@@ -66,8 +66,9 @@ impl User {
         self.messages
             .entry(topic)
             .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
+            //.or_insert_with(VecDeque::new)
             .push_back(message);
-        /* 
+        /*
         if self.messages.contains_key(&topic) { //si el usuario ya tiene mensajes en ese topic
             if let Some(messages) = self.messages.get_mut(&topic) {
                 messages.push_back(message);

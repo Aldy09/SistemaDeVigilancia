@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-#[derive(Debug, PartialEq,Clone)]
+#[derive(Debug, PartialEq, Clone)]
 
 /// Flags para el mensaje Publish.
 /// Los flags son:

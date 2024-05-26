@@ -53,12 +53,13 @@ impl MQTTServer {
         }
     }
 
+    /// Procesa el mensaje de conexión recibido, autentica
+    /// al cliente y envía un mensaje de conexión de vuelta.
     fn process_connect(
         &self,
         fixed_header: &FixedHeader,
         stream: &Arc<Mutex<TcpStream>>,
         fixed_header_buf: &[u8; 2],
-       
     ) -> Result<(), Error> {
         // Continúa leyendo y reconstruye el mensaje recibido completo
         println!("Recibo mensaje tipo Connect");
@@ -78,10 +79,12 @@ impl MQTTServer {
         write_message_to_stream(&connack_response, stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
+        // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
+        // y se maneja la conexión(handle_connection)
         if is_authentic {
             if let Some(username) = connect_msg.get_user() {
                 self.add_user(stream, username);
-                self.handle_connection(username,stream)?;
+                self.handle_connection(username, stream)?;
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -94,6 +97,7 @@ impl MQTTServer {
         user.is_none() && passwd.is_none()
     }
 
+    /// Autentica al usuario con las credenciales almacenadas en el archivo credentials.txt
     fn authenticate(&self, user: Option<&str>, passwd: Option<&str>) -> bool {
         let mut is_authentic: bool = false;
         let credentials_path = Path::new("credentials.txt");
@@ -118,6 +122,8 @@ impl MQTTServer {
         is_authentic
     }
 
+    /// Verifica si la sesión fue creada exitosamente: usuario valido o invitado
+    /// y devuelve un mensaje CONNACK acorde.
     fn was_the_session_created_succesfully(
         &self,
         connect_msg: &ConnectMessage,
@@ -133,21 +139,21 @@ impl MQTTServer {
         }
     }
 
+    /// Maneja la conexión con el cliente, recibe mensajes y los procesa.
     fn handle_connection(
         &self,
         username: &str,
         stream: &Arc<Mutex<TcpStream>>,
-        
     ) -> Result<(), Error> {
         println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
         let ceros: &[u8; 2] = &[0; 2];
         let mut vacio = &fixed_header_info.0 == ceros;
         while !vacio {
-            self.continue_with_conection(username,stream,  &fixed_header_info)?; // esta función lee UN mensaje.
-                                                                                      // Leo para la siguiente iteración
-                                                                                      // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
-                                                                                      // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+            self.continue_with_conection(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
+                                                                                 // Leo para la siguiente iteración
+                                                                                 // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
+                                                                                 // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
             println!("Server esperando más mensajes.");
             loop {
                 if let Ok((fixed_h, fixed_h_buf)) = get_fixed_header_from_stream(stream) {
@@ -162,6 +168,7 @@ impl MQTTServer {
         Ok(())
     }
 
+    /// Procesa el mensaje de tipo Publish recibido.
     fn process_publish(
         &self,
         fixed_header: &FixedHeader,
@@ -180,6 +187,7 @@ impl MQTTServer {
         Ok(msg)
     }
 
+    /// Envía un mensaje de tipo PubAck al cliente.
     fn send_puback(
         &self,
         msg: &PublishMessage,
@@ -196,64 +204,61 @@ impl MQTTServer {
     }
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
-    fn add_message_to_subscribers_queue(
-        &self,
-        msg: &PublishMessage,
-    ) -> Result<(), Error> {
+    fn add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
         //Pseudo código pensado:
         //for (user in users_connected)
         //if(user.topics.Contains(message.topic)){ //si el usuario está suscrito al topic del mensaje
         //    user.messages.addhash(topic, Publish)
-        
-        if let Ok(mut users_connected) = self.users_connected.lock(){
 
-            for user in users_connected.values_mut(){ //users_connected es un hashmap con key=username y value=user
-            //for username in users_connected.{ //users_connected es un hashmap con key=username y value=user
-                
+        if let Ok(mut users_connected) = self.users_connected.lock() {
+            for user in users_connected.values_mut() {
+                //users_connected es un hashmap con key=username y value=user
+                //for username in users_connected.{ //users_connected es un hashmap con key=username y value=user
+
                 //if let Some(&mut User) = users_connected.get(username){
                 let user_topics = user.get_topics();
-                if user_topics.contains(&(msg.get_topic())){//si el usuario está suscrito al topic del mensaje
+                if user_topics.contains(&(msg.get_topic())) {
+                    //si el usuario está suscrito al topic del mensaje
                     //Necesito el mensaje en todas las colas de mensajes de los usuarios suscritos al topic
-                    user.add_message(msg.clone());//agrego el mensaje a la cola del usuario
-                    //println!(
-                    //    "Se encontraron encontro subscriber: {} al topic {:?}",username, msg.get_topic()
-                    //);
+                    user.add_message(msg.clone()); //agrego el mensaje a la cola del usuario
+                                                   //println!(
+                                                   //    "Se encontraron encontro subscriber: {} al topic {:?}",username, msg.get_topic()
+                                                   //);
                 }
-                
             }
+        }
+        Ok(())
+    }
 
-        }
-        Ok(())
-    }
-    
-    
-/* 
-    fn distribute_to_subscribers(
-        &self,
-        username: &str,
-        msg: &PublishMessage,
-        subs_by_topic: &ShHashmapType,
-    ) -> Result<(), Error> {
-        let topic = msg.get_topic();
-        let msg_bytes = msg.to_bytes();
-        if let Ok(subs_by_top) = subs_by_topic.lock() {
-            if let Some(topic_subscribers) = subs_by_top.get(&topic) {
-                println!(
-                    "   Se encontraron {} suscriptores al topic {:?}",
-                    topic_subscribers.len(),
-                    topic
-                );
-                //println!("Debug 1, pre for");
-                for subscriber in topic_subscribers {
-                    write_message_to_stream(&msg_bytes, subscriber)?;
-                    println!("      enviado mensaje publish a subscriber");
+    /*
+        fn distribute_to_subscribers(
+            &self,
+            username: &str,
+            msg: &PublishMessage,
+            subs_by_topic: &ShHashmapType,
+        ) -> Result<(), Error> {
+            let topic = msg.get_topic();
+            let msg_bytes = msg.to_bytes();
+            if let Ok(subs_by_top) = subs_by_topic.lock() {
+                if let Some(topic_subscribers) = subs_by_top.get(&topic) {
+                    println!(
+                        "   Se encontraron {} suscriptores al topic {:?}",
+                        topic_subscribers.len(),
+                        topic
+                    );
+                    //println!("Debug 1, pre for");
+                    for subscriber in topic_subscribers {
+                        write_message_to_stream(&msg_bytes, subscriber)?;
+                        println!("      enviado mensaje publish a subscriber");
+                    }
+                    //println!("Debug 2, afuera del for");
                 }
-                //println!("Debug 2, afuera del for");
             }
+            Ok(())
         }
-        Ok(())
-    }
-*/
+    */
+
+    /// Procesa el mensaje de tipo Subscribe recibido.
     fn process_subscribe(
         &self,
         fixed_header: &FixedHeader,
@@ -296,30 +301,31 @@ impl MQTTServer {
     //     Ok(return_codes)
     // }
 
-
     /// Agrega los topics al suscriptor correspondiente. y devuelve los códigos de retorno(qos)
     fn add_topics_to_subscriber(
         &self,
         username: &str,
         msg: &SubscribeMessage,
-        
     ) -> Result<Vec<SubscribeReturnCode>, Error> {
-        
         let mut return_codes = vec![];
 
         // Agrega los topics a los que se suscribió el usuario
         if let Ok(mut users_connected) = self.users_connected.lock() {
-          if let Some(user) =  users_connected.get_mut(username) {
-            for (topic,_qos) in  msg.get_topic_filters() {
-                user.add_to_topics(topic.to_string());
-                return_codes.push(SubscribeReturnCode::QoS1);
-                println!("   Se agregó el topic {:?} al suscriptor {:?}", topic, username);
+            if let Some(user) = users_connected.get_mut(username) {
+                for (topic, _qos) in msg.get_topic_filters() {
+                    user.add_to_topics(topic.to_string());
+                    return_codes.push(SubscribeReturnCode::QoS1);
+                    println!(
+                        "   Se agregó el topic {:?} al suscriptor {:?}",
+                        topic, username
+                    );
+                }
             }
-          }
         }
         Ok(return_codes)
     }
 
+    /// Envía un mensaje de tipo SubAck al cliente.
     fn send_suback(
         &self,
         return_codes: Vec<SubscribeReturnCode>,
@@ -340,7 +346,7 @@ impl MQTTServer {
         &self,
         username: &str,
         stream: &Arc<Mutex<TcpStream>>,
-        
+
         fixed_header_info: &([u8; 2], FixedHeader),
     ) -> Result<(), Error> {
         let (fixed_header_bytes, fixed_header) = fixed_header_info;
@@ -352,12 +358,12 @@ impl MQTTServer {
 
                 self.send_puback(&msg, stream)?;
 
-                self.add_message_to_subscribers_queue( &msg)?;
+                self.add_message_to_subscribers_queue(&msg)?;
             }
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
 
-                let return_codes = self.add_topics_to_subscriber(username,&msg)?;
+                let return_codes = self.add_topics_to_subscriber(username, &msg)?;
 
                 self.send_suback(return_codes, stream)?;
             }
@@ -377,11 +383,7 @@ impl MQTTServer {
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
         match fixed_header.get_message_type() {
             1 => {
-                self.process_connect(
-                    &fixed_header,
-                    stream,
-                    &fixed_header_buf,
-                )?;
+                self.process_connect(&fixed_header, stream, &fixed_header_buf)?;
             }
             _ => {
                 println!("Error, el primer mensaje recibido DEBE ser un connect.");
@@ -399,6 +401,7 @@ impl MQTTServer {
         }
     }
 
+    /// Maneja las conexiones entrantes, acepta las conexiones y crea un hilo para manejar cada una.
     pub fn handle_incoming_connections(&self, listener: TcpListener) -> Result<(), Error> {
         println!("Servidor iniciado. Esperando conexiones.");
         let mut handles = vec![];
@@ -420,6 +423,7 @@ impl MQTTServer {
             }
         }
 
+        // Espera a que todos los hilos terminen.
         for handle in handles {
             if let Err(e) = handle.join() {
                 eprintln!("Error al esperar el hilo: {:?}", e);
@@ -429,6 +433,7 @@ impl MQTTServer {
         Ok(())
     }
 
+    /// Agrega un stream a la lista de streams.
     fn add_stream_to_vec(&self, stream: ShareableStream) {
         if let Ok(mut streams) = self.streams.lock() {
             streams.push(stream);
@@ -436,6 +441,7 @@ impl MQTTServer {
     }
 }
 
+/// Crea un servidor en la dirección ip y puerto especificados.
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
         TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
