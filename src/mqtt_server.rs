@@ -47,10 +47,12 @@ impl MQTTServer {
         Ok(mqtt_server)
     }
 
+    /// Agrega un usuario al hashmap de usuarios conectados
     fn add_user(&self, stream: &Arc<Mutex<TcpStream>>, username: &str) {
         let user = User::new(stream.clone(), username.to_string());
         if let Ok(mut users) = self.users_connected.lock() {
-            users.insert(user.username.clone(), user);
+            let username = user.get_username();
+            users.insert(username, user); //inserta el usuario en el hashmap
         }
     }
 
@@ -196,8 +198,40 @@ impl MQTTServer {
         Ok(())
     }
 
+    ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
+    fn add_message_to_subscribers_queue(
+        &self,
+        username: &str,
+        msg: &PublishMessage,
+    ) -> Result<(), Error> {
+        //Pseudo código pensado:
+        //for (user in users_connected)
+        //if(user.topics.Contains(message.topic)){ //si el usuario está suscrito al topic del mensaje
+        //    user.messages.addhash(topic, Publish)
+        
+        if let Ok(users_connected) = self.users_connected.lock(){
+            for username in users_connected.keys(){ //users_connected es un hashmap con key=username y value=user
+                if let Some(user) = users_connected.get(username){
+
+                    if user.topics.contains(&msg.get_topic()){//si el usuario está suscrito al topic del mensaje
+                        //Necesito clonar el mensaje para que cada usuario tenga su propia instancia
+                        user.add_message(msg.clone());//agrego el mensaje a la cola del usuario
+                        println!(
+                            "Se encontraron encontro subscriber: {} al topic {:?}",username, msg.get_topic()
+                        );
+                    }
+                }
+            }
+
+        }
+        Ok(())
+    }
+    
+    
+/* 
     fn distribute_to_subscribers(
         &self,
+        username: &str,
         msg: &PublishMessage,
         subs_by_topic: &ShHashmapType,
     ) -> Result<(), Error> {
@@ -220,7 +254,7 @@ impl MQTTServer {
         }
         Ok(())
     }
-
+*/
     fn process_subscribe(
         &self,
         fixed_header: &FixedHeader,
@@ -320,7 +354,7 @@ impl MQTTServer {
 
                 self.send_puback(&msg, stream)?;
 
-                self.distribute_to_subscribers(&msg, subs_by_topic)?;
+                self.add_message_to_subscribers_queue(username, &msg)?;
             }
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;

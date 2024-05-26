@@ -30,8 +30,8 @@ impl User {
         Arc::clone(&self.stream)
     }
 
-    pub fn get_username(&self) -> &String {
-        &self.username
+    pub fn get_username(&self) -> String {
+        self.username
     }
 
     pub fn get_topics(&self) -> &Vec<String> {
@@ -57,5 +57,19 @@ impl User {
 
     pub fn set_messages(&mut self, messages: HashMap<String, VecDeque<PublishMessage>>) {
         self.messages = messages;
+    }
+
+    /// Agrega el mensaje a la cola del usuario
+    pub fn add_message(&mut self, message: PublishMessage) {
+        let topic = message.get_topic();
+        if self.messages.contains_key(&topic) { //si el usuario ya tiene mensajes en ese topic
+            if let Some(messages) = self.messages.get_mut(&topic) {
+                messages.push_back(message);
+            }
+        } else { //si no tiene ese topic
+            let mut messages = VecDeque::new();
+            messages.push_back(message); //es el primer mensaje de ese topic
+            self.messages.insert(topic, messages);
+        }
     }
 }
