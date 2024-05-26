@@ -33,7 +33,7 @@ pub struct MQTTServer {
 }
 
 impl MQTTServer {
-    pub fn new(ip: String, port: u16) -> Result<(), Error> {
+    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
             users_connected: Arc::new(Mutex::new(HashMap::new())),
@@ -63,7 +63,7 @@ impl MQTTServer {
             .join()
             .expect("Failed to join outgoing thread");
 
-        Ok(())
+        Ok(mqtt_server)
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
