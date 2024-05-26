@@ -9,16 +9,19 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::thread;
 
-/// Lee el puerto por la consola, y devuelve la dirección IP y el puerto.
+
+/// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_port() -> Result<(String, u16), Box<dyn Error>> {
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != 2 {
+    let argv = std::env::args().collect::<Vec<String>>();
+    if argv.len() != 3 {
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Cantidad de argumentos inválido. Debe ingresar el puerto en el que desea correr el servidor.",
+            "Cantidad de argumentos inválido. Debe ingresar la dirección IP y 
+            el puerto en el que desea correr el servidor.",
         )));
     }
-    let port = match argv[1].parse::<u16>() {
+    let ip = &argv[1];
+    let port = match argv[2].parse::<u16>() {
         Ok(port) => port,
         Err(_) => {
             return Err(Box::new(std::io::Error::new(
@@ -27,9 +30,8 @@ fn load_port() -> Result<(String, u16), Box<dyn Error>> {
             )))
         }
     };
-    let localhost = "127.0.0.1".to_string();
 
-    Ok((localhost, port))
+    Ok((ip.to_string(), port))
 }
 
 fn establish_mqtt_broker_connection(
