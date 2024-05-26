@@ -29,7 +29,7 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
-    pub fn connect_to_broker(addr: &SocketAddr) -> Result<Self, Error> {
+    pub fn connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
         //io::Result<()> {
         // Inicializaciones
         // Intenta conectar al servidor MQTT
@@ -40,7 +40,7 @@ impl MQTTClient {
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
-            "rust-client",
+            client_id,
             None, // will_topic
             None, // will_message
             Some("sistema-monitoreo"),
