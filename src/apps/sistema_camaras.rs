@@ -12,7 +12,7 @@ type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
 //use rustx::apps::properties::Properties;
 
-use std::env::args;
+//use std::env::args;
 use std::error::Error;
 use std::net::SocketAddr;
 
