@@ -4,7 +4,7 @@ use gio::prelude::*;
 use gtk::prelude::*;
 //use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
-use std::env::args;
+//use std::env::args;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::thread;

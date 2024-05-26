@@ -6,6 +6,8 @@ use std::{
 
 use crate::publish_message::PublishMessage;
 
+type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 
@@ -13,7 +15,7 @@ pub struct User {
     stream: Arc<Mutex<TcpStream>>,
     username: String,
     topics: Vec<String>, //topics a los que esta suscripto
-    messages: HashMap<String, VecDeque<PublishMessage>>,
+    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>,
 }
 
 impl User {
@@ -22,7 +24,7 @@ impl User {
             stream,
             username,
             topics: Vec::new(),
-            messages: HashMap::new(),
+            messages: Arc::new(Mutex::new(HashMap::new())),
         }
     }
     // Getters
@@ -38,7 +40,7 @@ impl User {
         &self.topics
     }
 
-    pub fn get_messages(&self) -> &HashMap<String, VecDeque<PublishMessage>> {
+    pub fn get_messages(&self) -> &ShareableMessageQueue {
         &self.messages
     }
 
@@ -55,29 +57,19 @@ impl User {
         self.topics.push(topic);
     }
 
-    pub fn set_messages(&mut self, messages: HashMap<String, VecDeque<PublishMessage>>) {
+    pub fn set_messages(&mut self, messages: ShareableMessageQueue) {
         self.messages = messages;
     }
 
     /// Agrega el mensaje a la cola del usuario
     pub fn add_message(&mut self, message: PublishMessage) {
         let topic = message.get_topic();
-
-        self.messages
+        if let Ok(mut messages_locked) = self.messages.lock() {
+            messages_locked
             .entry(topic)
             .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
             //.or_insert_with(VecDeque::new)
             .push_back(message);
-        /*
-        if self.messages.contains_key(&topic) { //si el usuario ya tiene mensajes en ese topic
-            if let Some(messages) = self.messages.get_mut(&topic) {
-                messages.push_back(message);
-            }
-        } else { //si no tiene ese topic
-            let mut messages = VecDeque::new();
-            messages.push_back(message); //es el primer mensaje de ese topic
-            self.messages.insert(topic, messages);
         }
-        */
     }
 }

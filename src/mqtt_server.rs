@@ -3,7 +3,8 @@ use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream,
+    write_message_to_stream,
 };
 
 use crate::puback_message::PubAckMessage;
@@ -32,16 +33,37 @@ pub struct MQTTServer {
 }
 
 impl MQTTServer {
-    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+    pub fn new(ip: String, port: u16) -> Result<(), Error> {
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
             users_connected: Arc::new(Mutex::new(HashMap::new())),
         };
         let listener = create_server(ip, port)?;
 
-        mqtt_server.handle_incoming_connections(listener)?;
+        let mqtt_server_hijo = mqtt_server.clone_ref();
 
-        Ok(mqtt_server)
+        let incoming_thread = std::thread::spawn(move || {
+            if let Err(result) = mqtt_server_hijo.handle_incoming_connections(listener) {
+                println!("Error al manejar las conexiones entrantes: {:?}", result);
+            }
+        });
+
+        let mqtt_server_hermano = mqtt_server.clone_ref();
+
+        let outgoing_thread = std::thread::spawn(move || {
+            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
+                println!("Error al manejar los mensajes salientes: {:?}", result);
+            }
+        });
+
+        incoming_thread
+            .join()
+            .expect("Failed to join incoming thread");
+        outgoing_thread
+            .join()
+            .expect("Failed to join outgoing thread");
+
+        Ok(())
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
@@ -438,6 +460,29 @@ impl MQTTServer {
         if let Ok(mut streams) = self.streams.lock() {
             streams.push(stream);
         }
+    }
+    /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
+    fn handle_outgoing_messages(&self) -> Result<(), Error> {
+        if let Ok(users_connected_locked) = self.users_connected.lock() {
+            for user in users_connected_locked.values() {
+                let stream = user.get_stream();
+                let topics = user.get_topics();
+                //trae el hashmap del usuario topic, colas de mensajes
+                let messages = user.get_messages();
+                if let Ok(mut messages_locked) = messages.lock() {
+                    for topic in topics {
+                        // trae 1 cola de un topic y escribe los mensajes en el stream
+                        if let Some(messages_topic) = messages_locked.get_mut(topic) {
+                            while let Some(msg) = messages_topic.pop_front() {
+                                let msg_bytes = msg.to_bytes();
+                                write_message_to_stream(&msg_bytes, &stream)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
