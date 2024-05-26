@@ -62,6 +62,12 @@ impl User {
     /// Agrega el mensaje a la cola del usuario
     pub fn add_message(&mut self, message: PublishMessage) {
         let topic = message.get_topic();
+
+        self.messages
+            .entry(topic)
+            .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
+            .push_back(message);
+        /* 
         if self.messages.contains_key(&topic) { //si el usuario ya tiene mensajes en ese topic
             if let Some(messages) = self.messages.get_mut(&topic) {
                 messages.push_back(message);
@@ -71,5 +77,6 @@ impl User {
             messages.push_back(message); //es el primer mensaje de ese topic
             self.messages.insert(topic, messages);
         }
+        */
     }
 }
