@@ -51,8 +51,10 @@ impl MQTTServer {
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
         let outgoing_thread = std::thread::spawn(move || {
-            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
-                println!("Error al manejar los mensajes salientes: {:?}", result);
+            loop {
+                if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
+                    println!("Error al manejar los mensajes salientes: {:?}", result);
+                }
             }
         });
 
@@ -104,7 +106,7 @@ impl MQTTServer {
         // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
         // y se maneja la conexión(handle_connection)
         if is_authentic {
-            if let Some(username) = connect_msg.get_user() {
+            if let Some(username) = connect_msg.get_client_id() {
                 self.add_user(stream, username);
                 self.handle_connection(username, stream)?;
             }
@@ -379,13 +381,16 @@ impl MQTTServer {
                 let msg = self.process_publish(fixed_header, stream, fixed_header_bytes)?;
 
                 self.send_puback(&msg, stream)?;
-
+                println!(" Publish:  Antes de add_message_to_subscribers_queue");
                 self.add_message_to_subscribers_queue(&msg)?;
+                println!(" Publish:  Despues de add_message_to_subscribers_queue");
+
             }
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
-
+                println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
+                println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 self.send_suback(return_codes, stream)?;
             }
@@ -467,6 +472,7 @@ impl MQTTServer {
             for user in users_connected_locked.values() {
                 let stream = user.get_stream();
                 let topics = user.get_topics();
+                // println!("TOPICS: {:?}",topics);
                 //trae el hashmap del usuario topic, colas de mensajes
                 let messages = user.get_messages();
                 if let Ok(mut messages_locked) = messages.lock() {

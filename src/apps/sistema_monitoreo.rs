@@ -36,7 +36,8 @@ fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
 fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
 ) -> Result<MQTTClient, Box<dyn std::error::Error>> {
-    let mqtt_client_res = MQTTClient::connect_to_broker(broker_addr);
+    let client_id = "Sistema-Monitoreo";
+    let mqtt_client_res = MQTTClient::connect_to_broker(client_id,broker_addr);
     match mqtt_client_res {
         Ok(mqtt_client) => {
             println!("Cliente: Conectado al broker MQTT.");
