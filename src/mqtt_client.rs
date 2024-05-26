@@ -6,6 +6,7 @@ use crate::mqtt_server_client_utils::{
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
 use crate::subscribe_message::SubscribeMessage;
+use std::collections::HashMap;
 use std::io::{self, Error};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
@@ -26,6 +27,10 @@ pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
     rx: Receiver<PublishMessage>,
+    //acks_by_packet_id: // read control messages:
+    read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
+    read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
+    read_subacks: Arc<Mutex<HashMap<u16, SubAckMessage>>>,
 }
 
 impl MQTTClient {
@@ -64,6 +69,10 @@ impl MQTTClient {
             stream,
             handle_hijo: Some(h),
             rx,
+            read_connack: Arc::new(Mutex::new(false)),
+            read_pubacks: Arc::new(Mutex::new(HashMap::new())),
+            read_subacks: Arc::new(Mutex::new(HashMap::new())),
+            
         };
         // Fin inicializaciones.
 
@@ -193,6 +202,11 @@ fn leer_un_mensaje(
             // Entonces tengo el mensaje completo
             let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
             println!("   Mensaje conn ack completo recibido: {:?}", msg);
+            
+            // Marco que el ack fue recibido, para que el otro hilo pueda enterarse
+            self.
+
+
         }
         3 => {
             // Publish

@@ -15,7 +15,7 @@ pub struct User {
     stream: Arc<Mutex<TcpStream>>,
     username: String,
     topics: Vec<String>, //topics a los que esta suscripto
-    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>,
+    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
 
 impl User {
@@ -61,7 +61,7 @@ impl User {
         self.messages = messages;
     }
 
-    /// Agrega el mensaje a la cola del usuario
+    /// Agrega el mensaje a la cola del usuario, indexada por topic.
     pub fn add_message(&mut self, message: PublishMessage) {
         let topic = message.get_topic();
         if let Ok(mut messages_locked) = self.messages.lock() {
