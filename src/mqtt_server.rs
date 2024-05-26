@@ -234,9 +234,6 @@ impl MQTTServer {
         if let Ok(mut users_connected) = self.users_connected.lock() {
             for user in users_connected.values_mut() {
                 //users_connected es un hashmap con key=username y value=user
-                //for username in users_connected.{ //users_connected es un hashmap con key=username y value=user
-
-                //if let Some(&mut User) = users_connected.get(username){
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
@@ -250,34 +247,6 @@ impl MQTTServer {
         }
         Ok(())
     }
-
-    /*
-        fn distribute_to_subscribers(
-            &self,
-            username: &str,
-            msg: &PublishMessage,
-            subs_by_topic: &ShHashmapType,
-        ) -> Result<(), Error> {
-            let topic = msg.get_topic();
-            let msg_bytes = msg.to_bytes();
-            if let Ok(subs_by_top) = subs_by_topic.lock() {
-                if let Some(topic_subscribers) = subs_by_top.get(&topic) {
-                    println!(
-                        "   Se encontraron {} suscriptores al topic {:?}",
-                        topic_subscribers.len(),
-                        topic
-                    );
-                    //println!("Debug 1, pre for");
-                    for subscriber in topic_subscribers {
-                        write_message_to_stream(&msg_bytes, subscriber)?;
-                        println!("      enviado mensaje publish a subscriber");
-                    }
-                    //println!("Debug 2, afuera del for");
-                }
-            }
-            Ok(())
-        }
-    */
 
     /// Procesa el mensaje de tipo Subscribe recibido.
     fn process_subscribe(
@@ -297,30 +266,6 @@ impl MQTTServer {
 
         Ok(msg)
     }
-
-    // fn add_subscribers_to_topic(
-    //     &self,
-    //     msg: &SubscribeMessage,
-    //     stream: &Arc<Mutex<TcpStream>>,
-    //     subs_by_topic: &ShHashmapType,
-    // ) -> Result<Vec<SubscribeReturnCode>, Error> {
-    //     let mut return_codes = vec![];
-
-    //     for (topic, _qos) in msg.get_topic_filters() {
-    //         return_codes.push(SubscribeReturnCode::QoS1);
-    //         let topic_s = topic.to_string();
-
-    //         // Guarda una referencia (arc clone) al stream, en el vector de suscriptores al topic en cuestión
-    //         if let Ok(mut subs_b_t) = subs_by_topic.lock() {
-    //             subs_b_t
-    //                 .entry(topic_s)
-    //                 .or_insert_with(Vec::new)
-    //                 .push(stream.clone());
-    //         }
-    //         println!("   Se agregó el suscriptor al topic {:?}", topic);
-    //     }
-    //     Ok(return_codes)
-    // }
 
     /// Agrega los topics al suscriptor correspondiente. y devuelve los códigos de retorno(qos)
     fn add_topics_to_subscriber(
@@ -378,15 +323,15 @@ impl MQTTServer {
                 let msg = self.process_publish(fixed_header, stream, fixed_header_bytes)?;
 
                 self.send_puback(&msg, stream)?;
-                println!(" Publish:  Antes de add_message_to_subscribers_queue");
+                // println!(" Publish:  Antes de add_message_to_subscribers_queue");
                 self.add_message_to_subscribers_queue(&msg)?;
-                println!(" Publish:  Despues de add_message_to_subscribers_queue");
+                // println!(" Publish:  Despues de add_message_to_subscribers_queue");
             }
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
-                println!(" Subscribe:  Antes de add_topics_to_subscriber");
+                // println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
-                println!(" Subscribe:  Despues de add_topics_to_subscriber");
+                // println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 self.send_suback(return_codes, stream)?;
             }
