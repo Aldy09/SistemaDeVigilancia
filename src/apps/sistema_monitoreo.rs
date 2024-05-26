@@ -37,7 +37,7 @@ fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
 ) -> Result<MQTTClient, Box<dyn std::error::Error>> {
     let client_id = "Sistema-Monitoreo";
-    let mqtt_client_res = MQTTClient::connect_to_broker(client_id,broker_addr);
+    let mqtt_client_res = MQTTClient::connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
         Ok(mqtt_client) => {
             println!("Cliente: Conectado al broker MQTT.");

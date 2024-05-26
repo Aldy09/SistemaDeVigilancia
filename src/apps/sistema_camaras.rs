@@ -94,7 +94,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let client_id = "sistema-camaras";
-    let mqtt_client_res = MQTTClient::connect_to_broker(client_id,broker_addr);
+    let mqtt_client_res = MQTTClient::connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
         Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //

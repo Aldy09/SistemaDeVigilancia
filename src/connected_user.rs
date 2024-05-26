@@ -66,10 +66,10 @@ impl User {
         let topic = message.get_topic();
         if let Ok(mut messages_locked) = self.messages.lock() {
             messages_locked
-            .entry(topic)
-            .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
-            //.or_insert_with(VecDeque::new)
-            .push_back(message);
+                .entry(topic)
+                .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
+                //.or_insert_with(VecDeque::new)
+                .push_back(message);
         }
     }
 }

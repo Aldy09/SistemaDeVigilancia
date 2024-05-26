@@ -29,7 +29,7 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
-    pub fn connect_to_broker(client_id:&str, addr: &SocketAddr) -> Result<Self, Error> {
+    pub fn connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
         //io::Result<()> {
         // Inicializaciones
         // Intenta conectar al servidor MQTT

@@ -3,8 +3,7 @@ use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream,
-    write_message_to_stream,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
 
 use crate::puback_message::PubAckMessage;
@@ -50,11 +49,9 @@ impl MQTTServer {
 
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
-        let outgoing_thread = std::thread::spawn(move || {
-            loop {
-                if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
-                    println!("Error al manejar los mensajes salientes: {:?}", result);
-                }
+        let outgoing_thread = std::thread::spawn(move || loop {
+            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
+                println!("Error al manejar los mensajes salientes: {:?}", result);
             }
         });
 
@@ -384,7 +381,6 @@ impl MQTTServer {
                 println!(" Publish:  Antes de add_message_to_subscribers_queue");
                 self.add_message_to_subscribers_queue(&msg)?;
                 println!(" Publish:  Despues de add_message_to_subscribers_queue");
-
             }
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;

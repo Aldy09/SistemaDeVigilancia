@@ -241,7 +241,6 @@ impl<'a> ConnectMessage<'a> {
         self.payload.password
     }
 
-
     /// Devuelve el campo client_id del mensaje.
     pub fn get_client_id(&self) -> Option<&str> {
         Some(self.payload.client_id)
