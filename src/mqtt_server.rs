@@ -1,4 +1,5 @@
 use crate::connect_message::ConnectMessage;
+use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
 use crate::mqtt_server_client_utils::{
@@ -23,9 +24,11 @@ use std::vec;
 type ShareableStream = Arc<Mutex<TcpStream>>;
 type ShHashmapType = Arc<Mutex<HashMap<String, Vec<ShareableStream>>>>;
 type ShareableStreams = Arc<Mutex<Vec<ShareableStream>>>;
+type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 
 #[allow(dead_code)]
 pub struct MQTTServer {
+    users_connected: ShareableUsers,
     streams: ShareableStreams,
     subs_by_topic: ShHashmapType,
 }
@@ -35,12 +38,20 @@ impl MQTTServer {
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
             subs_by_topic: Arc::new(Mutex::new(HashMap::new())),
+            users_connected: Arc::new(Mutex::new(HashMap::new())),
         };
         let listener = create_server(ip, port)?;
 
         mqtt_server.handle_incoming_connections(listener)?;
 
         Ok(mqtt_server)
+    }
+
+    fn add_user(&self, stream: &Arc<Mutex<TcpStream>>, username: &str) {
+        let user = User::new(stream.clone(), username.to_string());
+        if let Ok(mut users) = self.users_connected.lock() {
+            users.insert(user.username.clone(), user);
+        }
     }
 
     fn process_connect(
@@ -63,12 +74,15 @@ impl MQTTServer {
 
         // Procesa el mensaje connect
         let (is_authentic, connack_response) =
-            self.was_the_session_created_succesfully(connect_msg)?;
+            self.was_the_session_created_succesfully(&connect_msg)?;
 
         write_message_to_stream(&connack_response, stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
         if is_authentic {
+            if let Some(username) = connect_msg.get_user() {
+                self.add_user(stream, username);
+            }
             self.handle_connection(stream, subs_by_topic)?;
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -107,7 +121,7 @@ impl MQTTServer {
 
     fn was_the_session_created_succesfully(
         &self,
-        connect_msg: ConnectMessage,
+        connect_msg: &ConnectMessage,
     ) -> Result<(bool, [u8; 4]), Error> {
         if self.is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
             || self.authenticate(connect_msg.get_user(), connect_msg.get_passwd())
@@ -324,13 +338,11 @@ impl MQTTServer {
         Self {
             streams: self.streams.clone(),
             subs_by_topic: self.subs_by_topic.clone(),
+            users_connected: self.users_connected.clone(),
         }
     }
 
-    pub fn handle_incoming_connections(
-        &self,
-        listener: TcpListener
-    ) -> Result<(), Error> {
+    pub fn handle_incoming_connections(&self, listener: TcpListener) -> Result<(), Error> {
         println!("Servidor iniciado. Esperando conexiones.");
         let mut handles = vec![];
 

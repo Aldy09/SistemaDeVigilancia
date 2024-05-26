@@ -9,6 +9,7 @@ pub mod connect_message;
 pub mod connect_payload;
 pub mod connect_return_code;
 pub mod connect_variable_header;
+pub mod connected_user;
 pub mod disconnect_fixed_header;
 pub mod disconnect_message;
 pub mod file_helper;
