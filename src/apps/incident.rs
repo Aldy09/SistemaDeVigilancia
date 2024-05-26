@@ -37,4 +37,33 @@ impl Incident {
         self.state = IncidentState::ResolvedIncident;
         self.sent = false;
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        vec![
+            self.id,
+            self.coord_x,
+            self.coord_y,
+            self.state.to_byte()[0],
+            self.sent as u8,
+        ]
+    }
+
+    pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
+        let id = msg_bytes[0];
+        let coord_x = msg_bytes[1];
+        let coord_y = msg_bytes[2];
+        let mut state = IncidentState::ActiveIncident;
+        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[3]]) {
+            state = state_parsed;
+        }
+        let sent = msg_bytes[4] == 1;
+
+        Self {
+            id,
+            coord_x,
+            coord_y,
+            state,
+            sent,
+        }
+    }
 }

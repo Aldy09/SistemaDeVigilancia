@@ -327,10 +327,7 @@ impl MQTTServer {
         }
     }
 
-    pub fn handle_incoming_connections(
-        &self,
-        listener: TcpListener
-    ) -> Result<(), Error> {
+    pub fn handle_incoming_connections(&self, listener: TcpListener) -> Result<(), Error> {
         println!("Servidor iniciado. Esperando conexiones.");
         let mut handles = vec![];
 
