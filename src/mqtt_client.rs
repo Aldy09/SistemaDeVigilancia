@@ -26,7 +26,7 @@ use crate::suback_message::SubAckMessage;
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<Result<(), Error>>>,
-    rx: Receiver<PublishMessage>,
+    rx: Option<Receiver<PublishMessage>>,
     //acks_by_packet_id: // read control messages:
     read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
     read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
@@ -65,14 +65,14 @@ impl MQTTClient {
         let mut mqtt = MQTTClient {
             stream: stream.clone(),
             handle_hijo: None,
-            rx,
+            rx: Some(rx),
             read_connack: Arc::new(Mutex::new(false)),
             read_pubacks: Arc::new(Mutex::new(HashMap::new())),
             read_subacks: Arc::new(Mutex::new(HashMap::new())),
             
         };
         let mut stream_para_hijo = stream.clone();
-        //let mut self_p_hijo = mqtt;
+        let mut self_p_hijo = mqtt.clone_refs_para_hijo_lectura();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
         let h = thread::spawn(move || {
             leer_desde_server(&mut stream_para_hijo, &tx) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
@@ -135,8 +135,22 @@ impl MQTTClient {
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvError> {
-        self.rx.recv()
+    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, Error> {
+        // Veo si tengo el rx (hijo no lo tiene)
+        if let Some(rx) = &self.rx {
+            
+            // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
+            match rx.recv(){
+                Ok(publish_message) => return Ok(publish_message),
+                Err(e) => {
+                    println!("Mqtt: Error al intentar leer Publish Message del rx: {:?}.", e);
+                    return Err(Error::new(ErrorKind::Other, "Mqtt: Error al leer del rx."));
+                },
+            }
+            
+        } else {
+            return Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."));
+        }
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -153,6 +167,20 @@ impl MQTTClient {
     /// Setea el handle del hijo para poder esperarlo y terminar correctamente.
     fn set_hijo_a_esperar(&mut self, h: JoinHandle<Result<(), Error>>) {
         self.handle_hijo = Some(h);
+    }
+
+    /// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
+    /// que utiliza el MQTTClient para el cual se está llamando a esta función, con la diferencia de que
+    /// los campos para esperar al hijo y para recibir mensajes publish están seteados en `None` ya que no son
+    /// de interés para un hijo del MQTTClient original.
+    fn clone_refs_para_hijo_lectura(&self) -> Self {
+        Self { stream: self.stream.clone(),
+             handle_hijo: None,
+             rx: None,
+             read_connack: self.read_connack.clone(),
+             read_pubacks: self.read_pubacks.clone(),
+             read_subacks: self.read_subacks.clone()
+        }
     }
 
     /*/// Setea el rx a asignarse, por el cual se recibirá cliente los PublishMessages a través de
