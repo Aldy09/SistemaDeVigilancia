@@ -3,7 +3,7 @@ use crate::publish_flags::PublishFlags;
 use crate::publish_payload::Payload;
 use crate::publish_variable_header::VariableHeader;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct PublishMessage {
     fixed_header: FixedHeader,
     variable_header: VariableHeader,

@@ -1,4 +1,5 @@
-#[derive(Debug)]
+#[derive(Debug,Clone)]
+
 pub struct VariableHeader {
     //byte1:long name bits mas signif,
     //byte2:long name bits menos signif

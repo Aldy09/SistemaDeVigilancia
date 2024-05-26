@@ -31,7 +31,7 @@ impl User {
     }
 
     pub fn get_username(&self) -> String {
-        self.username
+        self.username.to_string()
     }
 
     pub fn get_topics(&self) -> &Vec<String> {

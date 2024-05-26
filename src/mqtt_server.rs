@@ -210,11 +210,14 @@ impl MQTTServer {
         //    user.messages.addhash(topic, Publish)
         
         if let Ok(users_connected) = self.users_connected.lock(){
-            for username in users_connected.keys(){ //users_connected es un hashmap con key=username y value=user
-                if let Some(user) = users_connected.get(username){
 
-                    if user.topics.contains(&msg.get_topic()){//si el usuario está suscrito al topic del mensaje
-                        //Necesito clonar el mensaje para que cada usuario tenga su propia instancia
+            for username in users_connected.keys(){ //users_connected es un hashmap con key=username y value=user
+            //for username in users_connected.{ //users_connected es un hashmap con key=username y value=user
+                if let Some(&mut user) = users_connected.get_mut(username){
+                //if let Some(&mut User) = users_connected.get(username){
+                    let user_topics = user.get_topics();
+                    if user_topics.contains(&(msg.get_topic())){//si el usuario está suscrito al topic del mensaje
+                        //Necesito el mensaje en todas las colas de mensajes de los usuarios suscritos al topic
                         user.add_message(msg.clone());//agrego el mensaje a la cola del usuario
                         println!(
                             "Se encontraron encontro subscriber: {} al topic {:?}",username, msg.get_topic()
