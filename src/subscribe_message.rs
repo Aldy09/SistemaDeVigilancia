@@ -28,7 +28,7 @@ impl SubscribeMessage {
             reserved_flags: 2,
             packet_identifier: packet_id,
             topic_filters: topics.into_iter().map(|topic| (topic, 2)).collect(), // Convertimos cada tema en una tupla con QoS 2
-                                                                                 //No queremos mensajes duplicados y queremos que se exactamente 1 vez
+                                                                                 //No queremos mensajes duplicados y queremos que se envie exactamente 1 vez
         }
     }
 
