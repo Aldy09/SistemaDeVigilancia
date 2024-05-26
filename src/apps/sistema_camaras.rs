@@ -10,7 +10,11 @@ use std::{fs, thread};
 type ShareableCamType = Arc<Mutex<Camera>>;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
-use rustx::apps::properties::Properties;
+//use rustx::apps::properties::Properties;
+
+use std::env::args;
+use std::error::Error;
+use std::net::SocketAddr;
 
 #[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
 
@@ -37,7 +41,34 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
     cameras
 }
 
-fn connect_and_publish(cameras: &mut ShCamerasType) {
+///Recibe por consola la dirección IP del cliente y el puerto en el que se desea correr el servidor.
+fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
+    let argv = std::env::args().collect::<Vec<String>>();
+    if argv.len() != 3 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Cantidad de argumentos inválido. Debe ingresar:  la dirección IP de sistema_camaras y 
+            el puerto en el que desea correr el servidor.",
+        )));
+    }
+
+    let ip_cam = &argv[1];
+
+    let port = match argv[2].parse::<u16>() {
+        Ok(port) => port,
+        Err(_) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "El puerto proporcionado no es válido",
+            )))
+        }
+    };
+
+    Ok((ip_cam.to_string(), port))
+}
+
+fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
+    /*
     let properties = Properties::new("sistema_camaras.properties")
         .expect("Error al leer el archivo de properties");
     let ip = properties
@@ -57,9 +88,12 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
     let broker_addr = format!("{}:{}", ip, port)
         .parse()
         .expect("Dirección no válida");
+    */
+
+    let publish_interval = 9;
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
-    let mqtt_client_res = MQTTClient::connect_to_broker(&broker_addr);
+    let mqtt_client_res = MQTTClient::connect_to_broker(broker_addr);
     match mqtt_client_res {
         Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
@@ -114,6 +148,25 @@ fn connect_and_publish(cameras: &mut ShCamerasType) {
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
+    //Establezco la conexión con el servidor
+    let res = load_ip_and_port();
+    let (ip, port) = match res {
+        Ok((ip, port)) => (ip, port),
+        Err(_) => {
+            println!(
+                "Error al cargar la IP de sistema de camaras 
+            y/o puerto del servidor"
+            );
+            return;
+        }
+    };
+
+    // Parseo ip de sistema de cámaras y puerto del servidor
+    let broker_addr: String = format!("{}:{}", ip, port);
+    let broker_addr = broker_addr
+        .parse::<SocketAddr>()
+        .expect("Dirección no válida");
+
     let cameras: HashMap<u8, Arc<Mutex<Camera>>> = read_cameras_from_file("./cameras.properties");
     let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
     let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
@@ -130,7 +183,7 @@ fn main() {
 
     // Publicar cámaras
     let handle_2 = thread::spawn(move || {
-        connect_and_publish(&mut cameras_cloned);
+        connect_and_publish(&mut cameras_cloned, &broker_addr);
     });
 
     // Atender incidentes

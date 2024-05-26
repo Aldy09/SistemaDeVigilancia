@@ -9,14 +9,13 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::thread;
 
-
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
-fn load_port() -> Result<(String, u16), Box<dyn Error>> {
+fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
     let argv = std::env::args().collect::<Vec<String>>();
     if argv.len() != 3 {
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Cantidad de argumentos inválido. Debe ingresar la dirección IP y 
+            "Cantidad de argumentos inválido. Debe ingresar: la dirección IP del sistema monitoreo y 
             el puerto en el que desea correr el servidor.",
         )));
     }
@@ -76,7 +75,8 @@ fn subscribe_to_topics(mut mqtt_client: MQTTClient) {
 }
 
 fn main() {
-    let res = load_port();
+    //Recibe por consola la dirección IP y el puerto del servidor
+    let res = load_ip_and_port();
     let (ip, port) = match res {
         Ok((ip, port)) => (ip, port),
         Err(e) => {
