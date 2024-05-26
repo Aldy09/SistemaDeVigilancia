@@ -82,8 +82,8 @@ impl MQTTServer {
         if is_authentic {
             if let Some(username) = connect_msg.get_user() {
                 self.add_user(stream, username);
+                self.handle_connection(username,stream, subs_by_topic)?;
             }
-            self.handle_connection(stream, subs_by_topic)?;
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
         }
@@ -136,6 +136,7 @@ impl MQTTServer {
 
     fn handle_connection(
         &self,
+        username: &str,
         stream: &Arc<Mutex<TcpStream>>,
         subs_by_topic: &ShHashmapType,
     ) -> Result<(), Error> {
@@ -144,7 +145,7 @@ impl MQTTServer {
         let ceros: &[u8; 2] = &[0; 2];
         let mut vacio = &fixed_header_info.0 == ceros;
         while !vacio {
-            self.continue_with_conection(stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
+            self.continue_with_conection(username,stream, subs_by_topic, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                                       // Leo para la siguiente iteración
                                                                                       // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
                                                                                       // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
@@ -238,26 +239,51 @@ impl MQTTServer {
         Ok(msg)
     }
 
-    fn add_subscribers_to_topic(
+    // fn add_subscribers_to_topic(
+    //     &self,
+    //     msg: &SubscribeMessage,
+    //     stream: &Arc<Mutex<TcpStream>>,
+    //     subs_by_topic: &ShHashmapType,
+    // ) -> Result<Vec<SubscribeReturnCode>, Error> {
+    //     let mut return_codes = vec![];
+
+    //     for (topic, _qos) in msg.get_topic_filters() {
+    //         return_codes.push(SubscribeReturnCode::QoS1);
+    //         let topic_s = topic.to_string();
+
+    //         // Guarda una referencia (arc clone) al stream, en el vector de suscriptores al topic en cuestión
+    //         if let Ok(mut subs_b_t) = subs_by_topic.lock() {
+    //             subs_b_t
+    //                 .entry(topic_s)
+    //                 .or_insert_with(Vec::new)
+    //                 .push(stream.clone());
+    //         }
+    //         println!("   Se agregó el suscriptor al topic {:?}", topic);
+    //     }
+    //     Ok(return_codes)
+    // }
+
+
+    /// Agrega los topics al suscriptor correspondiente. y devuelve los códigos de retorno(qos)
+    fn add_topics_to_subscriber(
         &self,
+        username: &str,
         msg: &SubscribeMessage,
         stream: &Arc<Mutex<TcpStream>>,
         subs_by_topic: &ShHashmapType,
     ) -> Result<Vec<SubscribeReturnCode>, Error> {
+        
         let mut return_codes = vec![];
 
-        for (topic, _qos) in msg.get_topic_filters() {
-            return_codes.push(SubscribeReturnCode::QoS1);
-            let topic_s = topic.to_string();
-
-            // Guarda una referencia (arc clone) al stream, en el vector de suscriptores al topic en cuestión
-            if let Ok(mut subs_b_t) = subs_by_topic.lock() {
-                subs_b_t
-                    .entry(topic_s)
-                    .or_insert_with(Vec::new)
-                    .push(stream.clone());
+        // Agrega los topics a los que se suscribió el usuario
+        if let Ok(users_connected) = self.users_connected.lock() {
+          if let Some(user) =  users_connected.get(username) {
+            for (topic,_qos) in  msg.get_topic_filters() {
+                user.add_to_topics(topic.to_string());
+                return_codes.push(SubscribeReturnCode::QoS1);
+                println!("   Se agregó el topic {:?} al suscriptor {:?}", topic, username);
             }
-            println!("   Se agregó el suscriptor al topic {:?}", topic);
+          }
         }
         Ok(return_codes)
     }
@@ -280,6 +306,7 @@ impl MQTTServer {
     /// Lee un mensaje.
     fn continue_with_conection(
         &self,
+        username: &str,
         stream: &Arc<Mutex<TcpStream>>,
         subs_by_topic: &ShHashmapType,
         fixed_header_info: &([u8; 2], FixedHeader),
@@ -298,7 +325,7 @@ impl MQTTServer {
             8 => {
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
 
-                let return_codes = self.add_subscribers_to_topic(&msg, stream, subs_by_topic)?;
+                let return_codes = self.add_topics_to_subscriber(username,&msg, stream, subs_by_topic)?;
 
                 self.send_suback(return_codes, stream)?;
             }

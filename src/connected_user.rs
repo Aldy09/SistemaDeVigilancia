@@ -11,7 +11,7 @@ use crate::publish_message::PublishMessage;
 
 pub struct User {
     stream: Arc<Mutex<TcpStream>>,
-    pub username: String,
+    username: String,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: HashMap<String, VecDeque<PublishMessage>>,
 }
@@ -24,5 +24,38 @@ impl User {
             topics: Vec::new(),
             messages: HashMap::new(),
         }
+    }
+    // Getters
+    pub fn get_stream(&self) -> Arc<Mutex<TcpStream>> {
+        Arc::clone(&self.stream)
+    }
+
+    pub fn get_username(&self) -> &String {
+        &self.username
+    }
+
+    pub fn get_topics(&self) -> &Vec<String> {
+        &self.topics
+    }
+
+    pub fn get_messages(&self) -> &HashMap<String, VecDeque<PublishMessage>> {
+        &self.messages
+    }
+
+    // Setters
+    pub fn set_stream(&mut self, stream: Arc<Mutex<TcpStream>>) {
+        self.stream = stream;
+    }
+
+    pub fn set_username(&mut self, username: String) {
+        self.username = username;
+    }
+
+    pub fn add_to_topics(&mut self, topic:String) {
+        self.topics.push(topic);
+    }
+
+    pub fn set_messages(&mut self, messages: HashMap<String, VecDeque<PublishMessage>>) {
+        self.messages = messages;
     }
 }
