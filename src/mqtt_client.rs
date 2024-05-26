@@ -59,21 +59,26 @@ impl MQTTClient {
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
         // Más inicializaciones
+        
+        //
         let (tx, rx) = mpsc::channel::<PublishMessage>(); // [] que mande bytes, xq no hicimos un trait Message
-        let mut stream_para_hijo = stream.clone();
-        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
-        let h = thread::spawn(move || {
-            leer_desde_server(&mut stream_para_hijo, &tx) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
-        });
-        let mqtt = MQTTClient {
-            stream,
-            handle_hijo: Some(h),
+        let mut mqtt = MQTTClient {
+            stream: stream.clone(),
+            handle_hijo: None,
             rx,
             read_connack: Arc::new(Mutex::new(false)),
             read_pubacks: Arc::new(Mutex::new(HashMap::new())),
             read_subacks: Arc::new(Mutex::new(HashMap::new())),
             
         };
+        let mut stream_para_hijo = stream.clone();
+        //let mut self_p_hijo = mqtt;
+        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
+        let h = thread::spawn(move || {
+            leer_desde_server(&mut stream_para_hijo, &tx) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
+        });
+        mqtt.set_hijo_a_esperar(h);
+        
         // Fin inicializaciones.
 
         Ok(mqtt)
@@ -144,6 +149,17 @@ impl MQTTClient {
             }
         }
     }
+
+    /// Setea el handle del hijo para poder esperarlo y terminar correctamente.
+    fn set_hijo_a_esperar(&mut self, h: JoinHandle<Result<(), Error>>) {
+        self.handle_hijo = Some(h);
+    }
+
+    /*/// Setea el rx a asignarse, por el cual se recibirá cliente los PublishMessages a través de
+    /// `mqtt_receive_msg_from_subs_topic`.
+    fn set_rx(&mut self, rx: Receiver<PublishMessage>) {
+        self.rx = rx;
+    }*/
 }
 
 /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
@@ -204,7 +220,7 @@ fn leer_un_mensaje(
             println!("   Mensaje conn ack completo recibido: {:?}", msg);
             
             // Marco que el ack fue recibido, para que el otro hilo pueda enterarse
-            self.
+            // self. // [] no tengo self acá.
 
 
         }
