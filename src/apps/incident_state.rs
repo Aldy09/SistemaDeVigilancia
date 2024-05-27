@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum IncidentState {
     ActiveIncident,
     ResolvedIncident,

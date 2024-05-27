@@ -2,12 +2,18 @@ extern crate gio;
 extern crate gtk;
 use gio::prelude::*;
 use gtk::prelude::*;
+use rustx::apps::incident::Incident;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
 //use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 //use std::env::args;
+use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::thread::{self, sleep, JoinHandle}; // Import the `SistemaMonitoreo` type
 
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
@@ -50,28 +56,60 @@ fn establish_mqtt_broker_connection(
     }
 }
 
-fn subscribe_to_topics(mut mqtt_client: MQTTClient) {
-    let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"))]);
-    match res_sub {
-        Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
-        Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
+fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"))]);
+        match res_sub {
+            Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
+            Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
+        }
     }
 
     // Que lea del topic al/os cual/es hizo subscribe, implementando [].
     let h = thread::spawn(move || {
-        while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
-            println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-            // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
-            //let camera_recibida = Camera::from_bytes(&msg.get_payload());
-            //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+        if let Ok(mqtt_client) = mqtt_client.lock() {
+            while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
+                // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
+                //let camera_recibida = Camera::from_bytes(&msg.get_payload());
+                //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+            }
         }
 
         // Cliente termina de utilizar mqtt
-        mqtt_client.finalizar();
+        if let Ok(mut mqtt_client) = mqtt_client.lock() {
+            mqtt_client.finalizar();
+        }
     });
 
     if h.join().is_err() {
         println!("Cliente: error al esperar a hijo que recibe msjs");
+    }
+}
+
+fn publish_incident(incidents: &mut [Incident], mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    loop {
+        if incidents.is_empty() {
+            for incident in incidents.iter_mut() {
+                if !incident.sent {
+                    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+                        let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
+                        match res {
+                            Ok(_) => {
+                                println!("Sistema-Monitoreo: Ha hecho un publish exitosamente");
+
+                                incident.sent = true;
+                            }
+                            Err(e) => {
+                                println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
+                            }
+                        };
+                    }
+                }
+            }
+        };
+        // Esperamos, para publicar los cambios "periódicamente"
+        sleep(Duration::from_secs(3));
     }
 }
 
@@ -91,36 +129,72 @@ fn main() {
         .parse::<SocketAddr>()
         .expect("Dirección no válida");
 
-    let hijo_connect = thread::spawn(move || {
-        let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
-        match mqtt_client_res {
-            Ok(mqtt_client) => subscribe_to_topics(mqtt_client),
-            Err(e) => println!(
-                "Error al establecer la conexión con el broker MQTT: {:?}",
-                e
-            ),
+    let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
+    let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
+    let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
+
+    let mut hijos: Vec<JoinHandle<()>> = vec![];
+    match mqtt_client_res {
+        Ok(mqtt_client) => {
+            let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+            let mqtt_client_sh_clone = Arc::clone(&mqtt_client_sh);
+
+            let hijo_connect = thread::spawn(move || {
+                subscribe_to_topics(mqtt_client_sh_clone);
+            });
+            hijos.push(hijo_connect);
+
+            let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh);
+
+            let hijo_send_incidents = thread::spawn(move || loop {
+                let mut incidents = {
+                    let sistema_monitoreo = sistema_monitoreo.lock().unwrap();
+                    sistema_monitoreo.get_incidents()
+                };
+
+                publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
+
+                thread::sleep(std::time::Duration::from_secs(5));
+            });
+
+            hijos.push(hijo_send_incidents);
         }
-    });
+
+        Err(e) => println!(
+            "Error al establecer la conexión con el broker MQTT: {:?}",
+            e
+        ),
+    }
 
     let hijo_ui = thread::spawn(move || {
-        let application = gtk::Application::new(
-            Some("fi.uba.sistemamonitoreo"),
-            gio::ApplicationFlags::FLAGS_NONE,
-        )
-        .expect("Fallo en iniciar la aplicacion");
-        application.connect_activate(build_ui);
-        application.run(&[]);
+        let application = Rc::new(RefCell::new(
+            gtk::Application::new(
+                Some("fi.uba.sistemamonitoreo"),
+                gio::ApplicationFlags::FLAGS_NONE,
+            )
+            .expect("Fallo en iniciar la aplicacion"),
+        ));
+
+        let application_clone = Rc::clone(&application);
+
+        application.borrow_mut().connect_activate(move |_| {
+            build_ui(&application_clone.borrow(), &sistema_monitoreo_ui)
+        });
+
+        application.borrow().run(&[]);
     });
 
-    if hijo_connect.join().is_err() {
-        println!("Error al esperar a la conexión y suscripción.");
-    }
-    if hijo_ui.join().is_err() {
-        println!("Error al esperar a la ui.");
+    hijos.push(hijo_ui);
+
+    // Espera a que todos los hilos terminen.
+    for hijo in hijos {
+        if let Err(e) = hijo.join() {
+            eprintln!("Error al esperar el hilo: {:?}", e);
+        }
     }
 }
 
-fn build_ui(application: &gtk::Application) {
+fn build_ui(application: &gtk::Application, sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
     let window = gtk::ApplicationWindow::new(application);
     window.set_title("Sistema de Monitoreo");
     window.set_default_size(800, 600);
@@ -136,8 +210,9 @@ fn build_ui(application: &gtk::Application) {
     menu_incidents.append(&item_edit);
     menu_incidents.append(&item_delete);
 
+    let sistema_monitoreo_clone = Arc::clone(sistema_monitoreo);
     item_add.connect_activate(move |_| {
-        show_add_form();
+        show_add_form(&sistema_monitoreo_clone);
     });
 
     item_edit.connect_activate(|_| {
@@ -210,7 +285,7 @@ fn build_ui(application: &gtk::Application) {
     window.show_all();
 }
 
-fn show_add_form() {
+fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
     let dialog = gtk::Dialog::with_buttons(
         Some("Alta de Incidente"),
         None::<&gtk::Window>,
@@ -224,10 +299,10 @@ fn show_add_form() {
     let content_area = dialog.get_content_area();
     content_area.set_spacing(5);
 
-    let name_label = gtk::Label::new(Some("Nombre del Incidente:"));
-    let name_entry = gtk::Entry::new();
-    content_area.add(&name_label);
-    content_area.add(&name_entry);
+    // let name_label = gtk::Label::new(Some("Nombre del Incidente:"));
+    // let name_entry = gtk::Entry::new();
+    // content_area.add(&name_label);
+    // content_area.add(&name_entry);
 
     let x_label = gtk::Label::new(Some("Coordenada X:"));
     let x_entry = gtk::Entry::new();
@@ -241,15 +316,28 @@ fn show_add_form() {
 
     dialog.show_all();
 
+    let sistema_monitoreo_clone = Arc::clone(sistema_monitoreo);
+
     dialog.connect_response(move |dialog, response_type| {
         if response_type == gtk::ResponseType::Ok {
-            let name = name_entry.get_text().to_string();
+            // let name = name_entry.get_text().to_string();
             let x_coord = x_entry.get_text().to_string();
             let y_coord = y_entry.get_text().to_string();
 
-            println!("Nombre del Incidente: {}", name);
+            // println!("Nombre del Incidente: {}", name);
             println!("Coordenada X: {}", x_coord);
             println!("Coordenada Y: {}", y_coord);
+
+            let x = x_coord.parse::<u8>().unwrap();
+            let y = y_coord.parse::<u8>().unwrap();
+
+            if let Ok(sistema_monitoreo) = sistema_monitoreo_clone.lock() {
+                let incident =
+                    Incident::new((sistema_monitoreo.get_incidents().len() + 1) as u8, x, y);
+                sistema_monitoreo.add_incident(incident);
+            }
+
+            //generar una entidad tipo INC y enviarla al broker
         }
 
         dialog.close();
