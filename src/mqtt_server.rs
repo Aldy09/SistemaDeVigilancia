@@ -232,7 +232,7 @@ impl MQTTServer {
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
-                    user.add_message_to_queue(msg.clone());                                     
+                    user.add_message_to_queue(msg.clone());
                 }
             }
         }
