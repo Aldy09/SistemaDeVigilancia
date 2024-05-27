@@ -342,22 +342,3 @@ impl MQTTClient {
     }
 
 }
-
-
-/*
-#[cfg(test)]
-mod test {
-    use super::MQTTClient;
-
-    #[test]
-    fn test_1_publish_probando(){
-        let mqtt_client = MQTTClient::new();
-
-        // Yo quiero probar solamente esta función y no el connect ahora; ver cómo.
-        let res = mqtt_client.mqtt_publish("topic3", "hola mundo");
-        //assert!(res.is_ok()); // Va a fallar, xq no llamé a connect primero,
-                                // y xq hay stream socket involucrado (y no está levantado el server, es un unit test).
-                                // ToDo: hay que ver cómo testear esto con un archivo y mocks.
-    }
-}
-*/
