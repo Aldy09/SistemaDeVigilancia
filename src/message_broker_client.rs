@@ -36,7 +36,7 @@ fn main() {
             //packet_id: u16, topics: Vec<String>
             let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic3"))]);
             match res_sub {
-                Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
+                Ok(_) => println!("Cliente: Hecho un subscribe"),
                 Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
             }
 
@@ -44,7 +44,7 @@ fn main() {
             //(topic: &str, payload: &[u8]
             let res = mqtt_client.mqtt_publish("topic3", "hola mundo :)".as_bytes());
             match res {
-                Ok(_) => println!("Cliente: Hecho un publish exitosamente"),
+                Ok(_) => println!("Cliente: Hecho un publish"),
                 Err(e) => error!("Cliente: Error al hacer el publish {:?}", e),
             }
 

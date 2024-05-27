@@ -5,7 +5,7 @@ use gtk::prelude::*;
 use rustx::apps::incident::Incident;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::sync::mpsc::RecvTimeoutError;
 //use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 //use std::env::args;
@@ -13,7 +13,7 @@ use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use std::thread::{self, sleep, JoinHandle}; // Import the `SistemaMonitoreo` type
+use std::thread::{self, JoinHandle}; // Import the `SistemaMonitoreo` type
 
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
@@ -60,56 +60,71 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
     if let Ok(mut mqtt_client) = mqtt_client.lock() {
         let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"))]);
         match res_sub {
-            Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
+            Ok(_) => println!("Cliente: Hecho un subscribe"),
             Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
         }
     }
 
     // Que lea del topic al/os cual/es hizo subscribe, implementando [].
-    let h = thread::spawn(move || {
-        if let Ok(mqtt_client) = mqtt_client.lock() {
-            while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-                // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
-                //let camera_recibida = Camera::from_bytes(&msg.get_payload());
-                //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
-            }
-        }
-
-        // Cliente termina de utilizar mqtt
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finalizar();
-        }
-    });
-
-    if h.join().is_err() {
-        println!("Cliente: error al esperar a hijo que recibe msjs");
-    }
-}
-
-fn publish_incident(incidents: &mut [Incident], mqtt_client: &Arc<Mutex<MQTTClient>>) {
     loop {
-        if incidents.is_empty() {
-            for incident in incidents.iter_mut() {
-                if !incident.sent {
-                    if let Ok(mut mqtt_client) = mqtt_client.lock() {
-                        let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
-                        match res {
-                            Ok(_) => {
-                                println!("Sistema-Monitoreo: Ha hecho un publish exitosamente");
-
-                                incident.sent = true;
-                            }
-                            Err(e) => {
-                                println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
-                            }
-                        };
+        if let Ok(mqtt_client) = mqtt_client.lock() {
+            match mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                Ok(msg) => {
+                    println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
+                    // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
+                    //let camera_recibida = Camera::from_bytes(&msg.get_payload());
+                    //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+                }
+                Err(e) => {
+                    /*if e == RecvTimeoutError::Timeout {
+                    }*/
+                    if e == RecvTimeoutError::Disconnected {
+                        println!("Cliente: No hay más PublishMessage's por leer.");
+                        break;
                     }
                 }
             }
-        };
-        // Esperamos, para publicar los cambios "periódicamente"
-        sleep(Duration::from_secs(3));
+        }
+    }
+
+    // Cliente termina de utilizar mqtt
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        mqtt_client.finalizar();
+    }
+}
+
+fn publish_incident(
+    sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>,
+    mqtt_client: &Arc<Mutex<MQTTClient>>,
+) {
+    if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo.lock() {
+        if let Ok(mut incidents) = sistema_monitoreo_lock.get_incidents().lock() {
+            if !incidents.is_empty() {
+                for incident in incidents.iter_mut() {
+                    if !incident.sent {
+                        println!("Sistema-Monitoreo: Publicando incidente.");
+
+                        // Hago el publish
+                        if let Ok(mut mqtt_client) = mqtt_client.lock() {
+                            let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
+                            match res {
+                                Ok(_) => {
+                                    println!("Sistema-Monitoreo: Ha hecho un publish");
+
+                                    //sistema_monitoreo_lock.mark_incident_as_sent(incident.id);
+                                    incident.sent = true;
+                                }
+                                Err(e) => {
+                                    println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
+                                }
+                            };
+                        }
+                    }
+                }
+            };
+
+            //sistema_monitoreo_lock.get_incidents();
+        }
     }
 }
 
@@ -129,14 +144,16 @@ fn main() {
         .parse::<SocketAddr>()
         .expect("Dirección no válida");
 
-    let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
     let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
     let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
+    let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
 
     let mut hijos: Vec<JoinHandle<()>> = vec![];
     match mqtt_client_res {
         Ok(mqtt_client) => {
             let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+
+            // Hijo para subscribe cameras
             let mqtt_client_sh_clone = Arc::clone(&mqtt_client_sh);
 
             let hijo_connect = thread::spawn(move || {
@@ -144,16 +161,18 @@ fn main() {
             });
             hijos.push(hijo_connect);
 
+            // Hijo para publish incidents
             let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh);
 
             let hijo_send_incidents = thread::spawn(move || loop {
-                let mut incidents = {
-                    let sistema_monitoreo = sistema_monitoreo.lock().unwrap();
-                    sistema_monitoreo.get_incidents()
-                };
+                publish_incident(&sistema_monitoreo, &mqtt_client_incident_sh_clone);
+                /*
+                    let mut incidents: Vec<Incident> = sistema_monitoreo_lock.get_incidents();
+                    println!("Sistema-Monitoreo: Publicando incidentes {:?}", incidents);
+                    publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
+                }*/
 
-                publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
-
+                // Esperamos, para publicar los cambios "periódicamente"
                 thread::sleep(std::time::Duration::from_secs(5));
             });
 
@@ -331,10 +350,14 @@ fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
             let x = x_coord.parse::<u8>().unwrap();
             let y = y_coord.parse::<u8>().unwrap();
 
-            if let Ok(sistema_monitoreo) = sistema_monitoreo_clone.lock() {
+            if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo_clone.lock() {
                 let incident =
-                    Incident::new((sistema_monitoreo.get_incidents().len() + 1) as u8, x, y);
-                sistema_monitoreo.add_incident(incident);
+                    Incident::new(sistema_monitoreo_lock.generate_new_incident_id(), x, y);
+                sistema_monitoreo_lock.add_incident(incident);
+                println!(
+                    "Incidente agregado: {:?}",
+                    sistema_monitoreo_lock.get_incidents()
+                );
             }
 
             //generar una entidad tipo INC y enviarla al broker
