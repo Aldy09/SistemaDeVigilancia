@@ -1,4 +1,6 @@
-use crate::{unsuback_fixed_header::FixedHeader, unsuback_variable_header::VariableHeader};
+use crate::messages::{
+    unsuback_fixed_header::FixedHeader, unsuback_variable_header::VariableHeader,
+};
 
 pub struct Unsuback {
     fixed_header: FixedHeader,

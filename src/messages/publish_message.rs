@@ -15,10 +15,10 @@ type TdesEde3Cbc = Cbc<TdesEde3, Pkcs7>;
 const KEY: [u8; 24] = [0x01; 24]; // Esto es solo un ejemplo, usa claves seguras en producción
 const IV: [u8; 8] = [0x02; 8];
 
-use crate::publish_fixed_header::FixedHeader;
-use crate::publish_flags::PublishFlags;
-use crate::publish_payload::Payload;
-use crate::publish_variable_header::VariableHeader;
+use crate::messages::publish_fixed_header::FixedHeader;
+use crate::messages::publish_flags::PublishFlags;
+use crate::messages::publish_payload::Payload;
+use crate::messages::publish_variable_header::VariableHeader;
 
 #[derive(Debug, Clone)]
 pub struct PublishMessage {

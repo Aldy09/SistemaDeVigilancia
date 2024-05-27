@@ -6,7 +6,7 @@ use rustx::apps::camera::Camera;
 use rustx::apps::incident::Incident;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc::RecvTimeoutError;
+//use std::sync::mpsc::RecvTimeoutError;
 //use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 //use std::env::args;
@@ -78,12 +78,21 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
                     println!("Cliente: Recibo cámara: {:?}", camera_recibida);
                 }
                 Err(e) => {
-                    /*if e == RecvTimeoutError::Timeout {
+                    match e.kind() {
+                        std::io::ErrorKind::TimedOut => {}
+                        std::io::ErrorKind::NotConnected => {
+                            println!("Cliente: No hay más PublishMessage's por leer.");
+                            break;
+                        }
+                        _ => println!("Cliente: error al leer los publish messages recibidos."),
+                    }
+                    /*/*if e == RecvTimeoutError::Timeout {
                     }*/
+
                     if e == RecvTimeoutError::Disconnected {
                         println!("Cliente: No hay más PublishMessage's por leer.");
                         break;
-                    }
+                    }*/
                 }
             }
         }

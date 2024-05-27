@@ -1,4 +1,4 @@
-use crate::{
+use crate::messages::{
     connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_payload::Payload,
     connect_variable_header::VariableHeader,
 };

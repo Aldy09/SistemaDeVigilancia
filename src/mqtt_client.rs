@@ -1,11 +1,12 @@
-use crate::connect_message::ConnectMessage;
+use crate::messages::connect_message::ConnectMessage;
+use crate::messages::publish_flags::PublishFlags;
+use crate::messages::publish_message::PublishMessage;
+use crate::messages::subscribe_message::SubscribeMessage;
 use crate::mqtt_client::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
+    write_message_to_stream,
 };
-use crate::publish_flags::PublishFlags;
-use crate::publish_message::PublishMessage;
-use crate::subscribe_message::SubscribeMessage;
 use std::collections::HashMap;
 use std::io::{self, Error};
 use std::net::{SocketAddr, TcpStream};
@@ -14,10 +15,10 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
-use crate::connack_message::ConnackPacket;
 use crate::fixed_header::FixedHeader;
-use crate::puback_message::PubAckMessage;
-use crate::suback_message::SubAckMessage;
+use crate::messages::connack_message::ConnackPacket;
+use crate::messages::puback_message::PubAckMessage;
+use crate::messages::suback_message::SubAckMessage;
 
 #[allow(dead_code)]
 /// MQTTClient es instanciado por cada cliente que desee utilizar el protocolo.
@@ -27,11 +28,11 @@ pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<()>>,
     rx: Option<Receiver<PublishMessage>>,
-    available_packet_id: u16,
+    available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
-    read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
-    read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
-    read_subacks: Arc<Mutex<HashMap<u16, SubAckMessage>>>,
+    read_connack: Arc<Mutex<bool>>,
+
+    read_acks: Arc<Mutex<HashMap<u16, bool>>>,
 }
 
 impl MQTTClient {
@@ -71,6 +72,18 @@ impl MQTTClient {
 
         // Fin inicializaciones.
 
+        // Espero que el hijo que lee reciba y me informe que recibió el ack.
+        let mut llega_el_ack = false;
+        while !llega_el_ack {
+            if let Ok(llega_connack) = mqtt.read_connack.lock() {
+                if *llega_connack {
+                    // Llegó el ack
+                    llega_el_ack = true;
+                    println!("CONN: LLEGA EL ACK"); // debug []
+                }
+            }
+        }
+
         Ok(mqtt)
     }
 
@@ -82,8 +95,7 @@ impl MQTTClient {
             rx: Some(rx),
             available_packet_id: 0,
             read_connack: Arc::new(Mutex::new(false)),
-            read_pubacks: Arc::new(Mutex::new(HashMap::new())),
-            read_subacks: Arc::new(Mutex::new(HashMap::new())),
+            read_acks: Arc::new(Mutex::new(HashMap::new())),
         };
         (mqtt, tx)
     }
@@ -139,18 +151,28 @@ impl MQTTClient {
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
     pub fn mqtt_receive_msg_from_subs_topic(
         &self,
-    ) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+        //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+    ) -> Result<PublishMessage, Error> {
         // Veo si tengo el rx (hijo no lo tiene)
-        //if let Some(rx) = &self.rx {
-        let rx = self.rx.as_ref().unwrap(); // [] AUX TEMPORALMENTE, ahora lo borro
-
-        // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
-
-        rx.recv_timeout(Duration::from_micros(300))
-
-        //} else {
-        //Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."))
-        //}
+        if let Some(rx) = &self.rx {
+            // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
+            // Leo
+            match rx.recv_timeout(Duration::from_micros(300)) {
+                Ok(msg) => Ok(msg),
+                // (mapeo el error, por compatibilidad de tipos)
+                Err(e) => match e {
+                    mpsc::RecvTimeoutError::Timeout => Err(Error::new(ErrorKind::TimedOut, e)),
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        Err(Error::new(ErrorKind::NotConnected, e))
+                    }
+                },
+            }
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: no está seteado el rx.",
+            ))
+        }
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -180,8 +202,7 @@ impl MQTTClient {
             rx: None,
             available_packet_id: self.available_packet_id,
             read_connack: self.read_connack.clone(),
-            read_pubacks: self.read_pubacks.clone(),
-            read_subacks: self.read_subacks.clone(),
+            read_acks: self.read_acks.clone(),
         }
     }
 
@@ -262,6 +283,10 @@ impl MQTTClient {
                 println!("   Mensaje conn ack completo recibido: {:?}", msg);
 
                 // Marco que el ack fue recibido, para que el otro hilo pueda enterarse
+                if let Ok(mut read_connack_locked) = self.read_connack.lock() {
+                    *read_connack_locked = true;
+                    // [] acá
+                }
             }
             3 => {
                 // Publish
@@ -277,11 +302,10 @@ impl MQTTClient {
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
                 //println!("   Mensaje publish completo recibido: {:?}", msg);
 
-                // Ahora ¿tengo que mandarle un PubAck? [] ver, imagino que sí
-                if let Some(_packet_id) = msg.get_packet_identifier() {
-                    // Con el packet_id, marco en algún lado que recibí el ack.
-                }
+                // Le respondo un pub ack
+                let _ = send_puback(&msg, &self.stream);
 
+                // Envío por el channel para que le llegue al cliente real (app cliente)
                 match tx.send(msg) {
                     Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                     Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
@@ -297,7 +321,7 @@ impl MQTTClient {
                     "pub ack",
                 )?;
                 // Entonces tengo el mensaje completo
-                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
+                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
             }
             9 => {
