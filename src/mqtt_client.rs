@@ -4,7 +4,7 @@ use crate::messages::publish_message::PublishMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
 use crate::mqtt_client::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream, send_puback,
 };
 use std::collections::HashMap;
 use std::io::{self, Error};
@@ -29,9 +29,8 @@ pub struct MQTTClient {
     rx: Option<Receiver<PublishMessage>>,
     available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
-    read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
-    read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
-    read_subacks: Arc<Mutex<HashMap<u16, SubAckMessage>>>,
+    read_connack: Arc<Mutex<bool>>,
+    read_acks: Arc<Mutex<HashMap<u16, bool>>>,
 }
 
 impl MQTTClient {
@@ -94,8 +93,7 @@ impl MQTTClient {
             rx: Some(rx),
             available_packet_id: 0,
             read_connack: Arc::new(Mutex::new(false)),
-            read_pubacks: Arc::new(Mutex::new(HashMap::new())),
-            read_subacks: Arc::new(Mutex::new(HashMap::new())),
+            read_acks: Arc::new(Mutex::new(HashMap::new())),
         };
         (mqtt, tx)
     }
@@ -192,8 +190,7 @@ impl MQTTClient {
             rx: None,
             available_packet_id: self.available_packet_id,
             read_connack: self.read_connack.clone(),
-            read_pubacks: self.read_pubacks.clone(),
-            read_subacks: self.read_subacks.clone(),
+            read_acks: self.read_acks.clone(),
         }
     }
 
@@ -293,11 +290,10 @@ impl MQTTClient {
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
                 //println!("   Mensaje publish completo recibido: {:?}", msg);
 
-                // Ahora ¿tengo que mandarle un PubAck? [] ver, imagino que sí
-                if let Some(_packet_id) = msg.get_packet_identifier() {
-                    // Con el packet_id, marco en algún lado que recibí el ack.
-                }
+                // Le respondo un pub ack
+                let _ = send_puback(&msg, &self.stream);
 
+                // Envío por el channel para que le llegue al cliente real (app cliente)
                 match tx.send(msg) {
                     Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                     Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),

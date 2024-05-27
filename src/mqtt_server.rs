@@ -166,7 +166,7 @@ impl MQTTServer {
         username: &str,
         stream: &Arc<Mutex<TcpStream>>,
     ) -> Result<(), Error> {
-        // Probando
+        // Inicio
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         let ceros: &[u8; 2] = &[0; 2];
         let mut vacio: bool;
@@ -183,7 +183,7 @@ impl MQTTServer {
             };
             thread::sleep(Duration::from_millis(300)); // []
         }
-        // Fin Probando
+        // Fin
 
         /*println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
@@ -330,21 +330,34 @@ impl MQTTServer {
 
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
-            3 => {
+            3 => { // Publish
                 let msg = self.process_publish(fixed_header, stream, fixed_header_bytes)?;
 
                 self.send_puback(&msg, stream)?;
                 // println!(" Publish:  Antes de add_message_to_subscribers_queue");
                 self.add_message_to_subscribers_queue(&msg)?;
                 // println!(" Publish:  Despues de add_message_to_subscribers_queue");
-            }
-            8 => {
+            },
+            8 => { // Subscribe
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
                 // println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
                 // println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 self.send_suback(return_codes, stream)?;
+            },
+            4 => {
+                // PubAck
+                println!("Recibo mensaje tipo PubAck");
+                let msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    stream,
+                    fixed_header_bytes,
+                    "pub ack",
+                )?;
+                // Entonces tengo el mensaje completo
+                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
+                println!("   Mensaje pub ack completo recibido: {:?}", msg);
             }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",
