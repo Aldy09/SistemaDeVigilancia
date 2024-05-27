@@ -87,11 +87,15 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
     }
 }
 
-fn publish_incident(incidents: &mut [Incident], mqtt_client: &Arc<Mutex<MQTTClient>>) {
-    loop {
-        if incidents.is_empty() {
+fn publish_incident(incidents: &mut Vec<Incident>, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+        println!("Sistema-Monitoreo: Publicando incidentes PASO 1");
+        if !incidents.is_empty() {
+            println!("Sistema-Monitoreo: Publicando incidentes PASO 1.5");
+
             for incident in incidents.iter_mut() {
                 if !incident.sent {
+                     println!("Sistema-Monitoreo: Publicando incidentes PASO 2");
+
                     if let Ok(mut mqtt_client) = mqtt_client.lock() {
                         let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
                         match res {
@@ -110,7 +114,6 @@ fn publish_incident(incidents: &mut [Incident], mqtt_client: &Arc<Mutex<MQTTClie
         };
         // Esperamos, para publicar los cambios "periódicamente"
         sleep(Duration::from_secs(3));
-    }
 }
 
 fn main() {
@@ -148,12 +151,13 @@ fn main() {
             let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh);
 
             let hijo_send_incidents = thread::spawn(move || loop {
-                let mut incidents = {
-                    let sistema_monitoreo = sistema_monitoreo.lock().unwrap();
-                    sistema_monitoreo.get_incidents()
-                };
 
-                publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
+                if let Ok(sistema_monitoreo_lock) = sistema_monitoreo.lock(){
+                    let mut incidents: Vec<Incident> = sistema_monitoreo_lock.get_incidents();
+                    println!("Sistema-Monitoreo: Publicando incidentes {:?}", incidents);
+                    publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
+                }
+
 
                 thread::sleep(std::time::Duration::from_secs(5));
             });
@@ -332,10 +336,11 @@ fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
             let x = x_coord.parse::<u8>().unwrap();
             let y = y_coord.parse::<u8>().unwrap();
 
-            if let Ok(sistema_monitoreo) = sistema_monitoreo_clone.lock() {
+            if let Ok(sistema_monitoreo_lock) = sistema_monitoreo_clone.lock() {
                 let incident =
-                    Incident::new((sistema_monitoreo.get_incidents().len() + 1) as u8, x, y);
-                sistema_monitoreo.add_incident(incident);
+                    Incident::new((sistema_monitoreo_lock.get_incidents().len() + 1) as u8, x, y);
+                    sistema_monitoreo_lock.add_incident(incident);
+                println!("Incidente agregado: {:?}", sistema_monitoreo_lock.get_incidents());
             }
 
             //generar una entidad tipo INC y enviarla al broker
