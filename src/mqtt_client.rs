@@ -4,7 +4,8 @@ use crate::messages::publish_message::PublishMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
 use crate::mqtt_client::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
-    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream, send_puback,
+    get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
+    write_message_to_stream,
 };
 use std::collections::HashMap;
 use std::io::{self, Error};
@@ -30,6 +31,7 @@ pub struct MQTTClient {
     available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
     read_connack: Arc<Mutex<bool>>,
+    
     read_acks: Arc<Mutex<HashMap<u16, bool>>>,
 }
 
@@ -69,7 +71,7 @@ impl MQTTClient {
         mqtt.set_hijo_a_esperar(h);
 
         // Fin inicializaciones.
-        
+
         // Espero que el hijo que lee reciba y me informe que recibió el ack.
         let mut llega_el_ack = false;
         while !llega_el_ack {
@@ -149,18 +151,28 @@ impl MQTTClient {
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
     pub fn mqtt_receive_msg_from_subs_topic(
         &self,
-    ) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+    //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+    ) -> Result<PublishMessage, Error> {
         // Veo si tengo el rx (hijo no lo tiene)
-        //if let Some(rx) = &self.rx {
-        let rx = self.rx.as_ref().unwrap(); // [] AUX TEMPORALMENTE, ahora lo borro
+        if let Some(rx) = &self.rx {
 
-        // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
+            // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
+            // Leo
+            match rx.recv_timeout(Duration::from_micros(300)){
+                Ok(msg) => Ok(msg), 
+                // (mapeo el error, por compatibilidad de tipos)
+                Err(e) => {
+                    match e {
+                        mpsc::RecvTimeoutError::Timeout => Err(Error::new(ErrorKind::TimedOut, e)),
+                        mpsc::RecvTimeoutError::Disconnected => Err(Error::new(ErrorKind::NotConnected, e)),
+                    }
 
-        rx.recv_timeout(Duration::from_micros(300))
+                },
+            }
 
-        //} else {
-        //Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."))
-        //}
+        } else {
+            Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."))
+        }
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -309,7 +321,7 @@ impl MQTTClient {
                     "pub ack",
                 )?;
                 // Entonces tengo el mensaje completo
-                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
+                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
             }
             9 => {

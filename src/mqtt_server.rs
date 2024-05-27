@@ -330,22 +330,24 @@ impl MQTTServer {
 
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
-            3 => { // Publish
+            3 => {
+                // Publish
                 let msg = self.process_publish(fixed_header, stream, fixed_header_bytes)?;
 
                 self.send_puback(&msg, stream)?;
                 // println!(" Publish:  Antes de add_message_to_subscribers_queue");
                 self.add_message_to_subscribers_queue(&msg)?;
                 // println!(" Publish:  Despues de add_message_to_subscribers_queue");
-            },
-            8 => { // Subscribe
+            }
+            8 => {
+                // Subscribe
                 let msg = self.process_subscribe(fixed_header, stream, fixed_header_bytes)?;
                 // println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
                 // println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 self.send_suback(return_codes, stream)?;
-            },
+            }
             4 => {
                 // PubAck
                 println!("Recibo mensaje tipo PubAck");
