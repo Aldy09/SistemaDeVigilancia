@@ -15,7 +15,7 @@ pub struct User {
     stream: Arc<Mutex<TcpStream>>,
     username: String,
     topics: Vec<String>, //topics a los que esta suscripto
-    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>,
+    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
 
 impl User {

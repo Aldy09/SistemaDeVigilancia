@@ -2,6 +2,7 @@ extern crate gio;
 extern crate gtk;
 use gio::prelude::*;
 use gtk::prelude::*;
+use rustx::apps::camera::Camera;
 use rustx::apps::incident::Incident;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -43,7 +44,7 @@ fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
 ) -> Result<MQTTClient, Box<dyn std::error::Error>> {
     let client_id = "Sistema-Monitoreo";
-    let mqtt_client_res = MQTTClient::connect_to_broker(client_id, broker_addr);
+    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
         Ok(mqtt_client) => {
             println!("Cliente: Conectado al broker MQTT.");
@@ -58,22 +59,23 @@ fn establish_mqtt_broker_connection(
 
 fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
     if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"))]);
+        let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from("Cam"))]);
         match res_sub {
             Ok(_) => println!("Cliente: Hecho un subscribe"),
             Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
         }
     }
 
-    // Que lea del topic al/os cual/es hizo subscribe, implementando [].
+    // Que lea del topic al/os cual/es hizo subscribe.
     loop {
         if let Ok(mqtt_client) = mqtt_client.lock() {
             match mqtt_client.mqtt_receive_msg_from_subs_topic() {
                 Ok(msg) => {
                     println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-                    // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
-                    //let camera_recibida = Camera::from_bytes(&msg.get_payload());
-                    //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+
+                    // Ya puedo obtener la cámara recibida
+                    let camera_recibida = Camera::from_bytes(&msg.get_payload());
+                    println!("Cliente: Recibo cámara: {:?}", camera_recibida);
                 }
                 Err(e) => {
                     /*if e == RecvTimeoutError::Timeout {
@@ -146,6 +148,8 @@ fn main() {
 
     let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
     let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
+
+    // Hijos para publish y subscribe
     let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
 
     let mut hijos: Vec<JoinHandle<()>> = vec![];
@@ -166,11 +170,6 @@ fn main() {
 
             let hijo_send_incidents = thread::spawn(move || loop {
                 publish_incident(&sistema_monitoreo, &mqtt_client_incident_sh_clone);
-                /*
-                    let mut incidents: Vec<Incident> = sistema_monitoreo_lock.get_incidents();
-                    println!("Sistema-Monitoreo: Publicando incidentes {:?}", incidents);
-                    publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
-                }*/
 
                 // Esperamos, para publicar los cambios "periódicamente"
                 thread::sleep(std::time::Duration::from_secs(5));
@@ -185,6 +184,7 @@ fn main() {
         ),
     }
 
+    // Hijo para ui
     let hijo_ui = thread::spawn(move || {
         let application = Rc::new(RefCell::new(
             gtk::Application::new(
@@ -339,11 +339,9 @@ fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
 
     dialog.connect_response(move |dialog, response_type| {
         if response_type == gtk::ResponseType::Ok {
-            // let name = name_entry.get_text().to_string();
             let x_coord = x_entry.get_text().to_string();
             let y_coord = y_entry.get_text().to_string();
 
-            // println!("Nombre del Incidente: {}", name);
             println!("Coordenada X: {}", x_coord);
             println!("Coordenada Y: {}", y_coord);
 
@@ -359,8 +357,6 @@ fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
                     sistema_monitoreo_lock.get_incidents()
                 );
             }
-
-            //generar una entidad tipo INC y enviarla al broker
         }
 
         dialog.close();

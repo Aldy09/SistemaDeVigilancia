@@ -6,6 +6,7 @@ use crate::mqtt_server_client_utils::{
 use crate::publish_flags::PublishFlags;
 use crate::publish_message::PublishMessage;
 use crate::subscribe_message::SubscribeMessage;
+use std::collections::HashMap;
 use std::io::{self, Error};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
@@ -24,13 +25,17 @@ use crate::suback_message::SubAckMessage;
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
-    handle_hijo: Option<JoinHandle<Result<(), Error>>>,
-    rx: Receiver<PublishMessage>,
+    handle_hijo: Option<JoinHandle<()>>,
+    rx: Option<Receiver<PublishMessage>>,
+    available_packet_id: u16,
+    //acks_by_packet_id: // read control messages:
+    read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
+    read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
+    read_subacks: Arc<Mutex<HashMap<u16, SubAckMessage>>>,
 }
 
 impl MQTTClient {
-    pub fn connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
-        //io::Result<()> {
+    pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
         // Inicializaciones
         // Intenta conectar al servidor MQTT
         let stream_tcp = TcpStream::connect(addr)
@@ -54,20 +59,33 @@ impl MQTTClient {
         println!("   El Connect en bytes: {:?}", msg_bytes);
 
         // Más inicializaciones
-        let (tx, rx) = mpsc::channel::<PublishMessage>(); // [] que mande bytes, xq no hicimos un trait Message
-        let mut stream_para_hijo = stream.clone();
+        let (mut mqtt, tx) = MQTTClient::mqtt_new(stream);
+        //
+
+        let self_p_hijo = mqtt.clone_refs_para_hijo_lectura();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
-        let h = thread::spawn(move || {
-            leer_desde_server(&mut stream_para_hijo, &tx) // [] Ahora que cambió desde afuera, pensar si stream es atributo o pasado
+        let h: JoinHandle<()> = thread::spawn(move || {
+            let _res = self_p_hijo.leer_desde_server(&tx); // []
         });
-        let mqtt = MQTTClient {
-            stream,
-            handle_hijo: Some(h),
-            rx,
-        };
+        mqtt.set_hijo_a_esperar(h);
+
         // Fin inicializaciones.
 
         Ok(mqtt)
+    }
+
+    fn mqtt_new(stream: Arc<Mutex<TcpStream>>) -> (Self, Sender<PublishMessage>) {
+        let (tx, rx) = mpsc::channel::<PublishMessage>();
+        let mqtt = MQTTClient {
+            stream: stream.clone(),
+            handle_hijo: None,
+            rx: Some(rx),
+            available_packet_id: 0,
+            read_connack: Arc::new(Mutex::new(false)),
+            read_pubacks: Arc::new(Mutex::new(HashMap::new())),
+            read_subacks: Arc::new(Mutex::new(HashMap::new())),
+        };
+        (mqtt, tx)
     }
 
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
@@ -77,9 +95,10 @@ impl MQTTClient {
     /// y se recibió un ack correcto. Devuelve error en caso contrario.
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
         println!("-----------------");
+        let packet_id = self.generate_packet_id();
         // Creo un msj publish
-        let flags = PublishFlags::new(0, 2, 0)?;
-        let result = PublishMessage::new(3, flags, topic, Some(1), payload);
+        let flags = PublishFlags::new(0, 1, 0)?;
+        let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
         let pub_msg = match result {
             Ok(msg) => {
                 println!("Mqtt publish: envío publish: \n   {:?}", msg);
@@ -99,11 +118,8 @@ impl MQTTClient {
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
-    pub fn mqtt_subscribe(
-        &mut self,
-        packet_id: u16,
-        topics_to_subscribe: Vec<String>,
-    ) -> Result<(), Error> {
+    pub fn mqtt_subscribe(&mut self, topics_to_subscribe: Vec<String>) -> Result<(), Error> {
+        let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
@@ -124,9 +140,17 @@ impl MQTTClient {
     pub fn mqtt_receive_msg_from_subs_topic(
         &self,
     ) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
-        //Result<PublishMessage,> {
-        //self.rx.recv()
-        self.rx.recv_timeout(Duration::from_micros(300))
+        // Veo si tengo el rx (hijo no lo tiene)
+        //if let Some(rx) = &self.rx {
+        let rx = self.rx.as_ref().unwrap(); // [] AUX TEMPORALMENTE, ahora lo borro
+
+        // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
+
+        rx.recv_timeout(Duration::from_micros(300))
+
+        //} else {
+        //Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."))
+        //}
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -139,47 +163,42 @@ impl MQTTClient {
             }
         }
     }
-}
 
-/// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
-fn leer_desde_server(
-    stream: &mut Arc<Mutex<TcpStream>>,
-    tx: &Sender<PublishMessage>,
-) -> Result<(), Error> {
-    // Este bloque de código de acá abajo es similar a lo que hay en server,
-    // pero la función que lee un mensaje lo procesa de manera diferente.
-
-    // Probando
-    let mut fixed_header_info: ([u8; 2], FixedHeader);
-    let ceros: &[u8; 2] = &[0; 2];
-    let mut vacio: bool;
-
-    //vacio = &fixed_header_info.0 == ceros;
-    println!("Mqtt cliente leyendo: esperando más mensajes.");
-    loop {
-        if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
-            println!("While: leí bien.");
-            // Guardo lo leído y comparo para siguiente vuelta del while
-            fixed_header_info = (fixed_h_buf, fixed_h);
-            vacio = &fixed_header_info.0 == ceros;
-            break;
-        };
-        thread::sleep(Duration::from_millis(300)); // []
+    /// Setea el handle del hijo para poder esperarlo y terminar correctamente.
+    fn set_hijo_a_esperar(&mut self, h: JoinHandle<()>) {
+        self.handle_hijo = Some(h);
     }
-    // Fin Probando
 
-    /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
-    let ceros: &[u8; 2] = &[0; 2];
-    let mut vacio = &fixed_header_info.0 == ceros;*/
-    while !vacio {
-        println!("Mqtt cliente leyendo: siguiente msj");
-        leer_un_mensaje(stream, &fixed_header_info, tx)?; // esta función lee UN mensaje.
+    /// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
+    /// que utiliza el MQTTClient para el cual se está llamando a esta función, con la diferencia de que
+    /// los campos para esperar al hijo y para recibir mensajes publish están seteados en `None` ya que no son
+    /// de interés para un hijo del MQTTClient original.
+    fn clone_refs_para_hijo_lectura(&self) -> Self {
+        Self {
+            stream: self.stream.clone(),
+            handle_hijo: None,
+            rx: None,
+            available_packet_id: self.available_packet_id,
+            read_connack: self.read_connack.clone(),
+            read_pubacks: self.read_pubacks.clone(),
+            read_subacks: self.read_subacks.clone(),
+        }
+    }
 
-        // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
-        // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+    /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
+    fn leer_desde_server(&self, tx: &Sender<PublishMessage>) -> Result<(), Error> {
+        // Este bloque de código de acá abajo es similar a lo que hay en server,
+        // pero la función que lee un mensaje lo procesa de manera diferente.
+
+        // Inicio primer mensaje
+        let mut fixed_header_info: ([u8; 2], FixedHeader);
+        let ceros: &[u8; 2] = &[0; 2];
+        let mut vacio: bool;
+
+        //vacio = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
-            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&self.stream.clone()) {
                 println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
@@ -188,113 +207,132 @@ fn leer_desde_server(
             };
             thread::sleep(Duration::from_millis(300)); // []
         }
-    }
-    Ok(())
-}
+        // Fin
 
-/// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
-fn leer_un_mensaje(
-    stream: &Arc<Mutex<TcpStream>>,
-    fixed_header_info: &([u8; 2], FixedHeader),
-    tx: &Sender<PublishMessage>,
-) -> Result<(), Error> {
-    // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
-    let (fixed_header_bytes, fixed_header) = fixed_header_info;
-    // Soy client, siempre inicio yo la conexión, puedo recibir distintos tipos de mensaje.
-    let tipo = fixed_header.get_message_type();
-    let msg_bytes: Vec<u8>;
+        /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
+        let ceros: &[u8; 2] = &[0; 2];
+        let mut vacio = &fixed_header_info.0 == ceros;*/
+        while !vacio {
+            println!("Mqtt cliente leyendo: siguiente msj");
+            self.leer_un_mensaje(&fixed_header_info, tx)?; // esta función lee UN mensaje.
 
-    match tipo {
-        2 => {
-            // ConnAck
-            println!("Mqtt cliente leyendo: recibo conn ack");
-            msg_bytes = get_whole_message_in_bytes_from_stream(
-                fixed_header,
-                stream,
-                fixed_header_bytes,
-                "conn ack",
-            )?;
-            // Entonces tengo el mensaje completo
-            let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
-            println!("   Mensaje conn ack completo recibido: {:?}", msg);
+            // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
+            // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+            println!("Mqtt cliente leyendo: esperando más mensajes.");
+            loop {
+                if let Ok((fixed_h_buf, fixed_h)) =
+                    get_fixed_header_from_stream(&self.stream.clone())
+                {
+                    println!("While: leí bien.");
+                    // Guardo lo leído y comparo para siguiente vuelta del while
+                    fixed_header_info = (fixed_h_buf, fixed_h);
+                    vacio = &fixed_header_info.0 == ceros;
+                    break;
+                };
+                thread::sleep(Duration::from_millis(300)); // []
+            }
         }
-        3 => {
-            // Publish
-            println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
-            // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
-            msg_bytes = get_whole_message_in_bytes_from_stream(
-                fixed_header,
-                stream,
-                fixed_header_bytes,
-                "publish",
-            )?;
-            // Entonces tengo el mensaje completo
-            let msg = PublishMessage::from_bytes(msg_bytes)?;
-            //println!("   Mensaje publish completo recibido: {:?}", msg);
+        Ok(())
+    }
 
-            // Ahora ¿tengo que mandarle un PubAck? [] ver, imagino que sí
-            if let Some(_packet_id) = msg.get_packet_identifier() {
-                // Con el packet_id, marco en algún lado que recibí el ack.
+    /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
+    fn leer_un_mensaje(
+        &self,
+        fixed_header_info: &([u8; 2], FixedHeader),
+        tx: &Sender<PublishMessage>,
+    ) -> Result<(), Error> {
+        // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
+        let (fixed_header_bytes, fixed_header) = fixed_header_info;
+        // Soy client, siempre inicio yo la conexión, puedo recibir distintos tipos de mensaje.
+        let tipo = fixed_header.get_message_type();
+        let msg_bytes: Vec<u8>;
+
+        match tipo {
+            2 => {
+                // ConnAck
+                println!("Mqtt cliente leyendo: recibo conn ack");
+                msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    &self.stream,
+                    fixed_header_bytes,
+                    "conn ack",
+                )?;
+                // Entonces tengo el mensaje completo
+                let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
+                println!("   Mensaje conn ack completo recibido: {:?}", msg);
+
+                // Marco que el ack fue recibido, para que el otro hilo pueda enterarse
+            }
+            3 => {
+                // Publish
+                println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
+                // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
+                msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    &self.stream,
+                    fixed_header_bytes,
+                    "publish",
+                )?;
+                // Entonces tengo el mensaje completo
+                let msg = PublishMessage::from_bytes(msg_bytes)?;
+                //println!("   Mensaje publish completo recibido: {:?}", msg);
+
+                // Ahora ¿tengo que mandarle un PubAck? [] ver, imagino que sí
+                if let Some(_packet_id) = msg.get_packet_identifier() {
+                    // Con el packet_id, marco en algún lado que recibí el ack.
+                }
+
+                match tx.send(msg) {
+                    Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
+                    Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
+                };
+            }
+            4 => {
+                // PubAck
+                println!("Mqtt cliente leyendo: recibo pub ack");
+                msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    &self.stream,
+                    fixed_header_bytes,
+                    "pub ack",
+                )?;
+                // Entonces tengo el mensaje completo
+                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
+                println!("   Mensaje pub ack completo recibido: {:?}", msg);
+            }
+            9 => {
+                // SubAck
+                println!("Mqtt cliente leyendo: recibo sub ack");
+                msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    &self.stream,
+                    fixed_header_bytes,
+                    "sub ack",
+                )?;
+                // Entonces tengo el mensaje completo
+                let msg = SubAckMessage::from_bytes(msg_bytes)?;
+                println!("   Mensaje sub ack completo recibido: {:?}", msg);
             }
 
-            match tx.send(msg) {
-                Ok(_) => println!("Mqtt cliente leyendo: se envía por tx."),
-                Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
-            };
-        }
-        4 => {
-            // PubAck
-            println!("Mqtt cliente leyendo: recibo pub ack");
-            msg_bytes = get_whole_message_in_bytes_from_stream(
-                fixed_header,
-                stream,
-                fixed_header_bytes,
-                "pub ack",
-            )?;
-            // Entonces tengo el mensaje completo
-            let msg = PubAckMessage::msg_from_bytes(msg_bytes)?; // []
-            println!("   Mensaje pub ack completo recibido: {:?}", msg);
-        }
-        9 => {
-            // SubAck
-            println!("Mqtt cliente leyendo: recibo sub ack");
-            msg_bytes = get_whole_message_in_bytes_from_stream(
-                fixed_header,
-                stream,
-                fixed_header_bytes,
-                "sub ack",
-            )?;
-            // Entonces tengo el mensaje completo
-            let msg = SubAckMessage::from_bytes(msg_bytes)?;
-            println!("   Mensaje sub ack completo recibido: {:?}", msg);
-        }
+            _ => {
+                println!(
+                    "   ERROR: tipo desconocido: recibido: \n   {:?}",
+                    fixed_header
+                );
+                return Err(Error::new(ErrorKind::Other, "Tipo desconocido."));
+            }
+        };
 
-        _ => {
-            println!(
-                "   ERROR: tipo desconocido: recibido: \n   {:?}",
-                fixed_header
-            );
-            return Err(Error::new(ErrorKind::Other, "Tipo desconocido."));
-        }
-    };
+        Ok(())
+    }
 
-    Ok(())
-}
-
-/*
-#[cfg(test)]
-mod test {
-    use super::MQTTClient;
-
-    #[test]
-    fn test_1_publish_probando(){
-        let mqtt_client = MQTTClient::new();
-
-        // Yo quiero probar solamente esta función y no el connect ahora; ver cómo.
-        let res = mqtt_client.mqtt_publish("topic3", "hola mundo");
-        //assert!(res.is_ok()); // Va a fallar, xq no llamé a connect primero,
-                                // y xq hay stream socket involucrado (y no está levantado el server, es un unit test).
-                                // ToDo: hay que ver cómo testear esto con un archivo y mocks.
+    /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
+    /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
+    /// en el envío para el cual fue llamada esta función.
+    fn generate_packet_id(&mut self) -> u16 {
+        //self.last_used_packet_id += 1;
+        //self.last_used_packet_id
+        self.available_packet_id += 1;
+        self.available_packet_id
     }
 }
-*/

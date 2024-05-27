@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::incident::Incident;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
 }

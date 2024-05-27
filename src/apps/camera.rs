@@ -1,6 +1,6 @@
 use crate::apps::camera_state::CameraState;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// Struct que representa el estado de una de las cámaras del sistema central de cámaras.
 /// Tiene:
 /// - id;
@@ -44,7 +44,7 @@ impl Camera {
         bytes.extend_from_slice(&self.coord_x.to_be_bytes());
         bytes.extend_from_slice(&self.coord_y.to_be_bytes());
         bytes.extend_from_slice(&self.state.to_byte());
-        bytes.push(self.range);
+        bytes.extend_from_slice(&self.range.to_be_bytes());
         bytes.extend_from_slice(&(self.border_cameras.len() as u8).to_be_bytes());
         for camera in &self.border_cameras {
             bytes.push(*camera);
@@ -64,7 +64,7 @@ impl Camera {
         for i in 0..border_cameras_len {
             border_cameras.push(bytes[6 + i as usize]);
         }
-        let deleted = bytes[12 + border_cameras_len as usize] == 1;
+        let deleted = bytes[6 + border_cameras_len as usize] == 1;
         Self {
             id,
             coord_x,
@@ -157,5 +157,22 @@ impl Camera {
     pub fn delete_camera(&mut self) {
         self.deleted = true;
         self.sent = false;
+    }
+}
+
+#[cfg(test)]
+
+mod test {
+    use super::Camera;
+
+    #[test]
+    fn test_1_camera_to_y_from_bytes() {
+        let camera = Camera::new(12, 3, 4, 5, vec![6]);
+
+        let bytes = camera.to_bytes();
+
+        let camera_reconstruida = Camera::from_bytes(&bytes);
+
+        assert_eq!(camera_reconstruida, camera);
     }
 }

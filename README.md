@@ -13,8 +13,8 @@ En mac:
 - $ brew install libxkbcommon
 
 ## Cómo usar
-En dos terminales diferentes, en este orden:
-- puerto_servidor = 9090
+En tres terminales diferentes, en este orden:
+(utilizamos puerto_servidor = 9090)
 - cargo run --bin message_broker_server puerto_servidor 
 - cargo run --bin message_broker_client
 - cargo run --bin sistema_monitoreo ip_client puerto_servidor
