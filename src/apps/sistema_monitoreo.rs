@@ -132,7 +132,8 @@ fn main() {
     let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
     let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
     let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
-
+    
+    sleep(Duration::from_secs(5));
     let mut hijos: Vec<JoinHandle<()>> = vec![];
     match mqtt_client_res {
         Ok(mqtt_client) => {
