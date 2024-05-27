@@ -31,7 +31,7 @@ pub struct MQTTClient {
     available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
     read_connack: Arc<Mutex<bool>>,
-    
+
     read_acks: Arc<Mutex<HashMap<u16, bool>>>,
 }
 
@@ -151,27 +151,27 @@ impl MQTTClient {
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
     pub fn mqtt_receive_msg_from_subs_topic(
         &self,
-    //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+        //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
     ) -> Result<PublishMessage, Error> {
         // Veo si tengo el rx (hijo no lo tiene)
         if let Some(rx) = &self.rx {
-
             // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
             // Leo
-            match rx.recv_timeout(Duration::from_micros(300)){
-                Ok(msg) => Ok(msg), 
+            match rx.recv_timeout(Duration::from_micros(300)) {
+                Ok(msg) => Ok(msg),
                 // (mapeo el error, por compatibilidad de tipos)
-                Err(e) => {
-                    match e {
-                        mpsc::RecvTimeoutError::Timeout => Err(Error::new(ErrorKind::TimedOut, e)),
-                        mpsc::RecvTimeoutError::Disconnected => Err(Error::new(ErrorKind::NotConnected, e)),
+                Err(e) => match e {
+                    mpsc::RecvTimeoutError::Timeout => Err(Error::new(ErrorKind::TimedOut, e)),
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        Err(Error::new(ErrorKind::NotConnected, e))
                     }
-
                 },
             }
-
         } else {
-            Err(Error::new(ErrorKind::Other, "Error: no está seteado el rx."))
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: no está seteado el rx.",
+            ))
         }
     }
 

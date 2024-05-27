@@ -79,17 +79,16 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
                 }
                 Err(e) => {
                     match e.kind() {
-                        std::io::ErrorKind::TimedOut => {},
+                        std::io::ErrorKind::TimedOut => {}
                         std::io::ErrorKind::NotConnected => {
                             println!("Cliente: No hay más PublishMessage's por leer.");
                             break;
-                        },
+                        }
                         _ => println!("Cliente: error al leer los publish messages recibidos."),
-
                     }
                     /*/*if e == RecvTimeoutError::Timeout {
                     }*/
-                    
+
                     if e == RecvTimeoutError::Disconnected {
                         println!("Cliente: No hay más PublishMessage's por leer.");
                         break;
