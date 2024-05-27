@@ -27,6 +27,7 @@ pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_hijo: Option<JoinHandle<()>>,
     rx: Option<Receiver<PublishMessage>>,
+    available_packet_id: u16,
     //acks_by_packet_id: // read control messages:
     read_connack: Arc<Mutex<bool>>, // [] No es un ConnAckMessage
     read_pubacks: Arc<Mutex<HashMap<u16, PubAckMessage>>>, // [] No tenemos trait Mensaje
@@ -66,6 +67,7 @@ impl MQTTClient {
             stream: stream.clone(),
             handle_hijo: None,
             rx: Some(rx),
+            available_packet_id: 0,
             read_connack: Arc::new(Mutex::new(false)),
             read_pubacks: Arc::new(Mutex::new(HashMap::new())),
             read_subacks: Arc::new(Mutex::new(HashMap::new())),
@@ -91,9 +93,10 @@ impl MQTTClient {
     /// y se recibió un ack correcto. Devuelve error en caso contrario.
     pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
         println!("-----------------");
+        let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, 2, 0)?;
-        let result = PublishMessage::new(3, flags, topic, Some(1), payload);
+        let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
         let pub_msg = match result {
             Ok(msg) => {
                 println!("Mqtt publish: envío publish: \n   {:?}", msg);
@@ -115,9 +118,10 @@ impl MQTTClient {
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
     pub fn mqtt_subscribe(
         &mut self,
-        packet_id: u16,
+        _packet_id: u16,
         topics_to_subscribe: Vec<String>,
     ) -> Result<(), Error> {
+        let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
@@ -177,6 +181,7 @@ impl MQTTClient {
         Self { stream: self.stream.clone(),
              handle_hijo: None,
              rx: None,
+             available_packet_id: self.available_packet_id,
              read_connack: self.read_connack.clone(),
              read_pubacks: self.read_pubacks.clone(),
              read_subacks: self.read_subacks.clone()
@@ -312,6 +317,16 @@ impl MQTTClient {
         };
 
         Ok(())
+    }
+
+    /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
+    /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
+    /// en el envío para el cual fue llamada esta función.
+    fn generate_packet_id(&mut self) -> u16 {
+        //self.last_used_packet_id += 1;
+        //self.last_used_packet_id
+        self.available_packet_id += 1;
+        self.available_packet_id
     }
 
 }
