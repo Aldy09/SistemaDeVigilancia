@@ -118,7 +118,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
                                     match res {
                                         Ok(_) => {
                                             println!(
-                                                "Sistema-Camara: Hecho un publish exitosamente"
+                                                "Sistema-Camara: Hecho un publish"
                                             );
 
                                             cam.marked_as_sent();

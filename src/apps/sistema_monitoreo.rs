@@ -5,6 +5,7 @@ use gtk::prelude::*;
 use rustx::apps::incident::Incident;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 //use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
@@ -60,31 +61,39 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
     if let Ok(mut mqtt_client) = mqtt_client.lock() {
         let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("Cam"))]);
         match res_sub {
-            Ok(_) => println!("Cliente: Hecho un subscribe exitosamente"),
+            Ok(_) => println!("Cliente: Hecho un subscribe"),
             Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
         }
     }
 
     // Que lea del topic al/os cual/es hizo subscribe, implementando [].
-    let h = thread::spawn(move || {
+    loop {
         if let Ok(mqtt_client) = mqtt_client.lock() {
-            while let Ok(msg) = mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-                // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
-                //let camera_recibida = Camera::from_bytes(&msg.get_payload());
-                //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+
+            match mqtt_client.mqtt_receive_msg_from_subs_topic(){
+                Ok(msg) => {
+                    println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
+                    // Acá ya se podría hacer algo como lo de abajo, pero no descomentarlo xq rompe, hay que revisar
+                    //let camera_recibida = Camera::from_bytes(&msg.get_payload());
+                    //println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+                },
+                Err(e) => {
+                    /*if e == RecvTimeoutError::Timeout {
+                    }*/
+                    if e == RecvTimeoutError::Disconnected {
+                        println!("Cliente: No hay más PublishMessage's por leer.");
+                        break;
+                    }
+                },
             }
         }
-
-        // Cliente termina de utilizar mqtt
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finalizar();
-        }
-    });
-
-    if h.join().is_err() {
-        println!("Cliente: error al esperar a hijo que recibe msjs");
     }
+
+    // Cliente termina de utilizar mqtt
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        mqtt_client.finalizar();
+    }
+
 }
 
 fn publish_incident(incidents: &mut Vec<Incident>, mqtt_client: &Arc<Mutex<MQTTClient>>) {
@@ -100,7 +109,7 @@ fn publish_incident(incidents: &mut Vec<Incident>, mqtt_client: &Arc<Mutex<MQTTC
                         let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
                         match res {
                             Ok(_) => {
-                                println!("Sistema-Monitoreo: Ha hecho un publish exitosamente");
+                                println!("Sistema-Monitoreo: Ha hecho un publish");
 
                                 incident.sent = true;
                             }
@@ -132,22 +141,24 @@ fn main() {
         .parse::<SocketAddr>()
         .expect("Dirección no válida");
 
-    let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
     let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
     let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
+    let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
     
-    sleep(Duration::from_secs(5));
     let mut hijos: Vec<JoinHandle<()>> = vec![];
     match mqtt_client_res {
         Ok(mqtt_client) => {
             let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+
+            // Hijo para subscribe cameras
             let mqtt_client_sh_clone = Arc::clone(&mqtt_client_sh);
 
             let hijo_connect = thread::spawn(move || {
                 subscribe_to_topics(mqtt_client_sh_clone);
             });
             hijos.push(hijo_connect);
-
+            
+            // Hijo para publish incidents
             let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh);
 
             let hijo_send_incidents = thread::spawn(move || loop {

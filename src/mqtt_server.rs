@@ -167,24 +167,24 @@ impl MQTTServer {
         stream: &Arc<Mutex<TcpStream>>,
     ) -> Result<(), Error> {
 
-    // Probando
-    let mut fixed_header_info: ([u8; 2], FixedHeader);
-    let ceros: &[u8; 2] = &[0; 2];
-    let mut vacio: bool;
+        // Probando
+        let mut fixed_header_info: ([u8; 2], FixedHeader);
+        let ceros: &[u8; 2] = &[0; 2];
+        let mut vacio: bool;
 
-    //vacio = &fixed_header_info.0 == ceros;
-    println!("Mqtt cliente leyendo: esperando más mensajes.");
-    loop {
-        if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
-            println!("While: leí bien.");
-            // Guardo lo leído y comparo para siguiente vuelta del while
-            fixed_header_info = (fixed_h_buf, fixed_h);
-            vacio = &fixed_header_info.0 == ceros;
-            break;
-        };
-        thread::sleep(Duration::from_millis(300)); // []
-    }
-    // Fin Probando
+        //vacio = &fixed_header_info.0 == ceros;
+        println!("Mqtt cliente leyendo: esperando más mensajes.");
+        loop {
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+                println!("While: leí bien.");
+                // Guardo lo leído y comparo para siguiente vuelta del while
+                fixed_header_info = (fixed_h_buf, fixed_h);
+                vacio = &fixed_header_info.0 == ceros;
+                break;
+            };
+            thread::sleep(Duration::from_millis(300)); // []
+        }
+        // Fin Probando
 
 
 

@@ -121,8 +121,9 @@ impl MQTTClient {
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvError> {
-        self.rx.recv()
+    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvTimeoutError> { //Result<PublishMessage,> {
+        //self.rx.recv()
+        self.rx.recv_timeout(Duration::from_micros(300))
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -235,7 +236,7 @@ fn leer_un_mensaje(
             }
 
             match tx.send(msg) {
-                Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
+                Ok(_) => println!("Mqtt cliente leyendo: se envía por tx."),
                 Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
             };
         }
