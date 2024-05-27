@@ -26,7 +26,7 @@ fn main() {
         .expect("Dirección no válida");
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let client_id = "test-client";
-    let mqtt_client_res = MQTTClient::connect_to_broker(client_id, &broker_addr);
+    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr);
     match mqtt_client_res {
         Ok(mut mqtt_client) => {
             //info!("Conectado al broker MQTT."); //
