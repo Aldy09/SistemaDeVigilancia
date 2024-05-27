@@ -121,8 +121,12 @@ impl MQTTClient {
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvError> {
-        self.rx.recv()
+    pub fn mqtt_receive_msg_from_subs_topic(
+        &self,
+    ) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+        //Result<PublishMessage,> {
+        //self.rx.recv()
+        self.rx.recv_timeout(Duration::from_micros(300))
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
@@ -144,9 +148,29 @@ fn leer_desde_server(
 ) -> Result<(), Error> {
     // Este bloque de código de acá abajo es similar a lo que hay en server,
     // pero la función que lee un mensaje lo procesa de manera diferente.
-    let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
+
+    // Probando
+    let mut fixed_header_info: ([u8; 2], FixedHeader);
     let ceros: &[u8; 2] = &[0; 2];
-    let mut vacio = &fixed_header_info.0 == ceros;
+    let mut vacio: bool;
+
+    //vacio = &fixed_header_info.0 == ceros;
+    println!("Mqtt cliente leyendo: esperando más mensajes.");
+    loop {
+        if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+            println!("While: leí bien.");
+            // Guardo lo leído y comparo para siguiente vuelta del while
+            fixed_header_info = (fixed_h_buf, fixed_h);
+            vacio = &fixed_header_info.0 == ceros;
+            break;
+        };
+        thread::sleep(Duration::from_millis(300)); // []
+    }
+    // Fin Probando
+
+    /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
+    let ceros: &[u8; 2] = &[0; 2];
+    let mut vacio = &fixed_header_info.0 == ceros;*/
     while !vacio {
         println!("Mqtt cliente leyendo: siguiente msj");
         leer_un_mensaje(stream, &fixed_header_info, tx)?; // esta función lee UN mensaje.
@@ -214,7 +238,7 @@ fn leer_un_mensaje(
             }
 
             match tx.send(msg) {
-                Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
+                Ok(_) => println!("Mqtt cliente leyendo: se envía por tx."),
                 Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
             };
         }

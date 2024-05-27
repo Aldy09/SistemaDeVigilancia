@@ -166,10 +166,30 @@ impl MQTTServer {
         username: &str,
         stream: &Arc<Mutex<TcpStream>>,
     ) -> Result<(), Error> {
-        println!("Server esperando mensajes.");
+        // Probando
+        let mut fixed_header_info: ([u8; 2], FixedHeader);
+        let ceros: &[u8; 2] = &[0; 2];
+        let mut vacio: bool;
+
+        //vacio = &fixed_header_info.0 == ceros;
+        println!("Mqtt cliente leyendo: esperando más mensajes.");
+        loop {
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+                println!("While: leí bien.");
+                // Guardo lo leído y comparo para siguiente vuelta del while
+                fixed_header_info = (fixed_h_buf, fixed_h);
+                vacio = &fixed_header_info.0 == ceros;
+                break;
+            };
+            thread::sleep(Duration::from_millis(300)); // []
+        }
+        // Fin Probando
+
+        /*println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
         let ceros: &[u8; 2] = &[0; 2];
         let mut vacio = &fixed_header_info.0 == ceros;
+        */
         while !vacio {
             self.continue_with_conection(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                                  // Leo para la siguiente iteración
@@ -337,12 +357,28 @@ impl MQTTServer {
 
     /// Procesa los mensajes entrantes de un dado cliente.
     fn handle_client(&self, stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
-        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
+        // Probando
+        let fixed_header_info: ([u8; 2], FixedHeader);
+
+        //vacio = &fixed_header_info.0 == ceros;
+        println!("Mqtt cliente leyendo: esperando más mensajes.");
+        loop {
+            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
+                println!("While: leí bien.");
+                // Guardo lo leído y comparo para siguiente vuelta del while
+                fixed_header_info = (fixed_h_buf, fixed_h);
+                break;
+            };
+            thread::sleep(Duration::from_millis(300)); // []
+        }
+        // Fin Probando
+        //let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
+        let (fixed_header_buf, fixed_header) = (&fixed_header_info.0, &fixed_header_info.1);
 
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
         match fixed_header.get_message_type() {
             1 => {
-                self.process_connect(&fixed_header, stream, &fixed_header_buf)?;
+                self.process_connect(fixed_header, stream, fixed_header_buf)?;
             }
             _ => {
                 println!("Error, el primer mensaje recibido DEBE ser un connect.");

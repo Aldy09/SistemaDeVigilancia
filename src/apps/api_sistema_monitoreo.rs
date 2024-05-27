@@ -14,22 +14,20 @@ impl SistemaMonitoreo {
         }
     }
 
-    pub fn add_incident(&self, incident: Incident) {
+    pub fn add_incident(&mut self, incident: Incident) {
         self.incidents.lock().unwrap().push(incident);
     }
 
-    pub fn get_incidents(&self) -> Vec<Incident> {
-        self.incidents.lock().unwrap().clone()
+    pub fn get_incidents(&mut self) -> Arc<Mutex<Vec<Incident>>> {
+        self.incidents.clone()
     }
 
-    pub fn remove_incident(&self, incident_id: u8) {
-        let mut incidents = self.incidents.lock().unwrap();
-        let index = incidents
-            .iter()
-            .position(|incident| incident.id == incident_id);
-        if let Some(index) = index {
-            incidents.remove(index);
+    pub fn generate_new_incident_id(&self) -> u8 {
+        let mut new_inc_id: u8 = 0;
+        if let Ok(incidents) = self.incidents.lock() {
+            new_inc_id = (incidents.len() + 1) as u8;
         }
+        new_inc_id
     }
 }
 
