@@ -51,6 +51,8 @@ impl<'a> PublishMessage {
             content: content.to_vec(),
         };
 
+        //aux: let payload = Payload { content: content.to_vec() };
+
         let fixed_header = FixedHeader {
             message_type,
             flags,
@@ -70,8 +72,8 @@ impl<'a> PublishMessage {
     }
 
     fn calculate_remaining_length(&self) -> u8 {
-        //remaining length = variable header + payload
-        //variable header = topic_name + packet_identifier
+        //aux: remaining length = variable header + payload
+        //aux: variable header = topic_name + packet_identifier
         let rem_len_in_two_bytes = 2;
         let topic_name_length = self.variable_header.topic_name.len();
         let packet_identifier_length = match self.variable_header.packet_identifier {
@@ -188,8 +190,9 @@ impl<'a> PublishMessage {
     }
 
     pub fn get_payload(&self) -> Vec<u8> {
-        decrypt_3des(&self.payload.content)
-    }
+       decrypt_3des(&self.payload.content)
+       //aux: self.payload.content.to_vec()
+    } 
 }
 
 fn encrypt_3des(data: &[u8]) -> Vec<u8> {

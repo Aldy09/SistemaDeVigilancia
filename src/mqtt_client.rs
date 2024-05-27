@@ -118,7 +118,6 @@ impl MQTTClient {
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
     pub fn mqtt_subscribe(
         &mut self,
-        _packet_id: u16,
         topics_to_subscribe: Vec<String>,
     ) -> Result<(), Error> {
         let packet_id = self.generate_packet_id();

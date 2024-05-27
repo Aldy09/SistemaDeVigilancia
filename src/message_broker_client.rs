@@ -34,7 +34,7 @@ fn main() {
 
             // Cliente usa subscribe
             //packet_id: u16, topics: Vec<String>
-            let res_sub = mqtt_client.mqtt_subscribe(1, vec![(String::from("topic3"))]);
+            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from("topic3"))]);
             match res_sub {
                 Ok(_) => println!("Cliente: Hecho un subscribe"),
                 Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
