@@ -3,7 +3,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::subscribe_return_code::SubscribeReturnCode;
+use crate::messages::subscribe_return_code::SubscribeReturnCode;
 
 #[derive(Debug, PartialEq)]
 pub struct SubAckMessage {
@@ -112,7 +112,9 @@ impl SubAckMessage {
 
 #[cfg(test)]
 mod test {
-    use crate::{suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
+    use crate::messages::{
+        suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode,
+    };
 
     #[test]
     fn test_1_suback_msg_se_crea_con_tipo_y_flag_adecuados() {

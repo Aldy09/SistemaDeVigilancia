@@ -137,7 +137,7 @@ impl SubscribeMessage {
 
 #[cfg(test)]
 mod test {
-    use crate::subscribe_message::SubscribeMessage;
+    use crate::messages::subscribe_message::SubscribeMessage;
 
     #[test]
     fn test_1_subscribe_msg_se_crea_con_tipo_y_flag_adecuados() {

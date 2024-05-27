@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::publish_message::PublishMessage;
+use crate::messages::publish_message::PublishMessage;
 
 type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
 

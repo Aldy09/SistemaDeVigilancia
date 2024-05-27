@@ -1,4 +1,4 @@
-use crate::connect_flags::ConnectFlags;
+use crate::messages::connect_flags::ConnectFlags;
 
 #[derive(Debug, PartialEq)]
 pub struct VariableHeader {

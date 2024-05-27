@@ -1,16 +1,16 @@
-use crate::connect_message::ConnectMessage;
 use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
+use crate::messages::connect_message::ConnectMessage;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
 
-use crate::puback_message::PubAckMessage;
-use crate::publish_message::PublishMessage;
-use crate::suback_message::SubAckMessage;
-use crate::subscribe_message::SubscribeMessage;
-use crate::subscribe_return_code::SubscribeReturnCode; // Add the missing import
+use crate::messages::puback_message::PubAckMessage;
+use crate::messages::publish_message::PublishMessage;
+use crate::messages::suback_message::SubAckMessage;
+use crate::messages::subscribe_message::SubscribeMessage;
+use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
 use std::io::Error;
 use std::net::{TcpListener, TcpStream};

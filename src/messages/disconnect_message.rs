@@ -1,4 +1,4 @@
-use crate::disconnect_fixed_header::FixedHeader;
+use crate::messages::disconnect_fixed_header::FixedHeader;
 
 pub struct Disconnect {
     fixed_header: FixedHeader,
