@@ -1,3 +1,20 @@
+extern crate block_modes;
+extern crate des;
+extern crate hex;
+
+// use des::cipher::generic_array::GenericArray;
+// use des::cipher::NewBlockCipher;
+use block_modes::block_padding::Pkcs7;
+use block_modes::{BlockMode, Cbc};
+use des::TdesEde3;
+
+// Tipo para el modo CBC con padding PKCS7
+type TdesEde3Cbc = Cbc<TdesEde3, Pkcs7>;
+
+// Clave y vector de inicialización de ejemplo (debe ser de 24 y 8 bytes respectivamente)
+const KEY: [u8; 24] = [0x01; 24]; // Esto es solo un ejemplo, usa claves seguras en producción
+const IV: [u8; 8] = [0x02; 8];
+
 use crate::publish_fixed_header::FixedHeader;
 use crate::publish_flags::PublishFlags;
 use crate::publish_payload::Payload;
@@ -26,6 +43,9 @@ impl<'a> PublishMessage {
             topic_name: topic_name.to_string(),
             packet_identifier,
         };
+
+        //Hacer que la variable content se encripte por un algortimo de encriptacion SHA256
+        let content = encrypt_3des(content);
 
         let payload = Payload {
             content: content.to_vec(),
@@ -168,8 +188,18 @@ impl<'a> PublishMessage {
     }
 
     pub fn get_payload(&self) -> Vec<u8> {
-        self.payload.content.to_vec()
+        decrypt_3des(&self.payload.content)
     }
+}
+
+fn encrypt_3des(data: &[u8]) -> Vec<u8> {
+    let cipher = TdesEde3Cbc::new_from_slices(&KEY, &IV).unwrap();
+    cipher.encrypt_vec(data)
+}
+
+fn decrypt_3des(encrypted_data: &[u8]) -> Vec<u8> {
+    let cipher = TdesEde3Cbc::new_from_slices(&KEY, &IV).unwrap();
+    cipher.decrypt_vec(encrypted_data).unwrap()
 }
 
 #[cfg(test)]
@@ -225,9 +255,32 @@ mod tests {
             original_message.variable_header.packet_identifier,
             recovered_message.variable_header.packet_identifier
         );
-        assert_eq!(
-            original_message.payload.content,
-            recovered_message.payload.content
+        println!(
+            "original_message.payload.content: {:?}",
+            original_message.get_payload()
         );
+        assert_eq!(
+            original_message.get_payload(),
+            recovered_message.get_payload()
+        );
+    }
+
+    #[test]
+    /// Testeo de la funcion encriptar
+    fn test_encrypt() {
+        let content = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let encrypted_content = encrypt_3des(&content);
+
+        assert_ne!(content.to_vec(), encrypted_content);
+    }
+
+    #[test]
+    /// Testeo de la funcion desencriptar
+    fn test_decrypt() {
+        let content = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let encrypted_content = encrypt_3des(&content);
+        let decrypted_content = decrypt_3des(&encrypted_content);
+
+        assert_eq!(content.to_vec(), decrypted_content);
     }
 }

@@ -53,7 +53,7 @@ impl User {
         self.username = username;
     }
 
-    pub fn add_to_topics(&mut self, topic: String) {
+    pub fn add_topic(&mut self, topic: String) {
         self.topics.push(topic);
     }
 
@@ -61,8 +61,8 @@ impl User {
         self.messages = messages;
     }
 
-    /// Agrega el mensaje a la cola del usuario, indexada por topic.
-    pub fn add_message(&mut self, message: PublishMessage) {
+    /// Agrega el mensaje a la cola del usuario
+    pub fn add_message_to_queue(&mut self, message: PublishMessage) {
         let topic = message.get_topic();
         if let Ok(mut messages_locked) = self.messages.lock() {
             messages_locked

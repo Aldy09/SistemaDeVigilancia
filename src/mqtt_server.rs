@@ -226,22 +226,13 @@ impl MQTTServer {
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
     fn add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
-        //Pseudo código pensado:
-        //for (user in users_connected)
-        //if(user.topics.Contains(message.topic)){ //si el usuario está suscrito al topic del mensaje
-        //    user.messages.addhash(topic, Publish)
-
         if let Ok(mut users_connected) = self.users_connected.lock() {
             for user in users_connected.values_mut() {
                 //users_connected es un hashmap con key=username y value=user
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
-                    //Necesito el mensaje en todas las colas de mensajes de los usuarios suscritos al topic
-                    user.add_message(msg.clone()); //agrego el mensaje a la cola del usuario
-                                                   //println!(
-                                                   //    "Se encontraron encontro subscriber: {} al topic {:?}",username, msg.get_topic()
-                                                   //);
+                    user.add_message_to_queue(msg.clone());
                 }
             }
         }
@@ -279,7 +270,7 @@ impl MQTTServer {
         if let Ok(mut users_connected) = self.users_connected.lock() {
             if let Some(user) = users_connected.get_mut(username) {
                 for (topic, _qos) in msg.get_topic_filters() {
-                    user.add_to_topics(topic.to_string());
+                    user.add_topic(topic.to_string());
                     return_codes.push(SubscribeReturnCode::QoS1);
                     println!(
                         "   Se agregó el topic {:?} al suscriptor {:?}",
@@ -414,13 +405,12 @@ impl MQTTServer {
                 let stream = user.get_stream();
                 let topics = user.get_topics();
                 // println!("TOPICS: {:?}",topics);
-                //trae el hashmap del usuario topic, colas de mensajes
-                let messages = user.get_messages();
-                if let Ok(mut messages_locked) = messages.lock() {
+                let hashmap_messages = user.get_messages();
+                if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
                     for topic in topics {
                         // trae 1 cola de un topic y escribe los mensajes en el stream
-                        if let Some(messages_topic) = messages_locked.get_mut(topic) {
-                            while let Some(msg) = messages_topic.pop_front() {
+                        if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
+                            while let Some(msg) = messages_topic_queue.pop_front() {
                                 let msg_bytes = msg.to_bytes();
                                 write_message_to_stream(&msg_bytes, &stream)?;
                             }
