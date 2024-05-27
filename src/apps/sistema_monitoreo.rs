@@ -96,21 +96,28 @@ fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>) {
 
 }
 
-fn publish_incident(incidents: &mut Vec<Incident>, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+fn publish_incident(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo.lock(){
+        if let Ok(mut incidents) = sistema_monitoreo_lock.get_incidents().lock() {
         println!("Sistema-Monitoreo: Publicando incidentes PASO 1");
+
+
+        
         if !incidents.is_empty() {
             println!("Sistema-Monitoreo: Publicando incidentes PASO 1.5");
 
             for incident in incidents.iter_mut() {
                 if !incident.sent {
-                     println!("Sistema-Monitoreo: Publicando incidentes PASO 2");
+                        println!("Sistema-Monitoreo: Publicando incidentes PASO 2");
 
+                    // Hago el publish
                     if let Ok(mut mqtt_client) = mqtt_client.lock() {
                         let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
                         match res {
                             Ok(_) => {
                                 println!("Sistema-Monitoreo: Ha hecho un publish");
-
+                                
+                                //sistema_monitoreo_lock.mark_incident_as_sent(incident.id);
                                 incident.sent = true;
                             }
                             Err(e) => {
@@ -121,8 +128,11 @@ fn publish_incident(incidents: &mut Vec<Incident>, mqtt_client: &Arc<Mutex<MQTTC
                 }
             }
         };
-        // Esperamos, para publicar los cambios "periódicamente"
-        sleep(Duration::from_secs(3));
+
+        //sistema_monitoreo_lock.get_incidents();
+    }
+    }
+
 }
 
 fn main() {
@@ -141,7 +151,7 @@ fn main() {
         .parse::<SocketAddr>()
         .expect("Dirección no válida");
 
-    let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
+    let mut sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new())); // Create a new instance of `SistemaMonitoreo` and wrap it in an `Arc<Mutex<_>>`
     let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo); // Clone the `Arc` for the UI thread
     let mqtt_client_res = establish_mqtt_broker_connection(&broker_addr);
     
@@ -163,13 +173,14 @@ fn main() {
 
             let hijo_send_incidents = thread::spawn(move || loop {
 
-                if let Ok(sistema_monitoreo_lock) = sistema_monitoreo.lock(){
+                publish_incident(&mut sistema_monitoreo, &mqtt_client_incident_sh_clone);
+                /*
                     let mut incidents: Vec<Incident> = sistema_monitoreo_lock.get_incidents();
                     println!("Sistema-Monitoreo: Publicando incidentes {:?}", incidents);
                     publish_incident(&mut incidents, &mqtt_client_incident_sh_clone);
-                }
+                }*/
 
-
+                // Esperamos, para publicar los cambios "periódicamente"
                 thread::sleep(std::time::Duration::from_secs(5));
             });
 
@@ -347,9 +358,9 @@ fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
             let x = x_coord.parse::<u8>().unwrap();
             let y = y_coord.parse::<u8>().unwrap();
 
-            if let Ok(sistema_monitoreo_lock) = sistema_monitoreo_clone.lock() {
+            if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo_clone.lock() {
                 let incident =
-                    Incident::new((sistema_monitoreo_lock.get_incidents().len() + 1) as u8, x, y);
+                    Incident::new(sistema_monitoreo_lock.generate_new_incident_id(), x, y);
                     sistema_monitoreo_lock.add_incident(incident);
                 println!("Incidente agregado: {:?}", sistema_monitoreo_lock.get_incidents());
             }
