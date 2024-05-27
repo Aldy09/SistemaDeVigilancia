@@ -165,7 +165,6 @@ impl Camera {
 mod test {
     use super::Camera;
 
-
     #[test]
     fn test_1_camera_to_y_from_bytes() {
         let camera = Camera::new(12, 3, 4, 5, vec![6]);
@@ -175,6 +174,5 @@ mod test {
         let camera_reconstruida = Camera::from_bytes(&bytes);
 
         assert_eq!(camera_reconstruida, camera);
-        
     }
 }

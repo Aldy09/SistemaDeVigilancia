@@ -190,9 +190,9 @@ impl<'a> PublishMessage {
     }
 
     pub fn get_payload(&self) -> Vec<u8> {
-       decrypt_3des(&self.payload.content)
-       //aux: self.payload.content.to_vec()
-    } 
+        decrypt_3des(&self.payload.content)
+        //aux: self.payload.content.to_vec()
+    }
 }
 
 fn encrypt_3des(data: &[u8]) -> Vec<u8> {
