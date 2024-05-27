@@ -117,9 +117,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
                                     let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
                                     match res {
                                         Ok(_) => {
-                                            println!(
-                                                "Sistema-Camara: Hecho un publish"
-                                            );
+                                            println!("Sistema-Camara: Hecho un publish");
 
                                             cam.marked_as_sent();
                                         }

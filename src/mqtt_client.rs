@@ -121,7 +121,10 @@ impl MQTTClient {
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, mpsc::RecvTimeoutError> { //Result<PublishMessage,> {
+    pub fn mqtt_receive_msg_from_subs_topic(
+        &self,
+    ) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
+        //Result<PublishMessage,> {
         //self.rx.recv()
         self.rx.recv_timeout(Duration::from_micros(300))
     }
@@ -164,7 +167,6 @@ fn leer_desde_server(
         thread::sleep(Duration::from_millis(300)); // []
     }
     // Fin Probando
-
 
     /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
     let ceros: &[u8; 2] = &[0; 2];

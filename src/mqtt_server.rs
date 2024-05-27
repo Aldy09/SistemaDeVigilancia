@@ -166,7 +166,6 @@ impl MQTTServer {
         username: &str,
         stream: &Arc<Mutex<TcpStream>>,
     ) -> Result<(), Error> {
-
         // Probando
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         let ceros: &[u8; 2] = &[0; 2];
@@ -185,9 +184,6 @@ impl MQTTServer {
             thread::sleep(Duration::from_millis(300)); // []
         }
         // Fin Probando
-
-
-
 
         /*println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
@@ -362,9 +358,7 @@ impl MQTTServer {
     /// Procesa los mensajes entrantes de un dado cliente.
     fn handle_client(&self, stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
         // Probando
-        let mut fixed_header_info: ([u8; 2], FixedHeader);
-        let ceros: &[u8; 2] = &[0; 2];
-        let mut vacio: bool;
+        let fixed_header_info: ([u8; 2], FixedHeader);
 
         //vacio = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
@@ -373,7 +367,6 @@ impl MQTTServer {
                 println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
-                vacio = &fixed_header_info.0 == ceros;
                 break;
             };
             thread::sleep(Duration::from_millis(300)); // []
@@ -385,7 +378,7 @@ impl MQTTServer {
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
         match fixed_header.get_message_type() {
             1 => {
-                self.process_connect(&fixed_header, stream, &fixed_header_buf)?;
+                self.process_connect(fixed_header, stream, fixed_header_buf)?;
             }
             _ => {
                 println!("Error, el primer mensaje recibido DEBE ser un connect.");
