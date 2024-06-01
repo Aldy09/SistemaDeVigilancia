@@ -29,7 +29,7 @@ type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 #[allow(dead_code)]
 pub struct MQTTServer {
     streams: ShareableStreams,
-    users_connected: ShareableUsers,
+    connected_users: ShareableUsers,
     publish_msgs_tx: Sender<PublishMessage>, // rx no se puede clonar, mp"SC", pero el tx sí.
 }
 
@@ -40,7 +40,7 @@ impl MQTTServer {
 
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
-            users_connected: Arc::new(Mutex::new(HashMap::new())),
+            connected_users: Arc::new(Mutex::new(HashMap::new())),
             publish_msgs_tx: tx, // []
         };
         let listener = create_server(ip, port)?;
@@ -73,7 +73,7 @@ impl MQTTServer {
     /// Agrega un usuario al hashmap de usuarios conectados
     fn add_user(&self, stream: &Arc<Mutex<TcpStream>>, username: &str) {
         let user = User::new(stream.clone(), username.to_string());
-        if let Ok(mut users) = self.users_connected.lock() {
+        if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
             users.insert(username, user); //inserta el usuario en el hashmap
         }
@@ -255,9 +255,9 @@ impl MQTTServer {
         //self.publish_msgs_tx.send(*msg); // pero cómo le digo de qué user y topic es
         // dicen mis notas "y que el hilo ppal, que el pcsamiento de iterar x user lo haga el hilo que escribe.
         // fin probando
-        if let Ok(mut users_connected) = self.users_connected.lock() {
-            for user in users_connected.values_mut() {
-                //users_connected es un hashmap con key=username y value=user
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            for user in connected_users.values_mut() {
+                //connected_users es un hashmap con key=username y value=user
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
@@ -296,8 +296,8 @@ impl MQTTServer {
         let mut return_codes = vec![];
 
         // Agrega los topics a los que se suscribió el usuario
-        if let Ok(mut users_connected) = self.users_connected.lock() {
-            if let Some(user) = users_connected.get_mut(username) {
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            if let Some(user) = connected_users.get_mut(username) {
                 for (topic, _qos) in msg.get_topic_filters() {
                     user.add_topic(topic.to_string());
                     return_codes.push(SubscribeReturnCode::QoS1);
@@ -423,7 +423,7 @@ impl MQTTServer {
     fn clone_ref(&self) -> Self {
         Self {
             streams: self.streams.clone(),
-            users_connected: self.users_connected.clone(),
+            connected_users: self.connected_users.clone(),
             publish_msgs_tx: self.publish_msgs_tx.clone(), // []
         }
     }
@@ -476,14 +476,15 @@ impl MQTTServer {
         Ok(())
     }
 
+    // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
     fn handle_publish_message(&self, msg: PublishMessage) -> Result<(), Error> {
 
         // Inicio probando
         // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
-        if let Ok(mut users_connected) = self.users_connected.lock() {
-            for user in users_connected.values_mut() {
-                //users_connected es un hashmap con key=username y value=user
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            for user in connected_users.values_mut() {
+                //connected_users es un hashmap con key=username y value=user
                 // User/s que se suscribió/eron al topic del PublishMessage:
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
@@ -508,8 +509,8 @@ impl MQTTServer {
         // Aux: esto recorre todos los users, todos los topic, y hace pop de un msg de la queue.
         // aux: eso era xq antes no sabía qué se insertó a cada queue, por hacerlo un hilo diferente;
         // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
-        if let Ok(users_connected_locked) = self.users_connected.lock() {
-            for user in users_connected_locked.values() {
+        if let Ok(connected_users) = self.connected_users.lock() {
+            for user in connected_users.values() {
                 let stream = user.get_stream();
                 let topics = user.get_topics();
                 // println!("TOPICS: {:?}",topics);
