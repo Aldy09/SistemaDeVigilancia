@@ -99,7 +99,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr, rx
                 sleep(Duration::from_secs(publish_interval));*/
             }
             // Fin probando
-
+            
 
 
 
@@ -310,7 +310,20 @@ fn procesar_incidente_por_primera_vez(
 }
 
 fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
-    
+    /* // Aux: Se queja de que no puede enviar por el tx porque no implementa clone.
+    // Envía todas las cámaras al inicio
+    match cameras.lock() {
+        Ok(cams) => {
+            for camera in (*cams).values() {
+                // Envío la cámara eliminada por el tx
+                if camera_tx.send(*camera).is_err() {
+                    println!("Error al enviar cámara por tx desde hilo abm.");
+                }
+            }
+        }
+        Err(_) => println!("Error al tomar lock de cámaras."),
+    }*/
+
     loop {
         println!(
             "      MENÚ
@@ -416,13 +429,17 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
                             if camera_to_delete.is_not_deleted() {
                                 camera_to_delete.delete_camera();
 
-                                // Envío la cámara eliminada por el tx
-                                /*if camera_tx.send(cam_a_eliminar).is_err() {
-                                    println!("Error al enviar cámara por tx desde hilo abm.");
-                                }*/
                             };
-                            println!("Cámara eliminada con éxito.\n");
                         }
+                        /*
+                        // Aux: Ver, mismo bug de mandar por channel y tipo a mandar (tema clone)
+                        if let Some(camera_to_delete) = cams.get(&id) {
+                            // Envío la cámara eliminada por el tx
+                            if camera_tx.send(camera_to_delete).is_err() {
+                                println!("Error al enviar cámara por tx desde hilo abm.");
+                            }
+                        }*/
+                        println!("Cámara eliminada con éxito.\n");
                     }
                     Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
                 };
