@@ -12,7 +12,7 @@ use crate::messages::suback_message::SubAckMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
 use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, mpsc};
@@ -55,10 +55,9 @@ impl MQTTServer {
 
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
-        let outgoing_thread = std::thread::spawn(move || loop {
+        let outgoing_thread = std::thread::spawn(move || 
             if let Err(result) = mqtt_server_hermano.handle_outgoing_messages(rx) {
                 println!("Error al manejar los mensajes salientes: {:?}", result);
-            }
         });
 
         incoming_thread
@@ -251,9 +250,9 @@ impl MQTTServer {
     }
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
-    fn add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
+    fn _add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
         // inicio probando
-        self.publish_msgs_tx.send(ms); // pero cómo le digo de qué user y topic es
+        //self.publish_msgs_tx.send(*msg); // pero cómo le digo de qué user y topic es
         // dicen mis notas "y que el hilo ppal, que el pcsamiento de iterar x user lo haga el hilo que escribe.
         // fin probando
         if let Ok(mut users_connected) = self.users_connected.lock() {
@@ -349,7 +348,10 @@ impl MQTTServer {
                 
                 // Si llega un publish, lo mando por el channel, del otro lado (el hilo que llama a handle_outgoing_connections)
                 // se encargará de enviarlo al/los suscriptor/es que tenga el topic del mensaje en cuestión.
-                self.publish_msgs_tx.send(msg);
+                if self.publish_msgs_tx.send(msg).is_err() {
+                    //println!("Error al enviar el PublishMessage al hilo que los procesa.");
+                    return Err(Error::new(ErrorKind::Other, "Error al enviar el PublishMessage al hilo que los procesa."));
+                }
                 //self.add_message_to_subscribers_queue(&msg)?;
                 // println!(" Publish:  Despues de add_message_to_subscribers_queue");
             }
@@ -422,6 +424,7 @@ impl MQTTServer {
         Self {
             streams: self.streams.clone(),
             users_connected: self.users_connected.clone(),
+            publish_msgs_tx: self.publish_msgs_tx.clone(), // []
         }
     }
 
@@ -463,8 +466,48 @@ impl MQTTServer {
             streams.push(stream);
         }
     }
-    /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
+
+    /// Recibe los `PublishMessage`s recibidos de los clientes que le envía el otro hilo, y por cada uno,
+    /// lo agrega a la queue de cada suscriptor y lo envía.
     fn handle_outgoing_messages(&self, rx: Receiver<PublishMessage>) -> Result<(), Error> {
+        while let Ok(msg) = rx.recv() {
+            self.handle_publish_message(msg)?;
+        }
+        Ok(())
+    }
+
+    /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
+    fn handle_publish_message(&self, msg: PublishMessage) -> Result<(), Error> {
+
+        // Inicio probando
+        // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
+        if let Ok(mut users_connected) = self.users_connected.lock() {
+            for user in users_connected.values_mut() {
+                //users_connected es un hashmap con key=username y value=user
+                // User/s que se suscribió/eron al topic del PublishMessage:
+                let user_topics = user.get_topics();
+                if user_topics.contains(&(msg.get_topic())) {
+                    //si el usuario está suscrito al topic del mensaje
+                    user.add_message_to_queue(msg.clone());
+                    // Aux: y acá mismo llamar al write que se lo mande.
+                    // aux: el write actualmente hace pop. No tiene sentido hacer add message to queu
+                    // aux: y en la línea siguiente hacerle pop, pero capaz sí tiene sentido que esté en la queue
+                    // aux: por tema desconexiones. Ver [].
+                }
+            }
+        }
+
+        // Aux: se debe desencolar solamente cuando llega el ack. Por eso está en un for separado.
+        // Envía
+        self.pop_and_write()?;
+
+        Ok(())
+    }
+
+    fn pop_and_write(&self) -> Result<(), Error> {
+        // Aux: esto recorre todos los users, todos los topic, y hace pop de un msg de la queue.
+        // aux: eso era xq antes no sabía qué se insertó a cada queue, por hacerlo un hilo diferente;
+        // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
         if let Ok(users_connected_locked) = self.users_connected.lock() {
             for user in users_connected_locked.values() {
                 let stream = user.get_stream();
