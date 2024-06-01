@@ -2,7 +2,8 @@ use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::sync::Arc;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Arc, mpsc};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::Duration;
@@ -67,30 +68,8 @@ fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
     Ok((ip_cam.to_string(), port))
 }
 
-fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
-    /*
-    let properties = Properties::new("sistema_camaras.properties")
-        .expect("Error al leer el archivo de properties");
-    let ip = properties
-        .get("ip-server-mqtt")
-        .expect("No se encontró la propiedad 'ip-server-mqtt'");
-    let port = properties
-        .get("port-server-mqtt")
-        .expect("No se encontró la propiedad 'port-server-mqtt'")
-        .parse::<i32>()
-        .expect("Error al parsear el puerto");
-    let publish_interval = properties
-        .get("publish-interval-mqtt")
-        .expect("No se encontró la propiedad 'publish-interval-mqtt'")
-        .parse::<u64>()
-        .expect("Error al parsear el intervalo"); // []
-
-    let broker_addr = format!("{}:{}", ip, port)
-        .parse()
-        .expect("Dirección no válida");
-    */
-
-    let publish_interval = 4;
+fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr, rx: Receiver<Camera>) {
+    //let _publish_interval = 4;
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
     let client_id = "sistema-camaras";
@@ -100,7 +79,33 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-            loop {
+
+            // Inicio probando
+            while let Ok(mut cam) = rx.recv() {
+                let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
+                match res {
+                    Ok(_) => {
+                        println!("Sistema-Camara: Hecho un publish");
+
+                        cam.marked_as_sent(); // <-- aux: creo que ya no me importa
+                    }
+                    Err(e) => println!(
+                        "Sistema-Camara: Error al hacer el publish {:?}",
+                        e
+                    ),
+                };
+
+                /*// Aux ver cómo respetar el "periódicamente", o si sobra, ver [].
+                // Esperamos, para publicar los cambios "periódicamente"
+                sleep(Duration::from_secs(publish_interval));*/
+            }
+            // Fin probando
+
+
+
+
+            // Lo que había antes:
+            /*loop {
                 if let Ok(cams) = cameras.lock() {
                     // [] <--
 
@@ -138,7 +143,7 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr) {
 
                 // Esperamos, para publicar los cambios "periódicamente"
                 sleep(Duration::from_secs(publish_interval));
-            }
+            }*/
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
@@ -175,14 +180,17 @@ fn main() {
     // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
     sleep(Duration::from_secs(2));
 
+
+    let (tx, rx) = mpsc::channel::<Camera>();
+    
     // Menú cámaras
     let handle = thread::spawn(move || {
-        abm_cameras(&mut shareable_cameras);
+        abm_cameras(&mut shareable_cameras, tx);
     });
 
     // Publicar cámaras
     let handle_2 = thread::spawn(move || {
-        connect_and_publish(&mut cameras_cloned, &broker_addr);
+        connect_and_publish(&mut cameras_cloned, &broker_addr, rx);
     });
 
     // Atender incidentes
@@ -303,7 +311,8 @@ fn procesar_incidente_por_primera_vez(
     };
 }
 
-fn abm_cameras(cameras: &mut ShCamerasType) {
+fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
+    
     loop {
         println!(
             "      MENÚ
@@ -362,15 +371,19 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                     .expect("Error al leer la entrada");
                 let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
 
+                // Crea la cámara y la envia
                 let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
-                let shareable_camera = Arc::new(Mutex::new(new_camera));
+                /*let shareable_camera = Arc::new(Mutex::new(new_camera));
                 match cameras.lock() {
                     Ok(mut cams) => {
                         cams.insert(id, shareable_camera);
                         println!("Cámara agregada con éxito.\n");
                     }
                     Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-                };
+                };*/
+                if camera_tx.send(new_camera).is_err() {
+                    println!("Error al enviar cámara por tx desde hilo abm.");
+                }
             }
             "2" => {
                 // Mostramos todas las cámaras
@@ -412,6 +425,11 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                                 // Si ya estaba deleted, no hago nada, tampoco es error; else, la marco deleted
                                 if cam_a_eliminar.is_not_deleted() {
                                     cam_a_eliminar.delete_camera();
+
+                                    // Envío la cámara eliminada por el tx
+                                    /*if camera_tx.send(cam_a_eliminar).is_err() {
+                                        println!("Error al enviar cámara por tx desde hilo abm.");
+                                    }*/
                                 };
                                 println!("Cámara eliminada con éxito.\n");
                             }
