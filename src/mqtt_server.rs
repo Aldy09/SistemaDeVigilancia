@@ -14,7 +14,8 @@ use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the miss
 use std::collections::HashMap;
 use std::io::Error;
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self};
 use std::time::Duration;
 
@@ -27,15 +28,20 @@ type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 
 #[allow(dead_code)]
 pub struct MQTTServer {
-    users_connected: ShareableUsers,
     streams: ShareableStreams,
+    users_connected: ShareableUsers,
+    publish_msgs_tx: Sender<PublishMessage>, // rx no se puede clonar, mp"SC", pero el tx sí.
 }
 
 impl MQTTServer {
     pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+        //
+        let (tx, rx) = mpsc::channel::<PublishMessage>();
+
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
             users_connected: Arc::new(Mutex::new(HashMap::new())),
+            publish_msgs_tx: tx, // []
         };
         let listener = create_server(ip, port)?;
 
@@ -50,7 +56,7 @@ impl MQTTServer {
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
         let outgoing_thread = std::thread::spawn(move || loop {
-            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
+            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages(rx) {
                 println!("Error al manejar los mensajes salientes: {:?}", result);
             }
         });
@@ -246,6 +252,10 @@ impl MQTTServer {
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
     fn add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
+        // inicio probando
+        self.publish_msgs_tx.send(ms); // pero cómo le digo de qué user y topic es
+        // dicen mis notas "y que el hilo ppal, que el pcsamiento de iterar x user lo haga el hilo que escribe.
+        // fin probando
         if let Ok(mut users_connected) = self.users_connected.lock() {
             for user in users_connected.values_mut() {
                 //users_connected es un hashmap con key=username y value=user
@@ -336,7 +346,11 @@ impl MQTTServer {
 
                 self.send_puback(&msg, stream)?;
                 // println!(" Publish:  Antes de add_message_to_subscribers_queue");
-                self.add_message_to_subscribers_queue(&msg)?;
+                
+                // Si llega un publish, lo mando por el channel, del otro lado (el hilo que llama a handle_outgoing_connections)
+                // se encargará de enviarlo al/los suscriptor/es que tenga el topic del mensaje en cuestión.
+                self.publish_msgs_tx.send(msg);
+                //self.add_message_to_subscribers_queue(&msg)?;
                 // println!(" Publish:  Despues de add_message_to_subscribers_queue");
             }
             8 => {
@@ -450,7 +464,7 @@ impl MQTTServer {
         }
     }
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
-    fn handle_outgoing_messages(&self) -> Result<(), Error> {
+    fn handle_outgoing_messages(&self, rx: Receiver<PublishMessage>) -> Result<(), Error> {
         if let Ok(users_connected_locked) = self.users_connected.lock() {
             for user in users_connected_locked.values() {
                 let stream = user.get_stream();
