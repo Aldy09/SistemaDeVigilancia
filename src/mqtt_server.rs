@@ -1,7 +1,10 @@
 use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
+use crate::messages::connack_message::ConnackMessage;
+use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
+use crate::messages::connect_return_code::ConnectReturnCode;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -102,7 +105,7 @@ impl MQTTServer {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        write_message_to_stream(&connack_response, stream)?;
+        write_message_to_stream(&connack_response.to_bytes(), stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
         // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
@@ -153,14 +156,17 @@ impl MQTTServer {
     fn was_the_session_created_succesfully(
         &self,
         connect_msg: &ConnectMessage,
-    ) -> Result<(bool, [u8; 4]), Error> {
+    ) -> Result<(bool, ConnackMessage), Error> {
         if self.is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
             || self.authenticate(connect_msg.get_user(), connect_msg.get_passwd())
         {
-            let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
+            // Aux: volver cuando haya tema desconexiones, acá le estoy pasando siempre un SessionPresent::NotPresentInLastSession. [].
+            let connack_response = ConnackMessage::new(SessionPresent::NotPresentInLastSession, ConnectReturnCode::ConnectionAccepted);
+            //let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
             Ok((true, connack_response))
         } else {
-            let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
+            //let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
+            let connack_response = ConnackMessage::new(SessionPresent::NotPresentInLastSession, ConnectReturnCode::NotAuthorized);
             Ok((false, connack_response))
         }
     }

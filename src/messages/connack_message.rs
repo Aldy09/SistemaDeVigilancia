@@ -6,12 +6,12 @@ use crate::messages::{
 };
 
 #[derive(Debug)]
-pub struct ConnackPacket {
+pub struct ConnackMessage {
     fixed_header: FixedHeader,
     variable_header: VariableHeader,
 }
 
-impl ConnackPacket {
+impl ConnackMessage {
     pub fn new(session_present: SessionPresent, return_code: ConnectReturnCode) -> Self {
         let fixed_header = FixedHeader {
             message_type: 0b0010_0000, // 0010 for MQTT Control Packet Type (2) and 0000 for reserved
@@ -28,7 +28,7 @@ impl ConnackPacket {
             connect_return_code: return_code as u8,
         };
 
-        ConnackPacket {
+        ConnackMessage {
             fixed_header,
             variable_header,
         }
@@ -66,7 +66,7 @@ impl ConnackPacket {
 
         // un if message_type != de (2<<4) {dar error}
 
-        Ok(ConnackPacket {
+        Ok(ConnackMessage {
             fixed_header,
             variable_header,
         })
@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let connack_packet = ConnackPacket::new(
+        let connack_packet = ConnackMessage::new(
             SessionPresent::PresentInLastSession,
             ConnectReturnCode::ConnectionAccepted,
         );
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_to_bytes() {
-        let connack_packet = ConnackPacket::new(
+        let connack_packet = ConnackMessage::new(
             SessionPresent::PresentInLastSession,
             ConnectReturnCode::ConnectionAccepted,
         );
@@ -102,12 +102,12 @@ mod tests {
 
     #[test]
     fn test_from_bytes() {
-        let connack_packet = ConnackPacket::new(
+        let connack_packet = ConnackMessage::new(
             SessionPresent::PresentInLastSession,
             ConnectReturnCode::ConnectionAccepted,
         );
         let bytes = connack_packet.to_bytes();
-        let connack_packet = ConnackPacket::from_bytes(&bytes).unwrap();
+        let connack_packet = ConnackMessage::from_bytes(&bytes).unwrap();
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);
