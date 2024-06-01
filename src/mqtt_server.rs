@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
 
@@ -58,9 +58,10 @@ impl MQTTServer {
 
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
-        let outgoing_thread = std::thread::spawn(move || 
+        let outgoing_thread = std::thread::spawn(move || {
             if let Err(result) = mqtt_server_hermano.handle_outgoing_messages(rx) {
                 println!("Error al manejar los mensajes salientes: {:?}", result);
+            }
         });
 
         incoming_thread
@@ -161,12 +162,16 @@ impl MQTTServer {
             || self.authenticate(connect_msg.get_user(), connect_msg.get_passwd())
         {
             // Aux: volver cuando haya tema desconexiones, acá le estoy pasando siempre un SessionPresent::NotPresentInLastSession. [].
-            let connack_response = ConnackMessage::new(SessionPresent::NotPresentInLastSession, ConnectReturnCode::ConnectionAccepted);
-            //let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
+            let connack_response = ConnackMessage::new(
+                SessionPresent::NotPresentInLastSession,
+                ConnectReturnCode::ConnectionAccepted,
+            );
             Ok((true, connack_response))
         } else {
-            //let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
-            let connack_response = ConnackMessage::new(SessionPresent::NotPresentInLastSession, ConnectReturnCode::NotAuthorized);
+            let connack_response = ConnackMessage::new(
+                SessionPresent::NotPresentInLastSession,
+                ConnectReturnCode::NotAuthorized,
+            );
             Ok((false, connack_response))
         }
     }
@@ -351,12 +356,15 @@ impl MQTTServer {
 
                 self.send_puback(&msg, stream)?;
                 // println!(" Publish:  Antes de add_message_to_subscribers_queue");
-                
+
                 // Si llega un publish, lo mando por el channel, del otro lado (el hilo que llama a handle_outgoing_connections)
                 // se encargará de enviarlo al/los suscriptor/es que tenga el topic del mensaje en cuestión.
                 if self.publish_msgs_tx.send(msg).is_err() {
                     //println!("Error al enviar el PublishMessage al hilo que los procesa.");
-                    return Err(Error::new(ErrorKind::Other, "Error al enviar el PublishMessage al hilo que los procesa."));
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Error al enviar el PublishMessage al hilo que los procesa.",
+                    ));
                 }
                 //self.add_message_to_subscribers_queue(&msg)?;
                 // println!(" Publish:  Despues de add_message_to_subscribers_queue");
@@ -485,7 +493,6 @@ impl MQTTServer {
     // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
     fn handle_publish_message(&self, msg: PublishMessage) -> Result<(), Error> {
-
         // Inicio probando
         // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
         if let Ok(mut connected_users) = self.connected_users.lock() {

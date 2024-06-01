@@ -49,7 +49,7 @@ impl MQTTClient {
             client_id,
             None, // will_topic
             None, // will_message
-            Some("sistema-monitoreo"),
+            Some("usuario0"),
             Some("rustx123"),
         );
 
