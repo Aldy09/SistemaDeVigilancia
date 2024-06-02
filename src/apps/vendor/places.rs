@@ -3,7 +3,7 @@ use egui::{vec2, Align2, Color32, FontId, Painter, Response, Stroke};
 use super::{Plugin, Position};
 
 /// Visual style of the place.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Style {
     pub label_font: FontId,
     pub label_color: Color32,
@@ -28,6 +28,7 @@ impl Default for Style {
     }
 }
 
+#[derive(Debug, Clone)]
 /// A place to be drawn on the map.
 pub struct Place {
     /// Geographical position.
@@ -91,13 +92,23 @@ impl Place {
 }
 
 /// [`Plugin`] which draws list of places on the map.
+/// 
+#[derive(Debug, Clone)]
 pub struct Places {
     places: Vec<Place>,
 }
 
 impl Places {
-    pub fn new(places: Vec<Place>) -> Self {
-        Self { places }
+    pub fn new() -> Self {
+        Self { places: Vec::new() }
+    }
+
+    pub fn add_place(&mut self, place: Place) {
+        self.places.push(place);
+    }
+
+    pub fn get_places(&self) -> Vec<Place> {
+        self.places.to_vec()
     }
 }
 
@@ -107,4 +118,5 @@ impl Plugin for Places {
             place.draw(response, painter.clone(), projector);
         }
     }
+
 }

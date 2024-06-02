@@ -159,6 +159,20 @@ impl Camera {
         self.deleted = true;
         self.sent = false;
     }
+
+    /// Devuelve la latitud de la cámara.
+    pub fn get_latitude(&self) -> f32 {
+        self.latitude
+    }
+
+    /// Devuelve la longitud de la cámara.
+    pub fn get_longitude(&self) -> f32 {
+        self.longitude
+    }
+
+    pub fn get_id(&self) -> u8 {
+        self.id
+    }
 }
 
 #[cfg(test)]

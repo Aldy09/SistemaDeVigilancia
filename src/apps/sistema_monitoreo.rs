@@ -10,8 +10,10 @@
 // use std::sync::{Arc, Mutex};
 // use std::thread::{self, JoinHandle}; // Import the `SistemaMonitoreo` type
 
+use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
+
 fn main() {
     env_logger::init();
+
+    let _sistema_monitoreo = SistemaMonitoreo::new();
 }
-
-

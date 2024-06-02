@@ -1,9 +1,13 @@
 use std::{
-    error::Error, net::SocketAddr, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
+    error::Error,
+    net::SocketAddr,
+    sync::{mpsc, Arc, Mutex},
+    thread::{self, JoinHandle},
 };
 
 use std::sync::mpsc::Receiver;
 
+use crossbeam::channel::{self, Sender};
 
 use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
@@ -12,7 +16,7 @@ use super::{camera::Camera, incident::Incident, ui_sistema_monitoreo::UISistemaM
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
-    pub camera_tx: mpsc::Sender<Camera>,
+    pub camera_tx: Sender<Camera>,
 }
 
 fn get_broker_address() -> SocketAddr {
@@ -120,7 +124,7 @@ pub fn publish_incident(incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>
 
 impl SistemaMonitoreo {
     pub fn new() -> Self {
-        let (tx_camera, rx_camera) = mpsc::channel::<Camera>();
+        let (tx_camera, rx_camera) = channel::unbounded();
         let (tx, rx) = mpsc::channel::<Incident>();
         let mut children: Vec<JoinHandle<()>> = vec![];
         let broker_addr = get_broker_address();
@@ -129,7 +133,7 @@ impl SistemaMonitoreo {
             incidents: Arc::new(Mutex::new(Vec::new())),
             camera_tx: tx_camera,
         };
-        
+
         match establish_mqtt_broker_connection(&broker_addr) {
             Ok(mqtt_client) => {
                 let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
@@ -141,8 +145,8 @@ impl SistemaMonitoreo {
 
                 let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh_clone);
 
-                let send_incidents_thread =
-                    sistema_monitoreo.spawn_send_incidents_thread(mqtt_client_incident_sh_clone, rx);
+                let send_incidents_thread = sistema_monitoreo
+                    .spawn_send_incidents_thread(mqtt_client_incident_sh_clone, rx);
                 children.push(send_incidents_thread);
             }
             Err(e) => println!(
@@ -156,7 +160,13 @@ impl SistemaMonitoreo {
         let _ = eframe::run_native(
             "Sistema Monitoreo",
             Default::default(),
-            Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone(), tx_clone, rx_camera))),
+            Box::new(|cc| {
+                Box::new(UISistemaMonitoreo::new(
+                    cc.egui_ctx.clone(),
+                    tx_clone,
+                    rx_camera,
+                ))
+            }),
         );
 
         join_all_threads(children);
@@ -164,20 +174,21 @@ impl SistemaMonitoreo {
         sistema_monitoreo
     }
 
-    pub fn spawn_send_incidents_thread(&self,
+    pub fn spawn_send_incidents_thread(
+        &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: Receiver<Incident>,
-    ) -> JoinHandle<()> {                                                                   
+    ) -> JoinHandle<()> {
         thread::spawn(move || loop {
             while let Ok(msg) = rx.recv() {
-                publish_incident(msg, &mqtt_client);                        
+                publish_incident(msg, &mqtt_client);
             }
-        })                                                    
+        })
     }
 
     pub fn clone_ref(&self) -> Self {
         Self {
-            incidents: self.incidents.clone(),              
+            incidents: self.incidents.clone(),
             camera_tx: self.camera_tx.clone(),
         }
     }
@@ -186,7 +197,6 @@ impl SistemaMonitoreo {
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> JoinHandle<()> {
-
         let self_clone = self.clone_ref();
         thread::spawn(move || {
             self_clone.subscribe_to_topics(mqtt_client);

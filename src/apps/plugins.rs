@@ -1,26 +1,26 @@
-use super::vendor::{Image, Images, Place, Places, Style, Texture};
+use super::vendor::{Image, Images, Texture};
 use super::vendor::{Plugin, Position, Projector};
 use egui::{Color32, Painter, Response};
 
 use super::places;
 
 /// Creates a built-in `Places` plugin with some predefined places.
-pub fn places() -> impl Plugin {
-    Places::new(vec![
-        Place {
-            position: places::obelisco(),
-            label: "Wrocław Główny\ntrain station".to_owned(),
-            symbol: '📷',
-            style: Style::default(),
-        },
-        Place {
-            position: places::dworcowa_bus_stop(),
-            label: "Bus stop".to_owned(),
-            symbol: '🚌',
-            style: Style::default(),
-        },
-    ])
-}
+// pub fn places() -> impl Plugin {
+//     Places::new(vec![
+        // Place {
+        //     position: places::obelisco(),
+        //     label: "Wrocław Główny\ntrain station".to_owned(),
+        //     symbol: '📷',
+        //     style: Style::default(),
+        // },
+//         Place {
+//             position: places::dworcowa_bus_stop(),
+//             label: "Bus stop".to_owned(),
+//             symbol: '🚌',
+//             style: Style::default(),
+//         },
+//     ])
+// }
 
 /// Helper structure for the `Images` plugin.
 pub struct ImagesPluginData {
