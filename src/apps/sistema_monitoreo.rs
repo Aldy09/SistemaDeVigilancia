@@ -1,13 +1,7 @@
 use rustx::apps::camera::Camera;
-use rustx::apps::incident::Incident;
 use rustx::apps::ui_sistema_monitoreo::UISistemaMonitoreo;
 use rustx::messages::publish_message::PublishMessage;
-use std::cell::RefCell;
-use std::rc::Rc;
-//use std::sync::mpsc::RecvTimeoutError;
-//use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
-//use std::env::args;
 use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -332,8 +326,11 @@ fn main() {
         ),
     }
 
-    let hijo_ui = spawn_ui_thread(sistema_monitoreo_ui);
-    hijos.push(hijo_ui);
+    let _ = eframe::run_native(
+        "Sistema Monitoreo",
+        Default::default(),
+        Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
+    );
 
  
     join_all_threads(hijos);
@@ -381,7 +378,7 @@ fn spawn_ui_thread(sistema_monitoreo_ui: Arc<Mutex<SistemaMonitoreo>>) -> JoinHa
         // });
 
         // application.borrow().run(&[]);
-        eframe::run_native(
+        let _ = eframe::run_native(
             "Sistema Monitoreo",
             Default::default(),
             Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
