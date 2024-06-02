@@ -1,6 +1,6 @@
 use egui::{vec2, Align2, Color32, FontId, Painter, Response, Stroke};
 
-use crate::{Plugin, Position};
+use super::{Plugin, Position};
 
 /// Visual style of the place.
 #[derive(Clone)]
@@ -45,7 +45,7 @@ pub struct Place {
 }
 
 impl Place {
-    fn draw(&self, _response: &Response, painter: Painter, projector: &crate::Projector) {
+    fn draw(&self, _response: &Response, painter: Painter, projector: &super::Projector) {
         let screen_position = projector.project(self.position);
 
         let label = painter.layout_no_wrap(
@@ -102,7 +102,7 @@ impl Places {
 }
 
 impl Plugin for Places {
-    fn run(&mut self, response: &Response, painter: Painter, projector: &crate::Projector) {
+    fn run(&mut self, response: &Response, painter: Painter, projector: &super::Projector) {
         for place in &self.places {
             place.draw(response, painter.clone(), projector);
         }

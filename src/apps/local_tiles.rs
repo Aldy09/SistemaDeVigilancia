@@ -1,9 +1,9 @@
 use egui::ColorImage;
 use egui::Context;
-use walkers::sources::Attribution;
-use walkers::Texture;
-use walkers::TileId;
-use walkers::TilesManager;
+use super::sources::Attribution;
+use apps::vendor::Texture;
+use super::TileId;
+use super::TilesManager;
 
 pub struct LocalTiles {
     egui_ctx: Context,

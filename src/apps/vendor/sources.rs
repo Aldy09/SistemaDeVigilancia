@@ -1,6 +1,6 @@
 //! Some common HTTP tile sources. Make sure you follow terms of usage of the particular source.
 
-use crate::mercator::TileId;
+use super::mercator::TileId;
 
 #[derive(Clone)]
 pub struct Attribution {

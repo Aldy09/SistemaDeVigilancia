@@ -7,7 +7,7 @@ use super::center::Center;
 use super::mercator::{screen_to_position, Pixels, PixelsExt, TileId};
 use super::tiles;
 use super::zoom::{InvalidZoom, Zoom};
-use {Position, TilesManager};
+use super::{Position, TilesManager};
 // use [`Map::with_plugin`];
 pub trait Plugin {
     /// Function called at each frame.

@@ -14,11 +14,19 @@ rand = "0.8"
 des = "0.7"
 block-modes = "0.8"
 hex = "0.4"
-image = "0.25"
 egui = "0.27"
 egui_extras = { version = "0.27", features = ["svg"] }
 eframe = "0.27"
 egui-winit = "0.27"
+image = { version = "0.25", features = ["jpeg", "png"] }
+geo-types = { version = "0.7" }
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+] }
+futures = "0.3.28"
+reqwest-middleware = "0.2.4"
+tokio = { version = "1.28", features = ["macros"] }
+http-cache-reqwest = "0.13.0"
 
 [[bin]]
 name = "message_broker_client"

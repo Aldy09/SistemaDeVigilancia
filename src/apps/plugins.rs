@@ -1,10 +1,10 @@
 use egui::{Color32, Painter, Response};
-use walkers::{
-    extras::{Image, Images, Place, Places, Style, Texture},
+use super::extras::{Image, Images, Place, Places, Style, Texture}
+use super::{
     Plugin, Position, Projector,
 };
 
-use crate::places;
+use super::places;
 
 /// Creates a built-in `Places` plugin with some predefined places.
 pub fn places() -> impl Plugin {

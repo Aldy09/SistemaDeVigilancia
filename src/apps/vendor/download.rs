@@ -9,7 +9,10 @@ use image::ImageError;
 use reqwest::header::USER_AGENT;
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{io::http_client, mercator::TileId, sources::TileSource, tiles::Texture};
+use super::io::http_client;
+use super::mercator::TileId;
+use super::sources::TileSource;
+use super::tiles::Texture;
 
 pub use reqwest::header::HeaderValue;
 

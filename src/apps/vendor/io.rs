@@ -33,7 +33,7 @@ mod web {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use crate::HttpOptions;
+    use super::HttpOptions;
     use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
     use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 

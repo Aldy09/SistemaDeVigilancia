@@ -34,7 +34,7 @@ impl Image {
         self.angle = Rot2::from_angle(angle);
     }
 
-    pub fn draw(&self, _response: &Response, painter: Painter, projector: &crate::Projector) {
+    pub fn draw(&self, _response: &Response, painter: Painter, projector: &super::Projector) {
         let rect = Rect::from_center_size(
             projector.project(self.position).to_pos2(),
             self.texture.size() * self.scale,
@@ -60,7 +60,7 @@ impl Images {
 }
 
 impl Plugin for Images {
-    fn run(&mut self, response: &Response, painter: Painter, projector: &crate::Projector) {
+    fn run(&mut self, response: &Response, painter: Painter, projector: &super::Projector) {
         for image in &self.images {
             image.draw(response, painter.clone(), projector);
         }
