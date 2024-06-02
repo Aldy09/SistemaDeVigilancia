@@ -344,7 +344,10 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 io::stdin()
                     .read_line(&mut read_longitude)
                     .expect("Error al leer la entrada");
-                let longitude: f32 = read_longitude.trim().parse().expect("Coordenada Y no válida");
+                let longitude: f32 = read_longitude
+                    .trim()
+                    .parse()
+                    .expect("Coordenada Y no válida");
 
                 print!("Ingrese el rango: ");
                 let _ = io::stdout().flush();

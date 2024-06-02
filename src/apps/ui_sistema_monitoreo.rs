@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::apps::incident::Incident;
 
+use super::camera::Camera;
 use super::places;
 use super::plugins::ImagesPluginData;
 use super::vendor::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
-use egui::Context;
 use egui::menu;
-use std::sync::mpsc::{self, Sender};
-
+use egui::Context;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
@@ -102,10 +103,12 @@ pub struct UISistemaMonitoreo {
     latitude: String,
     longitude: String,
     publish_incident_tx: Sender<Incident>,
+    camera_rx: Receiver<Camera>,
+    
 }
 
 impl UISistemaMonitoreo {
-    pub fn new(egui_ctx: Context, tx: Sender<Incident>) -> Self {
+    pub fn new(egui_ctx: Context, tx: Sender<Incident>, camera_rx: Receiver<Camera>) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
         // Data for the `images` plugin showcase.
@@ -120,11 +123,12 @@ impl UISistemaMonitoreo {
             latitude: String::new(),
             longitude: String::new(),
             publish_incident_tx: tx,
+            camera_rx,
         }
     }
-    fn send_incident(&self,incident: Incident) {
+    fn send_incident(&self, incident: Incident) {
         println!("Enviando incidente: {:?}", incident);
-         let _ = self.publish_incident_tx.send(incident);
+        let _ = self.publish_incident_tx.send(incident);
     }
 }
 impl eframe::App for UISistemaMonitoreo {
@@ -144,8 +148,7 @@ impl eframe::App for UISistemaMonitoreo {
                     .get_mut(&self.selected_provider)
                     .unwrap()
                     .as_mut();
-                let attribution = tiles.attribution();
-
+                
                 let map = Map::new(Some(tiles), &mut self.map_memory, my_position)
                     .with_plugin(super::plugins::places())
                     .with_plugin(super::plugins::images(&mut self.images_plugin_data))
@@ -180,10 +183,16 @@ impl eframe::App for UISistemaMonitoreo {
                                     ui.add_space(5.0);
                                     ui.horizontal(|ui| {
                                         ui.label("Latitud:");
-                                        let latitude_input = ui.add_sized([100.0, 20.0], egui::TextEdit::singleline(&mut self.latitude));
+                                        let _latitude_input = ui.add_sized(
+                                            [100.0, 20.0],
+                                            egui::TextEdit::singleline(&mut self.latitude),
+                                        );
                                         ui.label("Longitud:");
-                                        let longitude_input = ui.add_sized([100.0, 20.0], egui::TextEdit::singleline(&mut self.longitude));
-                                        
+                                        let _longitude_input = ui.add_sized(
+                                            [100.0, 20.0],
+                                            egui::TextEdit::singleline(&mut self.longitude),
+                                        );
+
                                         if ui.button("OK").clicked() {
                                             let latitude_text = self.latitude.to_string();
                                             let longitude_text = self.longitude.to_string();
@@ -192,7 +201,8 @@ impl eframe::App for UISistemaMonitoreo {
                                             println!("Longitud: {}", longitude_text);
 
                                             let latitude = latitude_text.parse::<f32>().unwrap();
-                                            let longitude: f32 = longitude_text.parse::<f32>().unwrap();
+                                            let longitude: f32 =
+                                                longitude_text.parse::<f32>().unwrap();
                                             let incident = Incident::new(0, latitude, longitude);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;

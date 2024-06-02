@@ -177,7 +177,7 @@ mod test {
         assert_eq!(camera_reconstruida, camera);
     }
     #[test]
-    fn text_will_register(){
+    fn text_will_register() {
         let camera = Camera::new(12, 3.0, 4.0, 5, vec![6]);
         assert_eq!(camera.will_register((3.0, 4.0)), true);
         assert_eq!(camera.will_register((3.0, 4.1)), true);
