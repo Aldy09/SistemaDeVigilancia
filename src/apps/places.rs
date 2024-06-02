@@ -1,6 +1,6 @@
 //! Few common places in the city of Wrocław, used in the example app.
 
-use walkers::Position;
+use super::vendor::Position;
 
 
 pub fn obelisco() -> Position {

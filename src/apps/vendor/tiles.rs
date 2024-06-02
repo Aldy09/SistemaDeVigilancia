@@ -2,7 +2,7 @@ use egui::{pos2, Color32, Context, Mesh, Rect, Vec2};
 use egui::{ColorImage, TextureHandle};
 use image::ImageError;
 
-use crate::download::{download_continuously, HttpOptions};
+use download::{download_continuously, HttpOptions};
 use crate::io::Runtime;
 use crate::limited_map::LimitedMap;
 use crate::mercator::TileId;

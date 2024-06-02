@@ -1,5 +1,3 @@
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-#[error("invalid zoom level")]
 pub struct InvalidZoom;
 
 #[derive(Debug, Clone, Copy)]

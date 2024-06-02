@@ -1,5 +1,5 @@
-use crate::tiles::Texture;
-use crate::{Plugin, Position};
+use super::tiles::Texture;
+use super::{Plugin, Position};
 use egui::epaint::emath::Rot2;
 use egui::{Painter, Rect, Response, Vec2};
 

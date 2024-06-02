@@ -1,7 +1,7 @@
 use egui::{Response, Vec2};
 
-use map::AdjustedPosition;
-use mercator::{Pixels, Position};
+use super::map::AdjustedPosition;
+use super::mercator::{Pixels, Position};
 
 /// Position at the map's center. Initially, the map follows `my_position` argument which typically
 /// is meant to be fed by a GPS sensor or other geo-localization method. If user drags the map,
