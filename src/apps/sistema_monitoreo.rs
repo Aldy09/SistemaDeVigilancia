@@ -1,8 +1,8 @@
+use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use rustx::apps::camera::Camera;
 use rustx::apps::ui_sistema_monitoreo::UISistemaMonitoreo;
 use rustx::messages::publish_message::PublishMessage;
 use rustx::mqtt_client::MQTTClient;
-use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -332,7 +332,6 @@ fn main() {
         Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
     );
 
- 
     join_all_threads(hijos);
 }
 
@@ -383,9 +382,6 @@ fn spawn_ui_thread(sistema_monitoreo_ui: Arc<Mutex<SistemaMonitoreo>>) -> JoinHa
             Default::default(),
             Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
         );
-    
-
-
     })
 }
 
@@ -396,4 +392,3 @@ fn join_all_threads(hijos: Vec<JoinHandle<()>>) {
         }
     }
 }
-

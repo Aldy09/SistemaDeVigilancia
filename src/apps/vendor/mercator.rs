@@ -175,4 +175,3 @@ pub fn screen_to_position(pixels: Pixels, zoom: f64) -> Position {
 
     Position::from_lon_lat(lon, lat)
 }
-

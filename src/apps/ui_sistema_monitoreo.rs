@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
-use super::plugins::ImagesPluginData;
-use egui::Context;
-use super::vendor::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
-use egui::{menu, Button};
+use crate::apps::incident::Incident;
+
 use super::places;
+use super::plugins::ImagesPluginData;
+use super::vendor::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
+use egui::Context;
+use egui::{menu, Button};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
@@ -170,7 +172,6 @@ impl eframe::App for UISistemaMonitoreo {
                 // Add incident menu
                 egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
                     egui::menu::bar(ui, |ui| {
-
                         menu::bar(ui, |ui| {
                             ui.menu_button("Incidente", |ui| {
                                 if !self.incident_dialog_open {
@@ -179,15 +180,24 @@ impl eframe::App for UISistemaMonitoreo {
                                     }
                                 }
                                 if self.incident_dialog_open {
-                                    ui.add_space(5.0); 
+                                    ui.add_space(5.0);
                                     ui.horizontal(|ui| {
                                         ui.label("Latitud:");
                                         ui.text_edit_singleline(&mut self.latitude);
                                         ui.label("Longitud:");
                                         ui.text_edit_singleline(&mut self.longitude);
                                         if ui.button("OK").clicked() {
-                                            // Handle the entered latitude and longitude
-                                            // ...
+                                            let latitude_text = self.latitude.to_string();
+                                            let longitude_text = self.longitude.to_string();
+
+                                            println!("Latitud: {}", latitude_text);
+                                            println!("Longitud: {}", longitude_text);
+
+                                            let latitude = latitude_text.parse::<f32>().unwrap();
+                                            let longitude: f32 =
+                                                longitude_text.parse::<f32>().unwrap();
+                                            let incident = Incident::new(0, latitude, longitude);
+
                                             self.incident_dialog_open = false;
                                         }
                                     });
@@ -197,8 +207,6 @@ impl eframe::App for UISistemaMonitoreo {
                                 // Handle exit
                             }
                         });
-
-                        
                     });
                 });
             });

@@ -13,8 +13,8 @@ use crate::apps::camera_state::CameraState;
 /// - incs_being_managed: vector con los ids de los incidentes a los que la Camera está prestando atención, esto es, ids de los incidentes que ocasionan que esta Camera esté en estado activo.
 pub struct Camera {
     id: u8,
-    coord_x: u8,
-    coord_y: u8,
+    latitude: f32,
+    longitude: f32,
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
@@ -24,11 +24,11 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(id: u8, coord_x: u8, coord_y: u8, range: u8, border_cameras: Vec<u8>) -> Self {
+    pub fn new(id: u8, latitude: f32, longitude: f32, range: u8, border_cameras: Vec<u8>) -> Self {
         Self {
             id,
-            coord_x,
-            coord_y,
+            latitude,
+            longitude,
             state: CameraState::SavingMode,
             range,
             border_cameras,
@@ -41,8 +41,8 @@ impl Camera {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![];
         bytes.push(self.id);
-        bytes.extend_from_slice(&self.coord_x.to_be_bytes());
-        bytes.extend_from_slice(&self.coord_y.to_be_bytes());
+        bytes.extend_from_slice(&self.latitude.to_be_bytes());
+        bytes.extend_from_slice(&self.longitude.to_be_bytes());
         bytes.extend_from_slice(&self.state.to_byte());
         bytes.extend_from_slice(&self.range.to_be_bytes());
         bytes.extend_from_slice(&(self.border_cameras.len() as u8).to_be_bytes());
@@ -55,8 +55,8 @@ impl Camera {
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let id = bytes[0];
-        let coord_x = bytes[1];
-        let coord_y = bytes[2];
+        let latitude = f32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
+        let longitude = f32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
         let state = CameraState::from_byte([bytes[3]]);
         let range = bytes[4];
         let border_cameras_len = bytes[5];
@@ -67,8 +67,8 @@ impl Camera {
         let deleted = bytes[6 + border_cameras_len as usize] == 1;
         Self {
             id,
-            coord_x,
-            coord_y,
+            latitude,
+            longitude,
             state,
             range,
             border_cameras,
@@ -80,8 +80,8 @@ impl Camera {
 
     pub fn display(&self) {
         println!("ID: {}", self.id);
-        println!("Coordenada X: {}", self.coord_x);
-        println!("Coordenada Y: {}", self.coord_y);
+        println!("Latitude: {}", self.latitude);
+        println!("Longitude: {}", self.longitude);
         println!("Estado: {:?}", self.state);
         println!("Rango de alcance: {}", self.range);
         println!("Cámaras lindantes: {:?}\n", self.border_cameras);
@@ -89,11 +89,12 @@ impl Camera {
 
     /// Devuelve si el incidente de coordenadas `(inc_coord_x, inc_coord_y)`
     /// está en el rango de la cámara `Self`.
-    pub fn will_register(&self, (inc_coord_x, inc_coord_y): (u8, u8)) -> bool {
-        let is_in_x_range = self.coord_x + self.range >= inc_coord_x; // El range es un radio
-        let is_in_y_range = self.coord_y + self.range >= inc_coord_y;
-
-        is_in_x_range & is_in_y_range
+    pub fn will_register(&self, (latitude, longitude): (f32, f32)) -> bool {
+        //hacer que la funcion retorne true si el incidente esta en el rango de la camara
+        let x = self.latitude - latitude;
+        let y = self.longitude - longitude;
+        let distance = (x.powi(2) + y.powi(2)).sqrt();
+        distance <= self.range as f32
     }
 
     /// Modifica su estado al recibido por parámetro, y se marca un atributo
@@ -167,12 +168,26 @@ mod test {
 
     #[test]
     fn test_1_camera_to_y_from_bytes() {
-        let camera = Camera::new(12, 3, 4, 5, vec![6]);
+        let camera = Camera::new(12, 3.0, 4.0, 5, vec![6]);
 
         let bytes = camera.to_bytes();
 
         let camera_reconstruida = Camera::from_bytes(&bytes);
 
         assert_eq!(camera_reconstruida, camera);
+    }
+    #[test]
+    fn text_will_register(){
+        let camera = Camera::new(12, 3.0, 4.0, 5, vec![6]);
+        assert_eq!(camera.will_register((3.0, 4.0)), true);
+        assert_eq!(camera.will_register((3.0, 4.1)), true);
+        assert_eq!(camera.will_register((3.0, 4.2)), true);
+        assert_eq!(camera.will_register((3.0, 4.3)), true);
+        assert_eq!(camera.will_register((3.0, 4.4)), true);
+        assert_eq!(camera.will_register((3.0, 4.5)), false);
+        assert_eq!(camera.will_register((3.0, 4.6)), false);
+        assert_eq!(camera.will_register((3.0, 4.7)), false);
+        assert_eq!(camera.will_register((3.0, 4.8)), false);
+        assert_eq!(camera.will_register((3.0, 4.9)), false);
     }
 }

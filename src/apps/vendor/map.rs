@@ -2,7 +2,6 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use egui::{Mesh, Painter, Rect, Response, Sense, Ui, Vec2, Widget};
 
-
 use super::center::Center;
 use super::mercator::{screen_to_position, Pixels, PixelsExt, TileId};
 use super::tiles;

@@ -1,8 +1,6 @@
-use egui::{Color32, Painter, Response};
 use super::vendor::{Image, Images, Place, Places, Style, Texture};
-use super::vendor::{
-    Plugin, Position, Projector,
-};
+use super::vendor::{Plugin, Position, Projector};
+use egui::{Color32, Painter, Response};
 
 use super::places;
 
