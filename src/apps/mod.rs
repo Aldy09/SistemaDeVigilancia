@@ -1,4 +1,10 @@
 pub mod api_sistema_monitoreo;
+pub mod ui_sistema_monitoreo;
+pub mod vendor;
+pub mod places;
+pub mod plugins;
+pub mod windows;
+pub mod local_tiles;
 pub mod camera;
 pub mod camera_state;
 pub mod incident;
