@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::plugins::ImagesPluginData;
+use super::plugins::ImagesPluginData;
 use egui::Context;
-use walkers::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
+use super::vendor::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
 use egui::{menu, Button};
-use crate::apps::places::places;
+use super::places;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
@@ -33,7 +33,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
     providers.insert(
         Provider::OpenStreetMap,
         Box::new(Tiles::with_options(
-            walkers::sources::OpenStreetMap,
+            super::vendor::sources::OpenStreetMap,
             http_options(),
             egui_ctx.to_owned(),
         )),
@@ -42,7 +42,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
     providers.insert(
         Provider::Geoportal,
         Box::new(Tiles::with_options(
-            walkers::sources::Geoportal,
+            super::vendor::sources::Geoportal,
             http_options(),
             egui_ctx.to_owned(),
         )),
@@ -50,7 +50,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
 
     providers.insert(
         Provider::LocalTiles,
-        Box::new(local_tiles::LocalTiles::new(egui_ctx.to_owned())),
+        Box::new(super::local_tiles::LocalTiles::new(egui_ctx.to_owned())),
     );
 
     // Pass in a mapbox access token at compile time. May or may not be what you want to do,
@@ -62,8 +62,8 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
         providers.insert(
             Provider::MapboxStreets,
             Box::new(Tiles::with_options(
-                walkers::sources::Mapbox {
-                    style: walkers::sources::MapboxStyle::Streets,
+                super::vendor::sources::Mapbox {
+                    style: super::vendor::sources::MapboxStyle::Streets,
                     access_token: token.to_string(),
                     high_resolution: false,
                 },
@@ -74,8 +74,8 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
         providers.insert(
             Provider::MapboxSatellite,
             Box::new(Tiles::with_options(
-                walkers::sources::Mapbox {
-                    style: walkers::sources::MapboxStyle::Satellite,
+                super::vendor::sources::Mapbox {
+                    style: super::vendor::sources::MapboxStyle::Satellite,
                     access_token: token.to_string(),
                     high_resolution: true,
                 },
@@ -93,7 +93,7 @@ pub struct UISistemaMonitoreo {
     selected_provider: Provider,
     map_memory: MapMemory,
     images_plugin_data: ImagesPluginData,
-    click_watcher: plugins::ClickWatcher,
+    click_watcher: super::plugins::ClickWatcher,
     incident_dialog_open: bool,
     latitude: String,
     longitude: String,
@@ -144,9 +144,9 @@ impl eframe::App for UISistemaMonitoreo {
 
                 // Optionally, plugins can be attached.
                 let map = map
-                    .with_plugin(plugins::places())
-                    .with_plugin(plugins::images(&mut self.images_plugin_data))
-                    .with_plugin(plugins::CustomShapes {})
+                    .with_plugin(super::plugins::places())
+                    .with_plugin(super::plugins::images(&mut self.images_plugin_data))
+                    .with_plugin(super::plugins::CustomShapes {})
                     .with_plugin(&mut self.click_watcher);
 
                 // Draw the map widget.
@@ -154,7 +154,7 @@ impl eframe::App for UISistemaMonitoreo {
 
                 // Draw utility windows.
                 {
-                    use windows::*;
+                    use super::windows::*;
 
                     zoom(ui, &mut self.map_memory);
                     go_to_my_position(ui, &mut self.map_memory);

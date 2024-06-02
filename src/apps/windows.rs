@@ -1,9 +1,9 @@
-use crate::plugins::ImagesPluginData;
+use super::plugins::ImagesPluginData;
 
-use super::Provider;
+use super::ui_sistema_monitoreo::Provider;
 use egui::{Align2, RichText, Ui, Window};
-use super::sources::Attribution;
-use super::sources::MapMemory;
+use super::vendor::sources::Attribution;
+use super::vendor::MapMemory;
 
 pub fn acknowledge(ui: &Ui, attribution: Attribution) {
     Window::new("Acknowledge")

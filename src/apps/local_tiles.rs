@@ -1,9 +1,9 @@
 use egui::ColorImage;
 use egui::Context;
-use super::sources::Attribution;
-use apps::vendor::Texture;
-use super::TileId;
-use super::TilesManager;
+use super::vendor::sources::Attribution;
+use super::vendor::Texture;
+use super::vendor::TileId;
+use super::vendor::TilesManager;
 
 pub struct LocalTiles {
     egui_ctx: Context,

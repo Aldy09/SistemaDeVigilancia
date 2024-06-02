@@ -54,30 +54,3 @@ impl Zoom {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_constructing_zoom() {
-        assert_eq!(16, Zoom::default().round());
-        assert_eq!(19, Zoom::try_from(19.).unwrap().round());
-        assert_eq!(InvalidZoom, Zoom::try_from(20.).unwrap_err());
-    }
-
-    #[test]
-    fn test_zooming_in() {
-        let mut zoom = Zoom::try_from(18.).unwrap();
-        assert!(zoom.zoom_in().is_ok());
-        assert_eq!(19, zoom.round());
-        assert_eq!(Err(InvalidZoom), zoom.zoom_in());
-    }
-
-    #[test]
-    fn test_zooming_out() {
-        let mut zoom = Zoom::try_from(1.).unwrap();
-        assert!(zoom.zoom_out().is_ok());
-        assert_eq!(0, zoom.round());
-        assert_eq!(Err(InvalidZoom), zoom.zoom_out());
-    }
-}

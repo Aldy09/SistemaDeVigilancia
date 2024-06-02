@@ -33,9 +33,11 @@ mod web {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use super::HttpOptions;
+    
     use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
     use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+
+    use crate::apps::vendor::HttpOptions;
 
     pub struct Runtime {
         join_handle: Option<std::thread::JoinHandle<()>>,

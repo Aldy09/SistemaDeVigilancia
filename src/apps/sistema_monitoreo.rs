@@ -1,9 +1,6 @@
-extern crate gio;
-extern crate gtk;
-use gio::prelude::*;
-use gtk::prelude::*;
 use rustx::apps::camera::Camera;
 use rustx::apps::incident::Incident;
+use rustx::apps::ui_sistema_monitoreo::UISistemaMonitoreo;
 use rustx::messages::publish_message::PublishMessage;
 use std::cell::RefCell;
 use std::rc::Rc;
