@@ -105,12 +105,11 @@ pub struct UISistemaMonitoreo {
 }
 
 impl UISistemaMonitoreo {
-    pub fn new(egui_ctx: Context) -> Self {
+    pub fn new(egui_ctx: Context, tx: Sender<Incident>) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
-        let (tx, rx) = mpsc::channel::<Incident>();
         Self {
             providers: providers(egui_ctx.to_owned()),
             selected_provider: Provider::OpenStreetMap,

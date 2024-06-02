@@ -1,4 +1,3 @@
-use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use rustx::apps::camera::Camera;
 use rustx::apps::incident::Incident;
 use rustx::apps::ui_sistema_monitoreo::UISistemaMonitoreo;
@@ -10,155 +9,6 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle}; // Import the `SistemaMonitoreo` type
 
-// fn build_ui(application: &gtk::Application, sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
-//     let window = gtk::ApplicationWindow::new(application);
-//     window.set_title("Sistema de Monitoreo");
-//     window.set_default_size(800, 600);
-
-//     let menubar = gtk::MenuBar::new();
-
-//     let menu_incidents = gtk::Menu::new();
-//     let item_add = gtk::MenuItem::with_label("Alta de Incidente");
-//     let item_edit = gtk::MenuItem::with_label("Modificación de Incidente");
-//     let item_delete = gtk::MenuItem::with_label("Baja de Incidente");
-
-//     menu_incidents.append(&item_add);
-//     menu_incidents.append(&item_edit);
-//     menu_incidents.append(&item_delete);
-
-//     let sistema_monitoreo_clone = Arc::clone(sistema_monitoreo);
-//     item_add.connect_activate(move |_| {
-//         show_add_form(&sistema_monitoreo_clone);
-//     });
-
-//     item_edit.connect_activate(|_| {
-//         println!("Modificación de Incidente");
-//     });
-
-//     item_delete.connect_activate(|_| {
-//         println!("Baja de Incidente");
-//     });
-
-//     let item_quit = gtk::MenuItem::with_label("Salir");
-//     item_quit.connect_activate(|_| {
-//         gtk::main_quit();
-//     });
-
-//     let menu_app = gtk::Menu::new();
-//     menu_app.append(&item_quit);
-
-//     let item_incidents = gtk::MenuItem::with_label("Incidentes");
-//     let item_exit = gtk::MenuItem::with_label("Salir");
-
-//     item_incidents.set_submenu(Some(&menu_incidents));
-//     item_exit.connect_activate(|_| {
-//         gtk::main_quit();
-//     });
-
-//     menubar.append(&item_incidents);
-//     menubar.append(&item_exit);
-
-//     // Un layout para el menubar y la estructura de imágenes superpuestas
-//     let layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
-//     layout.pack_start(&menubar, false, false, 0);
-
-//     // Se crea un overlay para permitir superposición de imágenes
-//     let overlay = gtk::Overlay::new();
-//     layout.pack_start(&overlay, true, true, 0);
-
-//     // Imagen base
-//     let map_image = gtk::Image::from_file("mapa_temp.png");
-//     overlay.add(&map_image);
-
-//     // Imagen superpuesta: dron
-//     let superimposed_image = gtk::Image::from_file("dron_70.png");
-//     overlay.add_overlay(&superimposed_image);
-//     gtk::WidgetExt::set_halign(&superimposed_image, gtk::Align::Start);
-//     gtk::WidgetExt::set_valign(&superimposed_image, gtk::Align::Start);
-//     gtk::WidgetExt::set_margin_start(&superimposed_image, 100);
-//     gtk::WidgetExt::set_margin_top(&superimposed_image, 100);
-//     overlay.set_child_index(&superimposed_image, 0);
-
-//     let dron2 = gtk::Image::from_file("dron_70.png");
-//     overlay.add_overlay(&dron2.clone());
-//     gtk::WidgetExt::set_halign(&dron2, gtk::Align::Start);
-//     gtk::WidgetExt::set_valign(&dron2, gtk::Align::Start);
-//     gtk::WidgetExt::set_margin_start(&dron2, 200);
-//     gtk::WidgetExt::set_margin_top(&dron2, 300);
-//     overlay.set_child_index(&dron2, 0);
-
-//     // Imagen superpuesta: cámara
-//     let cam_img = gtk::Image::from_file("camara_50.png");
-//     overlay.add_overlay(&cam_img);
-//     gtk::WidgetExt::set_halign(&cam_img, gtk::Align::Start);
-//     gtk::WidgetExt::set_valign(&cam_img, gtk::Align::Start);
-//     gtk::WidgetExt::set_margin_start(&cam_img, 600);
-//     gtk::WidgetExt::set_margin_top(&cam_img, 400);
-//     overlay.set_child_index(&cam_img, 0);
-
-//     window.add(&layout);
-
-//     window.show_all();
-// }
-
-// fn show_add_form(sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>) {
-//     let dialog = gtk::Dialog::with_buttons(
-//         Some("Alta de Incidente"),
-//         None::<&gtk::Window>,
-//         gtk::DialogFlags::MODAL,
-//         &[
-//             ("Ok", gtk::ResponseType::Ok),
-//             ("Cancel", gtk::ResponseType::Cancel),
-//         ],
-//     );
-
-//     let content_area = dialog.get_content_area();
-//     content_area.set_spacing(5);
-
-//     // let name_label = gtk::Label::new(Some("Nombre del Incidente:"));
-//     // let name_entry = gtk::Entry::new();
-//     // content_area.add(&name_label);
-//     // content_area.add(&name_entry);
-
-//     let x_label = gtk::Label::new(Some("Coordenada X:"));
-//     let x_entry = gtk::Entry::new();
-//     content_area.add(&x_label);
-//     content_area.add(&x_entry);
-
-//     let y_label = gtk::Label::new(Some("Coordenada Y:"));
-//     let y_entry = gtk::Entry::new();
-//     content_area.add(&y_label);
-//     content_area.add(&y_entry);
-
-//     dialog.show_all();
-
-//     let sistema_monitoreo_clone = Arc::clone(sistema_monitoreo);
-
-//     dialog.connect_response(move |dialog, response_type| {
-//         if response_type == gtk::ResponseType::Ok {
-//             let x_coord = x_entry.get_text().to_string();
-//             let y_coord = y_entry.get_text().to_string();
-
-//             println!("Coordenada X: {}", x_coord);
-//             println!("Coordenada Y: {}", y_coord);
-
-//             let x = x_coord.parse::<u8>().unwrap();
-//             let y = y_coord.parse::<u8>().unwrap();
-
-//             if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo_clone.lock() {
-//                 let incident =
-//                     Incident::new(sistema_monitoreo_lock.generate_new_incident_id(), x, y);
-//                 sistema_monitoreo_lock.add_incident(incident);
-//                 println!(
-//                     "Incidente agregado: {:?}",
-//                     sistema_monitoreo_lock.get_incidents()
-//                 );
-//             }
-//         }
-
-//         dialog.close();
-//     });
-// }
 
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
@@ -290,7 +140,6 @@ fn publish_incident(
 fn main() {
     env_logger::init();
     let broker_addr = get_broker_address();
-    let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new()));
 
     let mut hijos: Vec<JoinHandle<()>> = vec![];
     let (tx, rx) = mpsc::channel::<Incident>();
@@ -319,7 +168,7 @@ fn main() {
     let _ = eframe::run_native(
         "Sistema Monitoreo",
         Default::default(),
-        Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
+        Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone(), tx))),
     );
 
     join_all_threads(hijos);
