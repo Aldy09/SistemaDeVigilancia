@@ -165,10 +165,12 @@ fn main() {
         ),
     }
 
+    let tx_clone = tx.clone();
+
     let _ = eframe::run_native(
         "Sistema Monitoreo",
         Default::default(),
-        Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone(), tx))),
+        Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone(), tx_clone))),
     );
 
     join_all_threads(hijos);
