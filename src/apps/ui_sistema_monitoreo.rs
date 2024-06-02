@@ -127,7 +127,6 @@ impl UISistemaMonitoreo {
          let _ = self.publish_incident_tx.send(incident);
     }
 }
-
 impl eframe::App for UISistemaMonitoreo {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let rimless = egui::Frame {
@@ -138,7 +137,6 @@ impl eframe::App for UISistemaMonitoreo {
         egui::CentralPanel::default()
             .frame(rimless)
             .show(ctx, |ui| {
-                // Typically this would be a GPS acquired position which is tracked by the map.
                 let my_position = places::obelisco();
 
                 let tiles = self
@@ -148,23 +146,16 @@ impl eframe::App for UISistemaMonitoreo {
                     .as_mut();
                 let attribution = tiles.attribution();
 
-                // In egui, widgets are constructed and consumed in each frame.
-                let map = Map::new(Some(tiles), &mut self.map_memory, my_position);
-
-                // Optionally, plugins can be attached.
-                let map = map
+                let map = Map::new(Some(tiles), &mut self.map_memory, my_position)
                     .with_plugin(super::plugins::places())
                     .with_plugin(super::plugins::images(&mut self.images_plugin_data))
                     .with_plugin(super::plugins::CustomShapes {})
                     .with_plugin(&mut self.click_watcher);
 
-                // Draw the map widget.
                 ui.add(map);
 
-                // Draw utility windows.
                 {
                     use super::windows::*;
-
                     zoom(ui, &mut self.map_memory);
                     go_to_my_position(ui, &mut self.map_memory);
                     self.click_watcher.show_position(ui);
@@ -176,7 +167,6 @@ impl eframe::App for UISistemaMonitoreo {
                     );
                 }
 
-                // Add incident menu
                 egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
                     egui::menu::bar(ui, |ui| {
                         menu::bar(ui, |ui| {
@@ -190,9 +180,10 @@ impl eframe::App for UISistemaMonitoreo {
                                     ui.add_space(5.0);
                                     ui.horizontal(|ui| {
                                         ui.label("Latitud:");
-                                        ui.text_edit_singleline(&mut self.latitude);
+                                        let latitude_input = ui.add_sized([100.0, 20.0], egui::TextEdit::singleline(&mut self.latitude));
                                         ui.label("Longitud:");
-                                        ui.text_edit_singleline(&mut self.longitude);
+                                        let longitude_input = ui.add_sized([100.0, 20.0], egui::TextEdit::singleline(&mut self.longitude));
+                                        
                                         if ui.button("OK").clicked() {
                                             let latitude_text = self.latitude.to_string();
                                             let longitude_text = self.longitude.to_string();
@@ -201,10 +192,8 @@ impl eframe::App for UISistemaMonitoreo {
                                             println!("Longitud: {}", longitude_text);
 
                                             let latitude = latitude_text.parse::<f32>().unwrap();
-                                            let longitude: f32 =
-                                                longitude_text.parse::<f32>().unwrap();
+                                            let longitude: f32 = longitude_text.parse::<f32>().unwrap();
                                             let incident = Incident::new(0, latitude, longitude);
-                                            // enviar el incidente a un channel
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
@@ -219,8 +208,4 @@ impl eframe::App for UISistemaMonitoreo {
                 });
             });
     }
-
-    
 }
-
-
