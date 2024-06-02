@@ -6,7 +6,9 @@ use super::places;
 use super::plugins::ImagesPluginData;
 use super::vendor::{HttpOptions, Map, MapMemory, Tiles, TilesManager};
 use egui::Context;
-use egui::{menu, Button};
+use egui::menu;
+use std::sync::mpsc::{self, Sender};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
@@ -99,6 +101,7 @@ pub struct UISistemaMonitoreo {
     incident_dialog_open: bool,
     latitude: String,
     longitude: String,
+    publish_incident_tx: Sender<Incident>,
 }
 
 impl UISistemaMonitoreo {
@@ -107,7 +110,7 @@ impl UISistemaMonitoreo {
 
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
-
+        let (tx, rx) = mpsc::channel::<Incident>();
         Self {
             providers: providers(egui_ctx.to_owned()),
             selected_provider: Provider::OpenStreetMap,
@@ -117,7 +120,12 @@ impl UISistemaMonitoreo {
             incident_dialog_open: false,
             latitude: String::new(),
             longitude: String::new(),
+            publish_incident_tx: tx,
         }
+    }
+    fn send_incident(&self,incident: Incident) {
+        println!("Enviando incidente: {:?}", incident);
+         let _ = self.publish_incident_tx.send(incident);
     }
 }
 
@@ -197,7 +205,8 @@ impl eframe::App for UISistemaMonitoreo {
                                             let longitude: f32 =
                                                 longitude_text.parse::<f32>().unwrap();
                                             let incident = Incident::new(0, latitude, longitude);
-
+                                            // enviar el incidente a un channel
+                                            self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
                                     });
@@ -211,4 +220,8 @@ impl eframe::App for UISistemaMonitoreo {
                 });
             });
     }
+
+    
 }
+
+

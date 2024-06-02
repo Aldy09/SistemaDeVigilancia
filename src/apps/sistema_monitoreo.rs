@@ -1,10 +1,12 @@
 use rustx::apps::api_sistema_monitoreo::SistemaMonitoreo;
 use rustx::apps::camera::Camera;
+use rustx::apps::incident::Incident;
 use rustx::apps::ui_sistema_monitoreo::UISistemaMonitoreo;
 use rustx::messages::publish_message::PublishMessage;
 use rustx::mqtt_client::MQTTClient;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle}; // Import the `SistemaMonitoreo` type
 
@@ -264,47 +266,35 @@ fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
 }
 
 fn publish_incident(
-    sistema_monitoreo: &Arc<Mutex<SistemaMonitoreo>>,
+    incident: Incident,
     mqtt_client: &Arc<Mutex<MQTTClient>>,
 ) {
-    if let Ok(mut sistema_monitoreo_lock) = sistema_monitoreo.lock() {
-        if let Ok(mut incidents) = sistema_monitoreo_lock.get_incidents().lock() {
-            if !incidents.is_empty() {
-                for incident in incidents.iter_mut() {
-                    if !incident.sent {
-                        println!("Sistema-Monitoreo: Publicando incidente.");
+    println!("Sistema-Monitoreo: Publicando incidente.");
 
-                        // Hago el publish
-                        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-                            let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
-                            match res {
-                                Ok(_) => {
-                                    println!("Sistema-Monitoreo: Ha hecho un publish");
-
-                                    //sistema_monitoreo_lock.mark_incident_as_sent(incident.id);
-                                    incident.sent = true;
-                                }
-                                Err(e) => {
-                                    println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
-                                }
-                            };
-                        }
-                    }
-                }
-            };
-
-            //sistema_monitoreo_lock.get_incidents();
-        }
+    // Hago el publish
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
+        match res {
+            Ok(_) => {
+                println!("Sistema-Monitoreo: Ha hecho un publish");
+            }
+            Err(e) => {
+                println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
+            }
+        };
     }
 }
+
+    
 
 fn main() {
     env_logger::init();
     let broker_addr = get_broker_address();
     let sistema_monitoreo = Arc::new(Mutex::new(SistemaMonitoreo::new()));
-    let sistema_monitoreo_ui = Arc::clone(&sistema_monitoreo);
 
     let mut hijos: Vec<JoinHandle<()>> = vec![];
+    let (tx, rx) = mpsc::channel::<Incident>();
+
 
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(mqtt_client) => {
@@ -317,7 +307,7 @@ fn main() {
             let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh_clone);
 
             let send_incidents_thread =
-                spawn_send_incidents_thread(sistema_monitoreo, mqtt_client_incident_sh_clone);
+                spawn_send_incidents_thread(mqtt_client_incident_sh_clone, rx);
             hijos.push(send_incidents_thread);
         }
         Err(e) => println!(
@@ -352,36 +342,13 @@ fn spawn_subscribe_to_topics_thread(mqtt_client: Arc<Mutex<MQTTClient>>) -> Join
 }
 
 fn spawn_send_incidents_thread(
-    sistema_monitoreo: Arc<Mutex<SistemaMonitoreo>>,
     mqtt_client: Arc<Mutex<MQTTClient>>,
+    rx: Receiver<Incident>
 ) -> JoinHandle<()> {
     thread::spawn(move || loop {
-        publish_incident(&sistema_monitoreo, &mqtt_client);
-        thread::sleep(std::time::Duration::from_secs(5));
-    })
-}
-fn spawn_ui_thread(sistema_monitoreo_ui: Arc<Mutex<SistemaMonitoreo>>) -> JoinHandle<()> {
-    thread::spawn(move || {
-        // let application = Rc::new(RefCell::new(
-        //     gtk::Application::new(
-        //         Some("fi.uba.sistemamonitoreo"),
-        //         gio::ApplicationFlags::FLAGS_NONE,
-        //     )
-        //     .expect("Fallo en iniciar la aplicacion"),
-        // ));
-
-        // let application_clone = Rc::clone(&application);
-
-        // application.borrow_mut().connect_activate(move |_| {
-        //     build_ui(&application_clone.borrow(), &sistema_monitoreo_ui)
-        // });
-
-        // application.borrow().run(&[]);
-        let _ = eframe::run_native(
-            "Sistema Monitoreo",
-            Default::default(),
-            Box::new(|cc| Box::new(UISistemaMonitoreo::new(cc.egui_ctx.clone()))),
-        );
+        while let Ok(msg) = rx.recv() {
+            publish_incident(msg, &mqtt_client);
+        }
     })
 }
 
