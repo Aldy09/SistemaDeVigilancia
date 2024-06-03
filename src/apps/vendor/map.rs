@@ -13,22 +13,6 @@ pub trait Plugin {
     fn run(&mut self, response: &Response, painter: Painter, projector: &Projector);
 }
 
-/// The actual map widget. Instances are to be created on each frame, as all necessary state is
-/// stored in [`TilesManager`] and [`MapMemory`].
-///
-/// # Examples
-///
-/// ```
-/// # use walkers::{Map, Tiles, MapMemory, Position};
-///
-/// fn update(ui: &mut egui::Ui, tiles: &mut Tiles, map_memory: &mut MapMemory) {
-///     ui.add(Map::new(
-///         Some(tiles), // `None`, if you don't want to show any tiles.
-///         map_memory,
-///         Position::from_lon_lat(17.03664, 51.09916)
-///     ));
-/// }
-/// ```
 pub struct Map<'a, 'b, 'c> {
     tiles: Option<&'b mut dyn TilesManager>,
     memory: &'a mut MapMemory,

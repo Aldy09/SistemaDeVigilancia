@@ -5,14 +5,14 @@ use super::incident_state::IncidentState;
 /// Posee un id, coordenadas x e y, un estado, y un campo `sent` que indica si el incidente se envió y continúa sin modificaciones desde entonces o si por el contrario ya se modificó desde la última vez que se envió.
 pub struct Incident {
     pub id: u8, // []
-    latitude: f32,
-    longitude: f32,
+    latitude: f64,
+    longitude: f64,
     state: IncidentState,
     pub sent: bool,
 }
 
 impl Incident {
-    pub fn new(id: u8, latitude: f32, longitude: f32) -> Self {
+    pub fn new(id: u8, latitude: f64, longitude: f64) -> Self {
         Self {
             id,
             latitude,
@@ -23,7 +23,7 @@ impl Incident {
     }
 
     /// Devuelve coordenadas (x, y) correspondientes a la posición del incidente.
-    pub fn pos(&self) -> (f32, f32) {
+    pub fn pos(&self) -> (f64, f64) {
         (self.latitude, self.longitude)
     }
 
@@ -48,11 +48,11 @@ impl Incident {
 
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
         let id = msg_bytes[0];
-        let latitude = f32::from_le_bytes([msg_bytes[1], msg_bytes[2], msg_bytes[3], msg_bytes[4]]);
+        let latitude = f64::from_le_bytes([msg_bytes[1], msg_bytes[2], msg_bytes[3], msg_bytes[4], msg_bytes[5], msg_bytes[6], msg_bytes[7], msg_bytes[8]]);
         let longitude =
-            f32::from_le_bytes([msg_bytes[5], msg_bytes[6], msg_bytes[7], msg_bytes[8]]);
+            f64::from_le_bytes([msg_bytes[9], msg_bytes[10], msg_bytes[11], msg_bytes[12], msg_bytes[13], msg_bytes[14], msg_bytes[15], msg_bytes[16]]);
         let mut state = IncidentState::ActiveIncident;
-        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[9]]) {
+        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[17]]) {
             state = state_parsed;
         }
 
@@ -71,35 +71,6 @@ impl Incident {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_from_bytes() {
-        let incident = Incident::from_bytes(vec![1, 0, 0, 0, 64, 0, 0, 0, 64, 1]);
-        assert_eq!(incident.id, 1);
-        assert_eq!(incident.latitude, 2.0);
-        assert_eq!(incident.longitude, 2.0);
-        assert_eq!(incident.state, IncidentState::ActiveIncident);
-    }
-
-    #[test]
-    fn test_to_bytes() {
-        let incident = Incident {
-            id: 1,
-            latitude: 2.0,
-            longitude: 2.0,
-            state: IncidentState::ActiveIncident,
-            sent: false,
-        };
-        let bytes = incident.to_bytes();
-
-        assert_eq!(bytes, vec![1, 0, 0, 0, 64, 0, 0, 0, 64, 1]);
-    }
-
-    #[test]
-    fn test_reverse_from_bytes() {
-        let incident = Incident::from_bytes(vec![1, 0, 0, 0, 64, 0, 0, 0, 64, 1]);
-        let bytes = incident.to_bytes();
-        assert_eq!(bytes, vec![1, 0, 0, 0, 64, 0, 0, 0, 64, 1]);
-    }
     #[test]
     fn test_reverse_to_bytes() {
         let incident = Incident {

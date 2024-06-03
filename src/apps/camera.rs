@@ -13,8 +13,8 @@ use crate::apps::camera_state::CameraState;
 /// - incs_being_managed: vector con los ids de los incidentes a los que la Camera está prestando atención, esto es, ids de los incidentes que ocasionan que esta Camera esté en estado activo.
 pub struct Camera {
     id: u8,
-    latitude: f32,
-    longitude: f32,
+    latitude: f64,
+    longitude: f64,
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
@@ -24,7 +24,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(id: u8, latitude: f32, longitude: f32, range: u8, border_cameras: Vec<u8>) -> Self {
+    pub fn new(id: u8, latitude: f64, longitude: f64, range: u8, border_cameras: Vec<u8>) -> Self {
         Self {
             id,
             latitude,
@@ -55,16 +55,16 @@ impl Camera {
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let id = bytes[0];
-        let latitude = f32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
-        let longitude = f32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]);
-        let state = CameraState::from_byte([bytes[9]]);
-        let range = bytes[10];
-        let border_cameras_len = bytes[11];
+        let latitude = f64::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4],bytes[5], bytes[6], bytes[7], bytes[8]]);
+        let longitude = f64::from_be_bytes([bytes[9], bytes[10], bytes[11], bytes[12],bytes[13], bytes[14], bytes[15], bytes[16]]);
+        let state = CameraState::from_byte([bytes[17]]);
+        let range = bytes[18];
+        let border_cameras_len = bytes[19];
         let mut border_cameras = vec![];
         for i in 0..border_cameras_len {
-            border_cameras.push(bytes[12 + i as usize]);
+            border_cameras.push(bytes[20 + i as usize]);
         }
-        let deleted = bytes[12 + border_cameras_len as usize] == 1;
+        let deleted = bytes[20 + border_cameras_len as usize] == 1;
         Self {
             id,
             latitude,
@@ -89,12 +89,12 @@ impl Camera {
 
     /// Devuelve si el incidente de coordenadas `(inc_coord_x, inc_coord_y)`
     /// está en el rango de la cámara `Self`.
-    pub fn will_register(&self, (latitude, longitude): (f32, f32)) -> bool {
+    pub fn will_register(&self, (latitude, longitude): (f64, f64)) -> bool {
         //hacer que la funcion retorne true si el incidente esta en el rango de la camara
         let x = self.latitude - latitude;
         let y = self.longitude - longitude;
         let distance = (x.powi(2) + y.powi(2)).sqrt();
-        distance <= self.range as f32
+        distance <= self.range as f64
     }
 
     /// Modifica su estado al recibido por parámetro, y se marca un atributo
@@ -161,12 +161,12 @@ impl Camera {
     }
 
     /// Devuelve la latitud de la cámara.
-    pub fn get_latitude(&self) -> f32 {
+    pub fn get_latitude(&self) -> f64 {
         self.latitude
     }
 
     /// Devuelve la longitud de la cámara.
-    pub fn get_longitude(&self) -> f32 {
+    pub fn get_longitude(&self) -> f64 {
         self.longitude
     }
 

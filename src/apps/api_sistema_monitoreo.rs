@@ -261,7 +261,6 @@ impl SistemaMonitoreo {
         let camera_recibida = Camera::from_bytes(&msg.get_payload());
         println!("Cliente: Recibo cámara: {:?}", camera_recibida);
         let res_send = self.camera_tx.send(camera_recibida);
-        println!("ENVIANDO POR TX LA CAMARA EN API SISTEMA MONITOREO");
         
         if let Err(e) = res_send {
             println!("Error al enviar la cámara: {:?}", e);

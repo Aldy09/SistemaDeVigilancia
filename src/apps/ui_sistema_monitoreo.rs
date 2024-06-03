@@ -141,19 +141,10 @@ impl eframe::App for UISistemaMonitoreo {
             ..Default::default()
         };
 
-        //while let Ok(camera) = self.camera_rx.try_recv() {}
-
         egui::CentralPanel::default().show(ctx, |_ui| {
-            println!("ACA ESTOY EN EL TRY RECV");
             if let Ok(camera) = self.camera_rx.try_recv() {
+                let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
 
-                println!("CAMARA RECIBIDA {:?}", camera);
-
-                let (latitude, longitude) =
-                    (camera.get_latitude() as f64, camera.get_longitude() as f64);
-
-                println!("LATITUD DE LA CAMARA {}", latitude);
-                println!("LONGITUD DE LA CAMARA {}", longitude);
                 let camera_id = camera.get_id();
                 let new_place = Place {
                     position: Position::from_lon_lat(longitude, latitude),
@@ -164,8 +155,6 @@ impl eframe::App for UISistemaMonitoreo {
 
                 self.places.add_place(new_place);
             }
-
-            //ui.label(&self.message);
         });
 
         egui::CentralPanel::default()
@@ -178,8 +167,6 @@ impl eframe::App for UISistemaMonitoreo {
                     .get_mut(&self.selected_provider)
                     .unwrap()
                     .as_mut();
-                
-                println!("HOLA DESDE EL MAP Y SELF PLACES VALE: {:?}", self.places);
 
                 let map = Map::new(Some(tiles), &mut self.map_memory, my_position)
                     .with_plugin(self.places.clone())
@@ -206,10 +193,10 @@ impl eframe::App for UISistemaMonitoreo {
                     egui::menu::bar(ui, |ui| {
                         menu::bar(ui, |ui| {
                             ui.menu_button("Incidente", |ui| {
-                                if !self.incident_dialog_open {
-                                    if ui.button("Alta Incidente").clicked() {
-                                        self.incident_dialog_open = true;
-                                    }
+                                if !self.incident_dialog_open
+                                    && ui.button("Alta Incidente").clicked()
+                                {
+                                    self.incident_dialog_open = true;
                                 }
                                 if self.incident_dialog_open {
                                     ui.add_space(5.0);
@@ -232,9 +219,9 @@ impl eframe::App for UISistemaMonitoreo {
                                             println!("Latitud: {}", latitude_text);
                                             println!("Longitud: {}", longitude_text);
 
-                                            let latitude = latitude_text.parse::<f32>().unwrap();
-                                            let longitude: f32 =
-                                                longitude_text.parse::<f32>().unwrap();
+                                            let latitude = latitude_text.parse::<f64>().unwrap();
+                                            let longitude: f64 =
+                                                longitude_text.parse::<f64>().unwrap();
                                             let incident = Incident::new(0, latitude, longitude);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;

@@ -336,7 +336,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 io::stdin()
                     .read_line(&mut read_latitude)
                     .expect("Error al leer la entrada");
-                let latitude: f32 = read_latitude.trim().parse().expect("Latitud no válida");
+                let latitude: f64 = read_latitude.trim().parse().expect("Latitud no válida");
 
                 print!("Ingrese Longitud: ");
                 let _ = io::stdout().flush();
@@ -344,7 +344,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                 io::stdin()
                     .read_line(&mut read_longitude)
                     .expect("Error al leer la entrada");
-                let longitude: f32 = read_longitude
+                let longitude: f64 = read_longitude
                     .trim()
                     .parse()
                     .expect("Coordenada Y no válida");

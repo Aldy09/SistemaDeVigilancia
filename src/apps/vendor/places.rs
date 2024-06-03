@@ -120,3 +120,9 @@ impl Plugin for Places {
     }
 
 }
+
+impl Default for Places{
+    fn default() -> Self {
+        Self::new()
+    }
+}
