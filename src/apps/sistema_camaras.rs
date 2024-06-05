@@ -26,13 +26,13 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Arc<Mutex<Camera>>> {
         let parts: Vec<&str> = line.split(':').collect();
         if parts.len() == 5 {
             let id: u8 = parts[0].trim().parse().expect("Id no válido");
-            let coord_x = parts[1].trim().parse().expect("Coordenada X no válida");
-            let coord_y = parts[2].trim().parse().expect("Coordenada Y no válida");
+            let latitude = parts[1].trim().parse().expect("Latitud no válida");
+            let longitude = parts[2].trim().parse().expect("Longitud no válida");
             let range = parts[3].trim().parse().expect("Rango no válido");
             let border_cam: u8 = parts[4].trim().parse().expect("Id no válido");
             let vec = vec![border_cam];
 
-            let camera = Camera::new(id, coord_x, coord_y, range, vec);
+            let camera = Camera::new(id, latitude, longitude, range, vec);
             let shareable_camera = Arc::new(Mutex::new(camera));
             cameras.insert(id, shareable_camera);
         }
@@ -200,10 +200,10 @@ fn main() {
 fn manage_incidents(cameras_cl: &mut ShCamerasType) {
     // probando, unos incidentes hardcodeados
     let mut read_incs: Vec<Incident> = vec![]; // (a mí no me digan, yo quería programar en castellano, xd)
-    let inc1 = Incident::new(1, 1, 1);
-    let inc2 = Incident::new(2, 5, 5);
-    let inc3 = Incident::new(3, 15, 15);
-    let mut inc1_resuelto = Incident::new(1, 1, 1);
+    let inc1 = Incident::new(1, 1.0, 1.0);
+    let inc2 = Incident::new(2, 5.0, 5.0);
+    let inc3 = Incident::new(3, 15.0, 15.0);
+    let mut inc1_resuelto = Incident::new(1, 1.0, 1.0);
     inc1_resuelto.set_resolved();
     read_incs.push(inc1);
     read_incs.push(inc2);
@@ -330,21 +330,24 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                     .expect("Error al leer la entrada");
                 let id: u8 = read_id.trim().parse().expect("Coordenada X no válida");
 
-                print!("Ingrese la coordenada X: ");
+                print!("Ingrese Latitud: ");
                 let _ = io::stdout().flush();
-                let mut read_coord_x = String::new();
+                let mut read_latitude = String::new();
                 io::stdin()
-                    .read_line(&mut read_coord_x)
+                    .read_line(&mut read_latitude)
                     .expect("Error al leer la entrada");
-                let coord_x: u8 = read_coord_x.trim().parse().expect("Coordenada X no válida");
+                let latitude: f64 = read_latitude.trim().parse().expect("Latitud no válida");
 
-                print!("Ingrese la coordenada Y: ");
+                print!("Ingrese Longitud: ");
                 let _ = io::stdout().flush();
-                let mut read_coord_y = String::new();
+                let mut read_longitude = String::new();
                 io::stdin()
-                    .read_line(&mut read_coord_y)
+                    .read_line(&mut read_longitude)
                     .expect("Error al leer la entrada");
-                let coord_y: u8 = read_coord_y.trim().parse().expect("Coordenada Y no válida");
+                let longitude: f64 = read_longitude
+                    .trim()
+                    .parse()
+                    .expect("Coordenada Y no válida");
 
                 print!("Ingrese el rango: ");
                 let _ = io::stdout().flush();
@@ -362,7 +365,7 @@ fn abm_cameras(cameras: &mut ShCamerasType) {
                     .expect("Error al leer la entrada");
                 let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
 
-                let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
+                let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
                 let shareable_camera = Arc::new(Mutex::new(new_camera));
                 match cameras.lock() {
                     Ok(mut cams) => {

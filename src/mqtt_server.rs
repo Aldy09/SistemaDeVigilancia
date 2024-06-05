@@ -456,7 +456,7 @@ impl MQTTServer {
                 let stream = user.get_stream();
                 let topics = user.get_topics();
                 // println!("TOPICS: {:?}",topics);
-                let hashmap_messages = user.get_messages();
+                let hashmap_messages = user.get_hashmap_messages();
                 if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
                     for topic in topics {
                         // trae 1 cola de un topic y escribe los mensajes en el stream
