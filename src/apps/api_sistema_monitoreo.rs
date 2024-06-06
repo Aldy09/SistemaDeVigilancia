@@ -24,109 +24,6 @@ pub struct SistemaMonitoreo {
     pub dron_tx: Sender<DronCurrentInfo>,
 }
 
-fn get_broker_address() -> SocketAddr {
-    let (ip, port) = load_ip_and_port().unwrap_or_else(|e| {
-        println!("Error al cargar el puerto: {:?}", e);
-        std::process::exit(1);
-    });
-
-    let broker_addr: String = format!("{}:{}", ip, port);
-    broker_addr.parse().expect("Dirección no válida")
-}
-
-fn join_all_threads(children: Vec<JoinHandle<()>>) {
-    for hijo in children {
-        if let Err(e) = hijo.join() {
-            eprintln!("Error al esperar el hilo: {:?}", e);
-        }
-    }
-}
-
-/// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
-pub fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
-    let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        return Err(Box::new(std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        "Cantidad de argumentos inválido. Debe ingresar: la dirección IP del sistema monitoreo y 
-        el puerto en el que desea correr el servidor.",
-    )));
-    }
-    let ip = &argv[1];
-    let port = match argv[2].parse::<u16>() {
-        Ok(port) => port,
-        Err(_) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "El puerto proporcionado no es válido",
-            )))
-        }
-    };
-
-    Ok((ip.to_string(), port))
-}
-
-pub fn establish_mqtt_broker_connection(
-    broker_addr: &SocketAddr,
-) -> Result<MQTTClient, Box<dyn std::error::Error>> {
-    let client_id = "Sistema-Monitoreo";
-    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
-    match mqtt_client_res {
-        Ok(mqtt_client) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(mqtt_client)
-        }
-        Err(e) => {
-            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
-            Err(e.into())
-        }
-    }
-}
-
-pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
-    match e.kind() {
-        std::io::ErrorKind::TimedOut => true,
-        std::io::ErrorKind::NotConnected => {
-            println!("Cliente: No hay más PublishMessage's por leer.");
-            false
-        }
-        _ => {
-            println!("Cliente: error al leer los publish messages recibidos.");
-            true
-        }
-    }
-    /*/*if e == RecvTimeoutError::Timeout {
-    }*/
-
-    if e == RecvTimeoutError::Disconnected {
-        println!("Cliente: No hay más PublishMessage's por leer.");
-        break;
-    }*/
-}
-
-pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
-    if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        mqtt_client.finalizar();
-    }
-}
-
-pub fn publish_incident(incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-    println!("Sistema-Monitoreo: Publicando incidente.");
-
-    // Hago el publish
-    if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
-        match res {
-            Ok(_) => {
-                println!("Sistema-Monitoreo: Ha hecho un publish");
-            }
-            Err(e) => {
-                println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
-            }
-        };
-    }
-}
-
 impl SistemaMonitoreo {
     pub fn new() -> Self {
         let (tx_camera, rx_camera) = channel::unbounded();
@@ -319,6 +216,109 @@ impl SistemaMonitoreo {
             new_inc_id = (incidents.len() + 1) as u8;
         }
         new_inc_id
+    }
+}
+
+fn get_broker_address() -> SocketAddr {
+    let (ip, port) = load_ip_and_port().unwrap_or_else(|e| {
+        println!("Error al cargar el puerto: {:?}", e);
+        std::process::exit(1);
+    });
+
+    let broker_addr: String = format!("{}:{}", ip, port);
+    broker_addr.parse().expect("Dirección no válida")
+}
+
+fn join_all_threads(children: Vec<JoinHandle<()>>) {
+    for hijo in children {
+        if let Err(e) = hijo.join() {
+            eprintln!("Error al esperar el hilo: {:?}", e);
+        }
+    }
+}
+
+/// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
+pub fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
+    let argv = std::env::args().collect::<Vec<String>>();
+    if argv.len() != 3 {
+        return Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "Cantidad de argumentos inválido. Debe ingresar: la dirección IP del sistema monitoreo y 
+        el puerto en el que desea correr el servidor.",
+    )));
+    }
+    let ip = &argv[1];
+    let port = match argv[2].parse::<u16>() {
+        Ok(port) => port,
+        Err(_) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "El puerto proporcionado no es válido",
+            )))
+        }
+    };
+
+    Ok((ip.to_string(), port))
+}
+
+pub fn establish_mqtt_broker_connection(
+    broker_addr: &SocketAddr,
+) -> Result<MQTTClient, Box<dyn std::error::Error>> {
+    let client_id = "Sistema-Monitoreo";
+    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
+    match mqtt_client_res {
+        Ok(mqtt_client) => {
+            println!("Cliente: Conectado al broker MQTT.");
+            Ok(mqtt_client)
+        }
+        Err(e) => {
+            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
+            Err(e.into())
+        }
+    }
+}
+
+pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut => true,
+        std::io::ErrorKind::NotConnected => {
+            println!("Cliente: No hay más PublishMessage's por leer.");
+            false
+        }
+        _ => {
+            println!("Cliente: error al leer los publish messages recibidos.");
+            true
+        }
+    }
+    /*/*if e == RecvTimeoutError::Timeout {
+    }*/
+
+    if e == RecvTimeoutError::Disconnected {
+        println!("Cliente: No hay más PublishMessage's por leer.");
+        break;
+    }*/
+}
+
+pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        mqtt_client.finalizar();
+    }
+}
+
+pub fn publish_incident(incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    println!("Sistema-Monitoreo: Publicando incidente.");
+
+    // Hago el publish
+    if let Ok(mut mqtt_client) = mqtt_client.lock() {
+        let res = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
+        match res {
+            Ok(_) => {
+                println!("Sistema-Monitoreo: Ha hecho un publish");
+            }
+            Err(e) => {
+                println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
+            }
+        };
     }
 }
 
