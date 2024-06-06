@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::apps::incident::Incident;
+use crate::messages::publish_message::PublishMessage;
 
 use super::camera::Camera;
 use super::places;
@@ -11,6 +12,7 @@ use super::vendor::{
 use crossbeam::channel::Receiver;
 use egui::menu;
 use egui::Context;
+//use tokio::net::unix::pipe::Receiver;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,12 +107,16 @@ pub struct UISistemaMonitoreo {
     latitude: String,
     longitude: String,
     publish_incident_tx: Sender<Incident>,
-    camera_rx: Receiver<Camera>,
+    publish_message_rx: Receiver<PublishMessage>,
     places: Places,
 }
 
 impl UISistemaMonitoreo {
-    pub fn new(egui_ctx: Context, tx: Sender<Incident>, camera_rx: Receiver<Camera>) -> Self {
+    pub fn new(
+        egui_ctx: Context,
+        tx: Sender<Incident>,
+        publish_message_rx: Receiver<PublishMessage>,
+    ) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
         // Data for the `images` plugin showcase.
@@ -125,7 +131,7 @@ impl UISistemaMonitoreo {
             latitude: String::new(),
             longitude: String::new(),
             publish_incident_tx: tx,
-            camera_rx,
+            publish_message_rx,
             places: super::vendor::Places::new(),
         }
     }
@@ -133,7 +139,25 @@ impl UISistemaMonitoreo {
         println!("Enviando incidente: {:?}", incident);
         let _ = self.publish_incident_tx.send(incident);
     }
+    fn handle_camera_message(&mut self, publish_message: PublishMessage) {
+        let camera = Camera::from_bytes(&publish_message.get_payload());
+        let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+        let camera_id = camera.get_id();
+        let new_place = Place {
+            position: Position::from_lon_lat(longitude, latitude),
+            label: format!("Camera {}", camera_id),
+            symbol: '📷',
+            style: Style::default(),
+        };
+
+        self.places.add_place(new_place);
+    }
+
+    fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
+        //cosas del drone
+    }
 }
+
 impl eframe::App for UISistemaMonitoreo {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let rimless = egui::Frame {
@@ -142,18 +166,12 @@ impl eframe::App for UISistemaMonitoreo {
         };
 
         egui::CentralPanel::default().show(ctx, |_ui| {
-            if let Ok(camera) = self.camera_rx.try_recv() {
-                let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-
-                let camera_id = camera.get_id();
-                let new_place = Place {
-                    position: Position::from_lon_lat(longitude, latitude),
-                    label: format!("Camera {}", camera_id),
-                    symbol: '📷',
-                    style: Style::default(),
-                };
-
-                self.places.add_place(new_place);
+            if let Ok(publish_message) = self.publish_message_rx.try_recv() {
+                if publish_message.get_topic_name() == "Cam" {
+                    self.handle_camera_message(publish_message);
+                } else if publish_message.get_topic_name() == "Drone" {
+                    self.handle_drone_message(publish_message);
+                }
             }
         });
 

@@ -71,6 +71,10 @@ impl<'a> PublishMessage {
         Ok(publish_message)
     }
 
+    pub fn get_topic_name(&self) -> String {
+        self.variable_header.topic_name.to_string()
+    }
+
     fn calculate_remaining_length(&self) -> u8 {
         //aux: remaining length = variable header + payload
         //aux: variable header = topic_name + packet_identifier

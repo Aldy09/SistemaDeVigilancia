@@ -7,12 +7,12 @@ use super::places;
 /// Creates a built-in `Places` plugin with some predefined places.
 // pub fn places() -> impl Plugin {
 //     Places::new(vec![
-        // Place {
-        //     position: places::obelisco(),
-        //     label: "Wrocław Główny\ntrain station".to_owned(),
-        //     symbol: '📷',
-        //     style: Style::default(),
-        // },
+// Place {
+//     position: places::obelisco(),
+//     label: "Wrocław Główny\ntrain station".to_owned(),
+//     symbol: '📷',
+//     style: Style::default(),
+// },
 //         Place {
 //             position: places::dworcowa_bus_stop(),
 //             label: "Bus stop".to_owned(),

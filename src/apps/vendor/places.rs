@@ -92,7 +92,7 @@ impl Place {
 }
 
 /// [`Plugin`] which draws list of places on the map.
-/// 
+///
 #[derive(Debug, Clone)]
 pub struct Places {
     places: Vec<Place>,
@@ -118,10 +118,9 @@ impl Plugin for Places {
             place.draw(response, painter.clone(), projector);
         }
     }
-
 }
 
-impl Default for Places{
+impl Default for Places {
     fn default() -> Self {
         Self::new()
     }
