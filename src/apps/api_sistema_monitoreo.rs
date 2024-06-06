@@ -261,7 +261,6 @@ impl SistemaMonitoreo {
                     //Publish message: camera o dron
                     //ver el topic name
                     Ok(msg) => self.handle_received_message(msg),
-
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;
@@ -276,35 +275,35 @@ impl SistemaMonitoreo {
     pub fn handle_received_message(&self, msg: PublishMessage) {
         println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
         if PublishMessage::get_topic_name(&msg) == "Cam" {
-            let camera_recibida = Camera::from_bytes(&msg.get_payload());
-            println!("Cliente: Recibo cámara: {:?}", camera_recibida);
-            let res_send = self.camera_tx.send(camera_recibida);
-
-            if let Err(e) = res_send {
-                println!("Error al enviar la cámara: {:?}", e);
-            }
+            self.handle_received_camera(msg);
         } else if PublishMessage::get_topic_name(&msg) == "Dron" {
-            let dron_recibido = DronCurrentInfo::from_bytes(msg.get_payload());
-            println!("Cliente: Recibo dron: {:?}", dron_recibido);
-            let res_send = self.dron_tx.send(dron_recibido);
-
-            if let Err(e) = res_send {
-                println!("Error al enviar el dron: {:?}", e);
-            }
+            self.handle_received_dron(msg);
         }
     }
-    /*
+    
+    /// Recibe un mensaje de tipo PublishMessage : camera, y lo procesa.
     pub fn handle_received_camera(&self, msg: PublishMessage) {
-        println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
         let camera_recibida = Camera::from_bytes(&msg.get_payload());
         println!("Cliente: Recibo cámara: {:?}", camera_recibida);
         let res_send = self.camera_tx.send(camera_recibida);
-
+    
         if let Err(e) = res_send {
             println!("Error al enviar la cámara: {:?}", e);
         }
     }
-    */
+    
+
+    /// Recibe un mensaje de tipo PublishMessage : dron, y lo procesa.
+    pub fn handle_received_dron(&self, msg: PublishMessage) {
+        let dron_recibido = DronCurrentInfo::from_bytes(msg.get_payload());
+        println!("Cliente: Recibo dron: {:?}", dron_recibido);
+        let res_send = self.dron_tx.send(dron_recibido);
+    
+        if let Err(e) = res_send {
+            println!("Error al enviar el dron: {:?}", e);
+        }
+    }
+    
 
     pub fn add_incident(&mut self, incident: Incident) {
         self.incidents.lock().unwrap().push(incident);
