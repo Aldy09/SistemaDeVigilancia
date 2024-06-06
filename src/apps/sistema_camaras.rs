@@ -67,7 +67,7 @@ fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
     Ok((ip_cam.to_string(), port))
 }
 
-fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr, rx: Receiver<Camera>) {
+fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
     //let _publish_interval = 4;
 
     // Cliente usa funciones connect, publish, y subscribe de la lib.
@@ -80,13 +80,13 @@ fn connect_and_publish(cameras: &mut ShCamerasType, broker_addr: &SocketAddr, rx
 
 
             // Inicio probando
-            while let Ok(mut cam) = rx.recv() {
-                let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
+            while let Ok(cam_bytes) = rx.recv() {
+                let res = mqtt_client.mqtt_publish("Cam", &cam_bytes);
                 match res {
                     Ok(_) => {
                         println!("Sistema-Camara: Hecho un publish");
 
-                        cam.marked_as_sent(); // <-- aux: creo que ya no me importa
+                        //cam.marked_as_sent(); // <-- aux: creo que ya no me importa
                     }
                     Err(e) => println!(
                         "Sistema-Camara: Error al hacer el publish {:?}",
@@ -180,7 +180,7 @@ fn main() {
     sleep(Duration::from_secs(2));
 
 
-    let (tx, rx) = mpsc::channel::<Camera>();
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
     
     // Menú cámaras
     let handle = thread::spawn(move || {
@@ -309,20 +309,20 @@ fn procesar_incidente_por_primera_vez(
     };
 }
 
-fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
-    /* // Aux: Se queja de que no puede enviar por el tx porque no implementa clone.
+fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
+     // Aux: Se queja de que no puede enviar por el tx porque no implementa clone.
     // Envía todas las cámaras al inicio
     match cameras.lock() {
         Ok(cams) => {
             for camera in (*cams).values() {
                 // Envío la cámara eliminada por el tx
-                if camera_tx.send(*camera).is_err() {
+                if camera_tx.send(camera.to_bytes()).is_err() {
                     println!("Error al enviar cámara por tx desde hilo abm.");
                 }
             }
         }
         Err(_) => println!("Error al tomar lock de cámaras."),
-    }*/
+    }
 
     loop {
         println!(
@@ -384,17 +384,16 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
 
                 // Crea la cámara y la envia
                 let new_camera = Camera::new(id, coord_x, coord_y, range, vec![border_camera]);
-                /*let shareable_camera = Arc::new(Mutex::new(new_camera));
                 match cameras.lock() {
                     Ok(mut cams) => {
-                        cams.insert(id, shareable_camera);
+                        if camera_tx.send(new_camera.to_bytes()).is_err() {
+                            println!("Error al enviar cámara por tx desde hilo abm.");
+                        }
+                        cams.insert(id, new_camera);
                         println!("Cámara agregada con éxito.\n");
                     }
                     Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-                };*/
-                if camera_tx.send(new_camera).is_err() {
-                    println!("Error al enviar cámara por tx desde hilo abm.");
-                }
+                };
             }
             "2" => {
                 // Mostramos todas las cámaras
@@ -427,19 +426,22 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Camera>) {
                         // Si ya estaba deleted, no hago nada, tampoco es error; else, la marco deleted
                         if let Some(camera_to_delete) = cams.get_mut(&id){       
                             if camera_to_delete.is_not_deleted() {
-                                camera_to_delete.delete_camera();
+                                camera_to_delete.delete_camera(); // <-- aux: revisar esto, que parece que ya no lo usamos.
+                                if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
+                                    println!("Error al enviar cámara por tx desde hilo abm.");
+                                }
 
                             };
                         }
-                        /*
-                        // Aux: Ver, mismo bug de mandar por channel y tipo a mandar (tema clone)
+                        
+                        /* // Aux: Ver, mismo bug de mandar por channel y tipo a mandar (tema clone)
                         if let Some(camera_to_delete) = cams.get(&id) {
                             // Envío la cámara eliminada por el tx
                             if camera_tx.send(camera_to_delete).is_err() {
                                 println!("Error al enviar cámara por tx desde hilo abm.");
                             }
-                        }*/
-                        println!("Cámara eliminada con éxito.\n");
+                        }
+                        println!("Cámara eliminada con éxito.\n");*/
                     }
                     Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
                 };
