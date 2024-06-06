@@ -17,8 +17,6 @@ use rustx::apps::incident::Incident;
 use std::error::Error;
 use std::net::SocketAddr;
 
-#[allow(unreachable_code)] // [] esto es por un finalizar que está abajo de un loop, que ya veremos dónde poner.
-
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
     let mut cameras = HashMap::new();
     let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
@@ -365,7 +363,7 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
                     .expect("Error al leer la entrada");
                 let id: u8 = read_id.trim().parse().expect("Id no válido");
 
-                // Eliminamos la cámara, es un borrado lógico
+                // Eliminamos la cámara
                 match cameras.lock() {
                     Ok(mut cams) => {
                         // Si no estaba en el hashmap, no hago nada, tampoco es error;
