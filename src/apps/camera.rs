@@ -136,7 +136,8 @@ impl Camera {
         (self.id, self.incs_being_managed.to_vec())
     }
 
-    /// Devuelve true si la cámara ha sido modificada desde la última vez que fue enviada,
+    
+    /*/// Devuelve true si la cámara ha sido modificada desde la última vez que fue enviada,
     /// y por lo tanto debería ser enviada,
     /// o false si no se ha modificado desde el último envío.
     /// Si nunca se produce un envío, esta función devolverá true.
@@ -146,7 +147,7 @@ impl Camera {
     /// Marca a la cámara como enviada.
     pub fn marked_as_sent(&mut self) {
         self.sent = true;
-    }
+    }*/
     /// Devuelve si la cámara ha pasado o no por un borrado lógico.
     pub fn is_not_deleted(&self) -> bool {
         !self.deleted
