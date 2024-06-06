@@ -51,3 +51,11 @@ path = "src/apps/sistema_camaras.rs"
 [[bin]]
 name = "generar_camaras"
 path = "src/apps/generar_camaras.rs"
+
+
+# Quise hacer un archivo en el que solo puse un main que hace un Dron::new(1) y tira un print.
+# (Porque tengo entendido que para que algo esté en el cargo toml, tiene que tener un main).
+# Cargo check y clippy dan ok, Pero en cuanto se descomenta esto que sigue, falla el import de dron_app.rs (?). 
+#[[bin]]
+#name = "dron"
+#path = "src/apps/dron_app.rs"
