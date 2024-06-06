@@ -78,15 +78,11 @@ fn connect_and_publish(broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
             //info!("Conectado al broker MQTT."); //
             println!("Cliente: Conectado al broker MQTT.");
 
-
-            // Inicio probando
             while let Ok(cam_bytes) = rx.recv() {
                 let res = mqtt_client.mqtt_publish("Cam", &cam_bytes);
                 match res {
                     Ok(_) => {
                         println!("Sistema-Camara: Hecho un publish");
-
-                        //cam.marked_as_sent(); // <-- aux: creo que ya no me importa
                     }
                     Err(e) => println!(
                         "Sistema-Camara: Error al hacer el publish {:?}",
@@ -98,51 +94,6 @@ fn connect_and_publish(broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
                 // Esperamos, para publicar los cambios "periódicamente"
                 sleep(Duration::from_secs(publish_interval));*/
             }
-            // Fin probando
-            
-
-
-
-            // Lo que había antes:
-            /*loop {
-                if let Ok(cams) = cameras.lock() {
-                    // [] <--
-
-                    for (_, camera) in cams.iter() {
-                        match camera.lock() {
-                            // como no guardo en una variable lo que me devuelve el lock, el lock se dropea al cerrar esta llave
-                            Ok(mut cam) => {
-                                if cam.modified_after_last_sent() {
-                                    //println!("Sist-Camara: por hacer publish de la cámara: {:?}", cam.display()); // Debug []
-                                    println!(
-                                        "Sist-Camara: por hacer publish de la cámara: {:?}",
-                                        cam
-                                    ); // Debug []
-                                    let res = mqtt_client.mqtt_publish("Cam", &cam.to_bytes());
-                                    match res {
-                                        Ok(_) => {
-                                            println!("Sistema-Camara: Hecho un publish");
-
-                                            cam.marked_as_sent();
-                                        }
-                                        Err(e) => println!(
-                                            "Sistema-Camara: Error al hacer el publish {:?}",
-                                            e
-                                        ),
-                                    };
-                                }
-                            }
-                            Err(e) => println!(
-                                "Sistema-Camara: Error al tomar lock de una cámara: {:?}",
-                                e
-                            ),
-                        };
-                    }
-                };
-
-                // Esperamos, para publicar los cambios "periódicamente"
-                sleep(Duration::from_secs(publish_interval));
-            }*/
         }
         Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
@@ -309,7 +260,6 @@ fn procesar_incidente_por_primera_vez(
 }
 
 fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
-     // Aux: Se queja de que no puede enviar por el tx porque no implementa clone.
     // Envía todas las cámaras al inicio
     match cameras.lock() {
         Ok(cams) => {
@@ -425,8 +375,8 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
                         // Si no estaba en el hashmap, no hago nada, tampoco es error;
                         // else, la elimino, la marco deleted para simplificar la comunicación y la envío
                         if let Some(mut camera_to_delete) = cams.remove(&id){
-                            if camera_to_delete.is_not_deleted() { // debería dar siempre true
-                                camera_to_delete.delete_camera(); // <-- aux: revisando esto, que ya no usamos el campo sent
+                            if camera_to_delete.is_not_deleted() { // (debería dar siempre true)
+                                camera_to_delete.delete_camera();
                                 if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                                     println!("Error al enviar cámara por tx desde hilo abm.");
                                 } else {

@@ -8,7 +8,6 @@ use crate::apps::camera_state::CameraState;
 /// - estado;
 /// - rango dentro del cual interesará manejar incidentes, es simllar a un radio pero que se suma a cada una de sus coordenadas;
 /// - border_cameras: vector con los ids de sus cámaras lindantes;
-/// - sent: campo que indica si la Camera se envió y aún no se modificó (`sent=true`) o si por el contrario modificó desde la última vez que el sistema central de cámaras la envió (`sent=false`);
 /// - deleted: campo que indica si la Camera ha pasado por un borrado lógico en el sistema central de cámaras;
 /// - incs_being_managed: vector con los ids de los incidentes a los que la Camera está prestando atención, esto es, ids de los incidentes que ocasionan que esta Camera esté en estado activo.
 pub struct Camera {
@@ -18,7 +17,6 @@ pub struct Camera {
     state: CameraState,
     range: u8,
     border_cameras: Vec<u8>,
-    sent: bool, // false si se modificó, true al enviarla
     deleted: bool,
     incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
 }
@@ -32,7 +30,6 @@ impl Camera {
             state: CameraState::SavingMode,
             range,
             border_cameras,
-            sent: false,
             deleted: false,
             incs_being_managed: vec![],
         }
@@ -72,7 +69,6 @@ impl Camera {
             state,
             range,
             border_cameras,
-            sent: false,
             deleted,
             incs_being_managed: vec![],
         }
@@ -100,7 +96,6 @@ impl Camera {
     /// para luego ser detectada como modificada y enviada.
     pub fn set_state_to(&mut self, new_state: CameraState) {
         self.state = new_state;
-        self.sent = false;
     }
 
     /// Devuelve un vector con los ids de sus cámaras lindantes.
@@ -136,18 +131,6 @@ impl Camera {
         (self.id, self.incs_being_managed.to_vec())
     }
 
-    
-    /*/// Devuelve true si la cámara ha sido modificada desde la última vez que fue enviada,
-    /// y por lo tanto debería ser enviada,
-    /// o false si no se ha modificado desde el último envío.
-    /// Si nunca se produce un envío, esta función devolverá true.
-    pub fn modified_after_last_sent(&self) -> bool {
-        !self.sent
-    }
-    /// Marca a la cámara como enviada.
-    pub fn marked_as_sent(&mut self) {
-        self.sent = true;
-    }*/
     /// Devuelve si la cámara ha pasado o no por un borrado lógico.
     pub fn is_not_deleted(&self) -> bool {
         !self.deleted
@@ -157,7 +140,6 @@ impl Camera {
     /// se marca como no enviada.
     pub fn delete_camera(&mut self) {
         self.deleted = true;
-        self.sent = false;
     }
 }
 
