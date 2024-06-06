@@ -1,4 +1,6 @@
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
+
+#[derive(Debug, PartialEq)]
 pub struct Dron {
     // #Pensando, quizás convenga que estos 5 atributos estén en un struct aparte, xq solo estos son los
     // que vamos a mandar en un publish, ya que las de más abajo son todas constantes que no interesa enviar.
@@ -22,6 +24,7 @@ pub struct Dron {
     mantainance_lon: f64,*/
 }
 
+#[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%
     /// Aux: desde la posición de mantenimiento, y vuela hacia el range_center (por ejemplo).
@@ -96,8 +99,23 @@ impl Dron {
         idx += b_size;
 
         let state = u8::from_be_bytes([bytes[idx]]);
-        idx += b_size;
+        //idx += b_size; // comentado porque warning is never read.
 
         Dron { id, latitude, longitude, battery_lvl, state }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Dron;
+
+    #[test]
+    fn test_1_dron_to_y_from_bytes() {
+        let dron = Dron { id: 1, latitude: -34.0, longitude: -58.0, battery_lvl: 100, state: 1 };
+        
+        let bytes = dron.to_bytes();
+        let reconstructed_dron = Dron::from_bytes(bytes);
+        
+        assert_eq!(reconstructed_dron, dron);
     }
 }
