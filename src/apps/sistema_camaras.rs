@@ -2,9 +2,9 @@ use rustx::apps::camera::Camera;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::{Arc, mpsc};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
+use std::sync::{mpsc, Arc};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{fs, thread};
@@ -84,10 +84,7 @@ fn connect_and_publish(broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
                     Ok(_) => {
                         println!("Sistema-Camara: Hecho un publish");
                     }
-                    Err(e) => println!(
-                        "Sistema-Camara: Error al hacer el publish {:?}",
-                        e
-                    ),
+                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
                 };
 
                 /*// Aux ver cómo respetar el "periódicamente", o si sobra, ver [].
@@ -129,9 +126,8 @@ fn main() {
     // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
     sleep(Duration::from_secs(2));
 
-
     let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    
+
     // Menú cámaras
     let handle = thread::spawn(move || {
         abm_cameras(&mut shareable_cameras, tx);
@@ -203,12 +199,12 @@ fn procesar_incidente_conocido(
                 match cameras_cl.lock() {
                     Ok(mut cams) => {
                         // Actualizo las cámaras en cuestión
-                        if let Some(camera_to_update) = cams.get_mut(camera_id){  
+                        if let Some(camera_to_update) = cams.get_mut(camera_id) {
                             camera_to_update.remove_from_incs_being_managed(inc.id);
                             println!(
                                 "  la cámara queda:\n   cam id y lista de incs: {:?}",
                                 camera_to_update.get_id_e_incs_for_debug_display()
-                            ); 
+                            );
                         }
                     }
                     Err(_) => println!(
@@ -236,7 +232,7 @@ fn procesar_incidente_por_primera_vez(
         Ok(mut cams) => {
             for (cam_id, camera) in cams.iter_mut() {
                 //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
-                
+
                 if camera.will_register(inc.pos()) {
                     println!(
                         "Está en rango de cam: {}, cambiando su estado a activo.",
@@ -374,8 +370,9 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
                     Ok(mut cams) => {
                         // Si no estaba en el hashmap, no hago nada, tampoco es error;
                         // else, la elimino, la marco deleted para simplificar la comunicación y la envío
-                        if let Some(mut camera_to_delete) = cams.remove(&id){
-                            if camera_to_delete.is_not_deleted() { // (debería dar siempre true)
+                        if let Some(mut camera_to_delete) = cams.remove(&id) {
+                            if camera_to_delete.is_not_deleted() {
+                                // (debería dar siempre true)
                                 camera_to_delete.delete_camera();
                                 if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                                     println!("Error al enviar cámara por tx desde hilo abm.");
@@ -384,7 +381,6 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
                                 }
                             };
                         }
-                        
                     }
                     Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
                 };
