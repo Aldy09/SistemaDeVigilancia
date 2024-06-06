@@ -19,17 +19,14 @@ impl DronCurrentInfo {
     /// Aux: desde la posición de mantenimiento, y vuela hacia el range_center (por ejemplo).
     /// Aux: Otra posibilidad sería que inicie desde la pos del range_center. <-- hacemos esto, por simplicidad con los estados por ahora.
     /// Se inicia con estado []. Ver (el activo si ya está en el range_center, o ver si inicia en mantenimiento).
-    pub fn new(id: u8) -> Self {
-        // Acá puede cargar las constantes desde archivo de config.
-        let range_center_lat_property = -34.20;
-        let range_center_lon_property = -58.20;
+    pub fn new(id: u8, latitude: f64, longitude: f64, battery_lvl: u8, state: u8) -> Self {        
 
         DronCurrentInfo {
             id,
-            latitude: range_center_lat_property, // Inicia desde el range_center.
-            longitude: range_center_lon_property,
-            battery_lvl: 100,
-            state: 1,
+            latitude,
+            longitude,
+            battery_lvl,
+            state,
         }
     }
 
@@ -39,7 +36,7 @@ impl DronCurrentInfo {
         bytes.extend_from_slice(&self.latitude.to_be_bytes());
         bytes.extend_from_slice(&self.longitude.to_be_bytes());
         bytes.extend_from_slice(&self.battery_lvl.to_be_bytes());
-        //bytes.push(self.state.to_byte()[0]);
+        //bytes.push(self.state.to_byte()[0]); // <-- así sería si fuera un enum en vez de un u8.
         bytes.extend_from_slice(&self.state.to_be_bytes());
         bytes
     }
