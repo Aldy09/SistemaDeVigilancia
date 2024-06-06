@@ -1,16 +1,12 @@
-/// Struct que representa a cada uno de los drones del sistema de vigilancia.
-
-/// Struct que contiene los campos que identifican al dron (el id) y que pueden modificarse durante su funcionamiento-
+/// Struct que contiene los campos que identifican al Dron (el id) y que pueden modificarse durante su funcionamiento.
 #[derive(Debug, PartialEq)]
 pub struct DronCurrentInfo {
-    // #Pensando, quizás convenga que estos 5 atributos estén en un struct aparte, xq solo estos son los
-    // que vamos a mandar en un publish, ya que las de más abajo son todas constantes que no interesa enviar.
     id: u8,
     // Posición actual
     latitude: f64,
     longitude: f64,
     battery_lvl: u8,
-    state: u8, // esto en realidad es un enum, volver []
+    state: u8, // esto en realidad es un enum, volver [].
 }
 
 #[allow(dead_code)]
@@ -19,8 +15,7 @@ impl DronCurrentInfo {
     /// Aux: desde la posición de mantenimiento, y vuela hacia el range_center (por ejemplo).
     /// Aux: Otra posibilidad sería que inicie desde la pos del range_center. <-- hacemos esto, por simplicidad con los estados por ahora.
     /// Se inicia con estado []. Ver (el activo si ya está en el range_center, o ver si inicia en mantenimiento).
-    pub fn new(id: u8, latitude: f64, longitude: f64, battery_lvl: u8, state: u8) -> Self {        
-
+    pub fn new(id: u8, latitude: f64, longitude: f64, battery_lvl: u8, state: u8) -> Self {
         DronCurrentInfo {
             id,
             latitude,
@@ -30,7 +25,8 @@ impl DronCurrentInfo {
         }
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    /// Pasa un struct `DronCurrentInfo` a bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![];
         bytes.extend_from_slice(&self.id.to_be_bytes());
         bytes.extend_from_slice(&self.latitude.to_be_bytes());
@@ -41,6 +37,7 @@ impl DronCurrentInfo {
         bytes
     }
 
+    /// Obtiene un struct `DronCurrentInfo` a partir de bytes.
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         let mut idx = 0;
         let b_size: usize = 1;
@@ -76,9 +73,15 @@ impl DronCurrentInfo {
         idx += b_size;
 
         let state = u8::from_be_bytes([bytes[idx]]);
-        //idx += b_size; // comentado porque warning is never read.
+        //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
 
-        DronCurrentInfo { id, latitude, longitude, battery_lvl, state }
+        DronCurrentInfo {
+            id,
+            latitude,
+            longitude,
+            battery_lvl,
+            state,
+        }
     }
 }
 
@@ -88,11 +91,17 @@ mod test {
 
     #[test]
     fn test_1_dron_to_y_from_bytes() {
-        let dron = DronCurrentInfo { id: 1, latitude: -34.0, longitude: -58.0, battery_lvl: 100, state: 1 };
-        
+        let dron = DronCurrentInfo {
+            id: 1,
+            latitude: -34.0,
+            longitude: -58.0,
+            battery_lvl: 100,
+            state: 1,
+        };
+
         let bytes = dron.to_bytes();
         let reconstructed_dron = DronCurrentInfo::from_bytes(bytes);
-        
+
         assert_eq!(reconstructed_dron, dron);
     }
 }
