@@ -9,26 +9,20 @@ use std::sync::mpsc::Receiver;
 
 use crossbeam::channel::{self, Sender};
 
-use crate::{
-    apps::{dron_current_info::DronCurrentInfo},
-    messages::publish_message::PublishMessage,
-    mqtt_client::MQTTClient,
-};
+use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
-use super::{camera::Camera, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
+use super::{incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
-    pub camera_tx: Sender<Camera>,
-    pub dron_tx: Sender<DronCurrentInfo>,
+    pub publish_message_tx: Sender<PublishMessage>,
 }
 
 impl SistemaMonitoreo {
     pub fn new() -> Self {
-        let (tx_camera, rx_camera) = channel::unbounded();
-        let (tx_dron, _rx_dron) = channel::unbounded();
-
+        // Crear un canal que acepte mensajes de tipo PublishMessage
+        let (publish_message_tx, publish_message_rx) = channel::unbounded::<PublishMessage>();
         let (tx, rx) = mpsc::channel::<Incident>();
 
         let mut children: Vec<JoinHandle<()>> = vec![];
@@ -36,8 +30,7 @@ impl SistemaMonitoreo {
 
         let sistema_monitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
-            camera_tx: tx_camera,
-            dron_tx: tx_dron,
+            publish_message_tx,
         };
 
         match establish_mqtt_broker_connection(&broker_addr) {
@@ -70,7 +63,7 @@ impl SistemaMonitoreo {
                 Box::new(UISistemaMonitoreo::new(
                     cc.egui_ctx.clone(),
                     tx_clone,
-                    rx_camera,
+                    publish_message_rx,
                 ))
             }),
         );
@@ -92,11 +85,18 @@ impl SistemaMonitoreo {
         })
     }
 
+    // pub fn clone_ref(&self) -> Self {
+    //     Self {
+    //         incidents: self.incidents.clone(),
+    //         camera_tx: self.camera_tx.clone(),
+    //         dron_tx: self.dron_tx.clone(),
+    //     }
+    // }
+
     pub fn clone_ref(&self) -> Self {
         Self {
             incidents: self.incidents.clone(),
-            camera_tx: self.camera_tx.clone(),
-            dron_tx: self.dron_tx.clone(),
+            publish_message_tx: self.publish_message_tx.clone(),
         }
     }
 
@@ -156,8 +156,7 @@ impl SistemaMonitoreo {
             if let Ok(mqtt_client) = mqtt_client.lock() {
                 match mqtt_client.mqtt_receive_msg_from_subs_topic() {
                     //Publish message: camera o dron
-                    //ver el topic name
-                    Ok(msg) => self.handle_received_message(msg),
+                    Ok(msg) => self.send_publish_message_to_ui(msg),
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;
@@ -168,39 +167,13 @@ impl SistemaMonitoreo {
         }
     }
 
-    /// Recibe un mensaje de tipo PublishMessage : dron o camara , y lo procesa.
-    pub fn handle_received_message(&self, msg: PublishMessage) {
-        println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
-        if PublishMessage::get_topic_name(&msg) == "Cam" {
-            self.handle_received_camera(msg);
-        } else if PublishMessage::get_topic_name(&msg) == "Dron" {
-            self.handle_received_dron(msg);
+    pub fn send_publish_message_to_ui(&self, msg: PublishMessage) {
+        let res_send = self.publish_message_tx.send(msg);
+        match res_send {
+            Ok(_) => println!("Cliente: Enviado mensaje a la UI"),
+            Err(e) => println!("Cliente: Error al enviar mensaje a la UI: {:?}", e),
         }
     }
-    
-    /// Recibe un mensaje de tipo PublishMessage : camera, y lo procesa.
-    pub fn handle_received_camera(&self, msg: PublishMessage) {
-        let camera_recibida = Camera::from_bytes(&msg.get_payload());
-        println!("Cliente: Recibo cámara: {:?}", camera_recibida);
-        let res_send = self.camera_tx.send(camera_recibida);
-    
-        if let Err(e) = res_send {
-            println!("Error al enviar la cámara: {:?}", e);
-        }
-    }
-    
-
-    /// Recibe un mensaje de tipo PublishMessage : dron, y lo procesa.
-    pub fn handle_received_dron(&self, msg: PublishMessage) {
-        let dron_recibido = DronCurrentInfo::from_bytes(msg.get_payload());
-        println!("Cliente: Recibo dron: {:?}", dron_recibido);
-        let res_send = self.dron_tx.send(dron_recibido);
-    
-        if let Err(e) = res_send {
-            println!("Error al enviar el dron: {:?}", e);
-        }
-    }
-    
 
     pub fn add_incident(&mut self, incident: Incident) {
         self.incidents.lock().unwrap().push(incident);
