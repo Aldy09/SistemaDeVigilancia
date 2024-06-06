@@ -48,9 +48,26 @@ impl Incident {
 
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
         let id = msg_bytes[0];
-        let latitude = f64::from_le_bytes([msg_bytes[1], msg_bytes[2], msg_bytes[3], msg_bytes[4], msg_bytes[5], msg_bytes[6], msg_bytes[7], msg_bytes[8]]);
-        let longitude =
-            f64::from_le_bytes([msg_bytes[9], msg_bytes[10], msg_bytes[11], msg_bytes[12], msg_bytes[13], msg_bytes[14], msg_bytes[15], msg_bytes[16]]);
+        let latitude = f64::from_le_bytes([
+            msg_bytes[1],
+            msg_bytes[2],
+            msg_bytes[3],
+            msg_bytes[4],
+            msg_bytes[5],
+            msg_bytes[6],
+            msg_bytes[7],
+            msg_bytes[8],
+        ]);
+        let longitude = f64::from_le_bytes([
+            msg_bytes[9],
+            msg_bytes[10],
+            msg_bytes[11],
+            msg_bytes[12],
+            msg_bytes[13],
+            msg_bytes[14],
+            msg_bytes[15],
+            msg_bytes[16],
+        ]);
         let mut state = IncidentState::ActiveIncident;
         if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[17]]) {
             state = state_parsed;

@@ -9,7 +9,11 @@ use std::sync::mpsc::Receiver;
 
 use crossbeam::channel::{self, Sender};
 
-use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
+use crate::{
+    apps::{dron_current_info::DronCurrentInfo},
+    messages::publish_message::PublishMessage,
+    mqtt_client::MQTTClient,
+};
 
 use super::{camera::Camera, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
 
@@ -17,6 +21,7 @@ use super::{camera::Camera, incident::Incident, ui_sistema_monitoreo::UISistemaM
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
     pub camera_tx: Sender<Camera>,
+    pub dron_tx: Sender<DronCurrentInfo>,
 }
 
 fn get_broker_address() -> SocketAddr {
@@ -125,13 +130,17 @@ pub fn publish_incident(incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>
 impl SistemaMonitoreo {
     pub fn new() -> Self {
         let (tx_camera, rx_camera) = channel::unbounded();
+        let (tx_dron, _rx_dron) = channel::unbounded();
+
         let (tx, rx) = mpsc::channel::<Incident>();
+
         let mut children: Vec<JoinHandle<()>> = vec![];
         let broker_addr = get_broker_address();
 
         let sistema_monitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             camera_tx: tx_camera,
+            dron_tx: tx_dron,
         };
 
         match establish_mqtt_broker_connection(&broker_addr) {
@@ -190,6 +199,7 @@ impl SistemaMonitoreo {
         Self {
             incidents: self.incidents.clone(),
             camera_tx: self.camera_tx.clone(),
+            dron_tx: self.dron_tx.clone(),
         }
     }
 
@@ -227,26 +237,31 @@ impl SistemaMonitoreo {
     }
 
     pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>) {
-        self.subscribe_to_cam_topic(&mqtt_client);
+        self.subscribe_to_topic(&mqtt_client, "Cam");
+        self.subscribe_to_topic(&mqtt_client, "Dron");
         self.receive_messages_from_subscribed_topics(&mqtt_client);
         finalize_mqtt_client(&mqtt_client);
     }
 
-    pub fn subscribe_to_cam_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from("Cam"))]);
+            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
-                Ok(_) => println!("Cliente: Hecho un subscribe"),
-                Err(e) => println!("Cliente: Error al hacer un subscribe: {:?}", e),
+                Ok(_) => println!("Cliente: Hecho un subscribe a topic {}", topic),
+                Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
             }
         }
     }
 
+    // Recibe mensajes de los topics a los que se ha suscrito
     pub fn receive_messages_from_subscribed_topics(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         loop {
             if let Ok(mqtt_client) = mqtt_client.lock() {
                 match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    Ok(msg) => self.handle_received_camera(msg),
+                    //Publish message: camera o dron
+                    //ver el topic name
+                    Ok(msg) => self.handle_received_message(msg),
+
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;
@@ -256,16 +271,40 @@ impl SistemaMonitoreo {
             }
         }
     }
+
+    /// Recibe un mensaje de tipo PublishMessage : dron o camara , y lo procesa.
+    pub fn handle_received_message(&self, msg: PublishMessage) {
+        println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
+        if PublishMessage::get_topic_name(&msg) == "Cam" {
+            let camera_recibida = Camera::from_bytes(&msg.get_payload());
+            println!("Cliente: Recibo cámara: {:?}", camera_recibida);
+            let res_send = self.camera_tx.send(camera_recibida);
+
+            if let Err(e) = res_send {
+                println!("Error al enviar la cámara: {:?}", e);
+            }
+        } else if PublishMessage::get_topic_name(&msg) == "Dron" {
+            let dron_recibido = DronCurrentInfo::from_bytes(msg.get_payload());
+            println!("Cliente: Recibo dron: {:?}", dron_recibido);
+            let res_send = self.dron_tx.send(dron_recibido);
+
+            if let Err(e) = res_send {
+                println!("Error al enviar el dron: {:?}", e);
+            }
+        }
+    }
+    /*
     pub fn handle_received_camera(&self, msg: PublishMessage) {
         println!("Cliente: Recibo estos msg_bytes: {:?}", msg);
         let camera_recibida = Camera::from_bytes(&msg.get_payload());
         println!("Cliente: Recibo cámara: {:?}", camera_recibida);
         let res_send = self.camera_tx.send(camera_recibida);
-        
+
         if let Err(e) = res_send {
             println!("Error al enviar la cámara: {:?}", e);
         }
     }
+    */
 
     pub fn add_incident(&mut self, incident: Incident) {
         self.incidents.lock().unwrap().push(incident);

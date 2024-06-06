@@ -55,8 +55,12 @@ impl Camera {
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let id = bytes[0];
-        let latitude = f64::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4],bytes[5], bytes[6], bytes[7], bytes[8]]);
-        let longitude = f64::from_be_bytes([bytes[9], bytes[10], bytes[11], bytes[12],bytes[13], bytes[14], bytes[15], bytes[16]]);
+        let latitude = f64::from_be_bytes([
+            bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8],
+        ]);
+        let longitude = f64::from_be_bytes([
+            bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15], bytes[16],
+        ]);
         let state = CameraState::from_byte([bytes[17]]);
         let range = bytes[18];
         let border_cameras_len = bytes[19];
