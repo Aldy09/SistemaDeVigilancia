@@ -40,7 +40,7 @@ impl User {
         &self.topics
     }
 
-    pub fn get_messages(&self) -> &ShareableMessageQueue {
+    pub fn get_hashmap_messages(&self) -> &ShareableMessageQueue {
         &self.messages
     }
 

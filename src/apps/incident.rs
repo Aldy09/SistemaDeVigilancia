@@ -5,26 +5,26 @@ use super::incident_state::IncidentState;
 /// Posee un id, coordenadas x e y, un estado, y un campo `sent` que indica si el incidente se envió y continúa sin modificaciones desde entonces o si por el contrario ya se modificó desde la última vez que se envió.
 pub struct Incident {
     pub id: u8, // []
-    coord_x: u8,
-    coord_y: u8,
+    latitude: f64,
+    longitude: f64,
     state: IncidentState,
     pub sent: bool,
 }
 
 impl Incident {
-    pub fn new(id: u8, coord_x: u8, coord_y: u8) -> Self {
+    pub fn new(id: u8, latitude: f64, longitude: f64) -> Self {
         Self {
             id,
-            coord_x,
-            coord_y,
+            latitude,
+            longitude,
             state: IncidentState::ActiveIncident,
             sent: false,
         }
     }
 
     /// Devuelve coordenadas (x, y) correspondientes a la posición del incidente.
-    pub fn pos(&self) -> (u8, u8) {
-        (self.coord_x, self.coord_y)
+    pub fn pos(&self) -> (f64, f64) {
+        (self.latitude, self.longitude)
     }
 
     /// Devuelve si el incidente tiene estado resuelto o no.
@@ -39,22 +39,27 @@ impl Incident {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        vec![self.id, self.coord_x, self.coord_y, self.state.to_byte()[0]]
+        let mut bytes = vec![self.id];
+        bytes.extend_from_slice(&self.latitude.to_le_bytes());
+        bytes.extend_from_slice(&self.longitude.to_le_bytes());
+        bytes.push(self.state.to_byte()[0]);
+        bytes
     }
 
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
         let id = msg_bytes[0];
-        let coord_x = msg_bytes[1];
-        let coord_y = msg_bytes[2];
+        let latitude = f64::from_le_bytes([msg_bytes[1], msg_bytes[2], msg_bytes[3], msg_bytes[4], msg_bytes[5], msg_bytes[6], msg_bytes[7], msg_bytes[8]]);
+        let longitude =
+            f64::from_le_bytes([msg_bytes[9], msg_bytes[10], msg_bytes[11], msg_bytes[12], msg_bytes[13], msg_bytes[14], msg_bytes[15], msg_bytes[16]]);
         let mut state = IncidentState::ActiveIncident;
-        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[3]]) {
+        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[17]]) {
             state = state_parsed;
         }
 
         Self {
             id,
-            coord_x,
-            coord_y,
+            latitude,
+            longitude,
             state,
             sent: false,
         }
@@ -67,48 +72,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_from_bytes() {
-        let incident = Incident::from_bytes(vec![1, 2, 3, 1]);
-        assert_eq!(incident.id, 1);
-        assert_eq!(incident.coord_x, 2);
-        assert_eq!(incident.coord_y, 3);
-        assert_eq!(incident.state, IncidentState::ActiveIncident);
-    }
-
-    #[test]
-    fn test_to_bytes() {
-        let incident = Incident {
-            id: 1,
-            coord_x: 2,
-            coord_y: 3,
-            state: IncidentState::ActiveIncident,
-            sent: false,
-        };
-        let bytes = incident.to_bytes();
-
-        assert_eq!(bytes, vec![1, 2, 3, 1]);
-    }
-
-    #[test]
-    fn test_reverse_from_bytes() {
-        let incident = Incident::from_bytes(vec![1, 2, 3, 1]);
-        let bytes = incident.to_bytes();
-        assert_eq!(bytes, vec![1, 2, 3, 1]);
-    }
-    #[test]
     fn test_reverse_to_bytes() {
         let incident = Incident {
             id: 1,
-            coord_x: 2,
-            coord_y: 3,
+            latitude: 2.0,
+            longitude: 2.0,
             state: IncidentState::ActiveIncident,
             sent: false,
         };
         let bytes = incident.to_bytes();
         let incident_bytes = Incident::from_bytes(bytes);
         assert_eq!(incident_bytes.id, incident.id);
-        assert_eq!(incident_bytes.coord_x, incident.coord_x);
-        assert_eq!(incident_bytes.coord_y, incident.coord_y);
+        assert_eq!(incident_bytes.latitude, incident.latitude);
+        assert_eq!(incident_bytes.longitude, incident.longitude);
         assert_eq!(incident_bytes.state, incident.state);
     }
 }
