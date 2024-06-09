@@ -82,15 +82,17 @@ pub fn establish_mqtt_broker_connection(
     }
 }
 
-fn publish_to_topic(mqtt_client: &mut MQTTClient, topic: &str, rx: Receiver<Vec<u8>>) {
-    while let Ok(cam_bytes) = rx.recv() {
-        let res = mqtt_client.mqtt_publish(topic, &cam_bytes);
-        match res {
-            Ok(_) => {
-                println!("Sistema-Camara: Hecho un publish");
-            }
-            Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-        };
+fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiver<Vec<u8>>) {
+    if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+        while let Ok(cam_bytes) = rx.recv() {
+            let res = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
+            match res {
+                Ok(_) => {
+                    println!("Sistema-Camara: Hecho un publish");
+                }
+                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+            };
+        }
     }
 }
 
@@ -112,6 +114,57 @@ fn join_all_threads(children: Vec<JoinHandle<()>>) {
     }
 }
 
+fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>, topics: Vec<String>, cameras_cl: &mut ShCamerasType) {
+    if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+        let res = mqtt_client_lock.mqtt_subscribe(topics);
+        match res {
+            Ok(_) => {
+                println!("Sistema-Camara: Subscripción a exitosa",);
+                receive_messages_from_subscribed_topics(&mqtt_client, cameras_cl);
+            }
+            Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
+        };
+    }
+    
+}
+pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut => true,
+        std::io::ErrorKind::NotConnected => {
+            println!("Cliente: No hay más PublishMessage's por leer.");
+            false
+        }
+        _ => {
+            println!("Cliente: error al leer los publish messages recibidos.");
+            true
+        }
+    }
+    /*/*if e == RecvTimeoutError::Timeout {
+    }*/
+
+    if e == RecvTimeoutError::Disconnected {
+        println!("Cliente: No hay más PublishMessage's por leer.");
+        break;
+    }*/
+}
+
+// Recibe mensajes de los topics a los que se ha suscrito
+pub fn receive_messages_from_subscribed_topics(mqtt_client: &Arc<Mutex<MQTTClient>>, cameras_cl: &mut ShCamerasType) {
+    loop {
+        if let Ok(mqtt_client) = mqtt_client.lock() {
+            match mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                //Publish message: camera o dron
+                Ok(msg) => manage_incidents(Incident::from_bytes(msg.get_payload()), cameras_cl),
+                Err(e) => {
+                    if !handle_message_receiving_error(e) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
@@ -119,7 +172,11 @@ fn main() {
     let mut children: Vec<JoinHandle<()>> = vec![];
 
     match establish_mqtt_broker_connection(&broker_addr) {
-        Ok(mut mqtt_client) => {
+        Ok(mqtt_client) => {
+            let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+            let mqtt_client_sh_clone: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
+            let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone);
+
             let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
             let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
 
@@ -131,19 +188,24 @@ fn main() {
 
             let (tx, rx) = mpsc::channel::<Vec<u8>>();
 
+            // Menú cámaras
             let handle = thread::spawn(move || {
                 abm_cameras(&mut shareable_cameras, tx);
             });
             children.push(handle);
 
             let handle_2 = thread::spawn(move || {
-                publish_to_topic(&mut mqtt_client, "Cam", rx);
+                publish_to_topic(mqtt_client_sh_clone, "Cam", rx);
             });
             children.push(handle_2);
-            // Menú cámaras
 
+            let handle_3 = thread::spawn(move || {
+                subscribe_to_topics(mqtt_client_sh_clone_2, vec!["Inc".to_string()], &mut cameras_cloned);
+            });
+            
+            children.push(handle_3);
             // Atender incidentes
-            manage_incidents(&mut cameras_cloned);
+            //manage_incidents(&mut cameras_cloned);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
@@ -151,29 +213,14 @@ fn main() {
     join_all_threads(children);
 }
 
-fn manage_incidents(cameras_cl: &mut ShCamerasType) {
-    // probando, unos incidentes hardcodeados
-    let mut read_incs: Vec<Incident> = vec![]; // (a mí no me digan, yo quería programar en castellano, xd)
-    let inc1 = Incident::new(1, 1.0, 1.0);
-    let inc2 = Incident::new(2, 5.0, 5.0);
-    let inc3 = Incident::new(3, 15.0, 15.0);
-    let mut inc1_resuelto = Incident::new(1, 1.0, 1.0);
-    inc1_resuelto.set_resolved();
-    read_incs.push(inc1);
-    read_incs.push(inc2);
-    read_incs.push(inc3);
-    read_incs.push(inc1_resuelto);
-    // fin probando
-
+fn manage_incidents(incident: Incident, cameras_cl: &mut ShCamerasType) {
     // Proceso los incidentes
     let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new(); // esto puede ser un atributo..., o no.
 
-    for inc in read_incs {
-        if !incs_being_managed.contains_key(&inc.id) {
-            procesar_incidente_por_primera_vez(cameras_cl, inc, &mut incs_being_managed);
-        } else {
-            procesar_incidente_conocido(cameras_cl, inc, &mut incs_being_managed);
-        }
+    if !incs_being_managed.contains_key(&incident.id) {
+        procesar_incidente_por_primera_vez(cameras_cl, incident, &mut incs_being_managed);
+    } else {
+        procesar_incidente_conocido(cameras_cl, incident, &mut incs_being_managed);
     }
 }
 
