@@ -153,7 +153,6 @@ impl UISistemaMonitoreo {
                 style: Style::default(),
                 id: camera_id,
             };
-
             self.places.add_place(new_place);
         } else {
             self.places.remove_place(camera.get_id());

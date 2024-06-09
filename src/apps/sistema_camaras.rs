@@ -1,4 +1,6 @@
 use rustx::apps::camera::Camera;
+use rustx::apps::common_clients::{get_broker_address, join_all_threads};
+use rustx::apps::manage_stored_cameras::read_cameras_from_file;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -7,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::{mpsc, Arc};
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
-use std::{fs, thread};
+use std::thread;
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
@@ -16,54 +18,6 @@ use rustx::apps::incident::Incident;
 //use std::env::args;
 use std::io::Error;
 use std::net::SocketAddr;
-
-fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
-    let mut cameras = HashMap::new();
-    let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
-
-    for line in contents.lines() {
-        let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() == 5 {
-            let id: u8 = parts[0].trim().parse().expect("Id no válido");
-            let latitude = parts[1].trim().parse().expect("Latitud no válida");
-            let longitude = parts[2].trim().parse().expect("Longitud no válida");
-            let range = parts[3].trim().parse().expect("Rango no válido");
-            let border_cam: u8 = parts[4].trim().parse().expect("Id no válido");
-            let vec = vec![border_cam];
-
-            let camera = Camera::new(id, latitude, longitude, range, vec);
-            cameras.insert(id, camera);
-        }
-    }
-
-    cameras
-}
-
-///Recibe por consola la dirección IP del cliente y el puerto en el que se desea correr el servidor.
-fn load_ip_and_port() -> Result<(String, u16), Box<Error>> {
-    let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Cantidad de argumentos inválido. Debe ingresar:  la dirección IP de sistema_camaras y 
-            el puerto en el que desea correr el servidor.",
-        )));
-    }
-
-    let ip_cam = &argv[1];
-
-    let port = match argv[2].parse::<u16>() {
-        Ok(port) => port,
-        Err(_) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "El puerto proporcionado no es válido",
-            )))
-        }
-    };
-
-    Ok((ip_cam.to_string(), port))
-}
 
 pub fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
@@ -92,24 +46,6 @@ fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiv
                 }
                 Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
             };
-        }
-    }
-}
-
-fn get_broker_address() -> SocketAddr {
-    let (ip, port) = load_ip_and_port().unwrap_or_else(|e| {
-        println!("Error al cargar el puerto: {:?}", e);
-        std::process::exit(1);
-    });
-
-    let broker_addr: String = format!("{}:{}", ip, port);
-    broker_addr.parse().expect("Dirección no válida")
-}
-
-fn join_all_threads(children: Vec<JoinHandle<()>>) {
-    for hijo in children {
-        if let Err(e) = hijo.join() {
-            eprintln!("Error al esperar el hilo: {:?}", e);
         }
     }
 }
@@ -222,8 +158,6 @@ fn main() {
             });
 
             children.push(handle_3);
-            // Atender incidentes
-            //manage_incidents(&mut cameras_cloned);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }

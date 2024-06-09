@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     net::SocketAddr,
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -11,7 +10,7 @@ use crossbeam::channel::{self, Sender};
 
 use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
-use super::{incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
+use super::{common_clients::{get_broker_address, join_all_threads}, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
@@ -28,7 +27,7 @@ impl SistemaMonitoreo {
         let mut children: Vec<JoinHandle<()>> = vec![];
         let broker_addr = get_broker_address();
 
-        let sistema_monitoreo = Self {
+        let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             publish_message_tx,
         };
@@ -192,47 +191,6 @@ impl SistemaMonitoreo {
     }
 }
 
-fn get_broker_address() -> SocketAddr {
-    let (ip, port) = load_ip_and_port().unwrap_or_else(|e| {
-        println!("Error al cargar el puerto: {:?}", e);
-        std::process::exit(1);
-    });
-
-    let broker_addr: String = format!("{}:{}", ip, port);
-    broker_addr.parse().expect("Dirección no válida")
-}
-
-fn join_all_threads(children: Vec<JoinHandle<()>>) {
-    for hijo in children {
-        if let Err(e) = hijo.join() {
-            eprintln!("Error al esperar el hilo: {:?}", e);
-        }
-    }
-}
-
-/// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
-pub fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
-    let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        return Err(Box::new(std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        "Cantidad de argumentos inválido. Debe ingresar: la dirección IP del sistema monitoreo y 
-        el puerto en el que desea correr el servidor.",
-    )));
-    }
-    let ip = &argv[1];
-    let port = match argv[2].parse::<u16>() {
-        Ok(port) => port,
-        Err(_) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "El puerto proporcionado no es válido",
-            )))
-        }
-    };
-
-    Ok((ip.to_string(), port))
-}
 
 pub fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
