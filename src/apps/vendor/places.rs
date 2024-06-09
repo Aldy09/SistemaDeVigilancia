@@ -43,6 +43,9 @@ pub struct Place {
 
     /// Visual style of this place.
     pub style: Style,
+
+    /// Unique identifier of the place.
+    pub id: u8,
 }
 
 impl Place {
@@ -109,6 +112,14 @@ impl Places {
 
     pub fn get_places(&self) -> Vec<Place> {
         self.places.to_vec()
+    }
+
+    pub fn remove_place(&mut self, id: u8) {
+        if let Some(index) = self.places.iter().position(|p| p.id == id) {
+            self.places.remove(index);
+        } else {
+            println!("No se encontró un lugar con el id {}", id);
+        }
     }
 }
 

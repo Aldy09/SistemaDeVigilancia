@@ -245,7 +245,10 @@ pub fn establish_mqtt_broker_connection(
             Ok(mqtt_client)
         }
         Err(e) => {
-            println!("Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}", e);
+            println!(
+                "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",
+                e
+            );
             Err(e.into())
         }
     }

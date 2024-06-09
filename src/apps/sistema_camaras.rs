@@ -206,17 +206,20 @@ fn main() {
 
             let handle_3 = thread::spawn(move || {
                 println!("ENTRE AL HILO DE SUBSCRIBIRME");
-                let res = subscribe_to_topics(mqtt_client_sh_clone_2.clone(), vec!["Inc".to_string()]);
+                let res =
+                    subscribe_to_topics(mqtt_client_sh_clone_2.clone(), vec!["Inc".to_string()]);
                 match res {
                     Ok(_) => {
                         println!("Sistema-Camara: Subscripción a exitosa");
-                        receive_messages_from_subscribed_topics(&mqtt_client_sh_clone_2, &mut cameras_cloned);
+                        receive_messages_from_subscribed_topics(
+                            &mqtt_client_sh_clone_2,
+                            &mut cameras_cloned,
+                        );
                     }
                     Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
                 };
                 println!("Saliendo del hilo de subscribirme");
             });
-
 
             children.push(handle_3);
             // Atender incidentes

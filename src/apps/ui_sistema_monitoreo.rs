@@ -143,16 +143,21 @@ impl UISistemaMonitoreo {
     }
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
-        let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-        let camera_id = camera.get_id();
-        let new_place = Place {
-            position: Position::from_lon_lat(longitude, latitude),
-            label: format!("Camera {}", camera_id),
-            symbol: '📷',
-            style: Style::default(),
-        };
+        if camera.is_not_deleted() {
+            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+            let camera_id = camera.get_id();
+            let new_place = Place {
+                position: Position::from_lon_lat(longitude, latitude),
+                label: format!("Camera {}", camera_id),
+                symbol: '📷',
+                style: Style::default(),
+                id: camera_id,
+            };
 
-        self.places.add_place(new_place);
+            self.places.add_place(new_place);
+        } else {
+            self.places.remove_place(camera.get_id());
+        }
     }
 
     fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
@@ -247,7 +252,11 @@ impl eframe::App for UISistemaMonitoreo {
                                             let latitude = latitude_text.parse::<f64>().unwrap();
                                             let longitude: f64 =
                                                 longitude_text.parse::<f64>().unwrap();
-                                            let incident = Incident::new(self.get_next_incident_id(), latitude, longitude);
+                                            let incident = Incident::new(
+                                                self.get_next_incident_id(),
+                                                latitude,
+                                                longitude,
+                                            );
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
@@ -262,7 +271,4 @@ impl eframe::App for UISistemaMonitoreo {
                 });
             });
     }
-
-    
 }
-
