@@ -109,6 +109,7 @@ pub struct UISistemaMonitoreo {
     publish_incident_tx: Sender<Incident>,
     publish_message_rx: Receiver<PublishMessage>,
     places: Places,
+    last_incident_id: u8,
 }
 
 impl UISistemaMonitoreo {
@@ -133,6 +134,7 @@ impl UISistemaMonitoreo {
             publish_incident_tx: tx,
             publish_message_rx,
             places: super::vendor::Places::new(),
+            last_incident_id: 0,
         }
     }
     fn send_incident(&self, incident: Incident) {
@@ -155,6 +157,11 @@ impl UISistemaMonitoreo {
 
     fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
         //cosas del drone
+    }
+
+    pub fn get_next_incident_id(&mut self) -> u8 {
+        self.last_incident_id = self.last_incident_id + 1;
+        self.last_incident_id
     }
 }
 
@@ -240,7 +247,7 @@ impl eframe::App for UISistemaMonitoreo {
                                             let latitude = latitude_text.parse::<f64>().unwrap();
                                             let longitude: f64 =
                                                 longitude_text.parse::<f64>().unwrap();
-                                            let incident = Incident::new(0, latitude, longitude);
+                                            let incident = Incident::new(self.get_next_incident_id(), latitude, longitude);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
@@ -255,4 +262,7 @@ impl eframe::App for UISistemaMonitoreo {
                 });
             });
     }
+
+    
 }
+

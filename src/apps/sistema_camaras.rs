@@ -14,7 +14,7 @@ use rustx::apps::incident::Incident;
 //use rustx::apps::properties::Properties;
 
 //use std::env::args;
-use std::error::Error;
+use std::io::Error;
 use std::net::SocketAddr;
 
 fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
@@ -40,7 +40,7 @@ fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
 }
 
 ///Recibe por consola la dirección IP del cliente y el puerto en el que se desea correr el servidor.
-fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
+fn load_ip_and_port() -> Result<(String, u16), Box<Error>> {
     let argv = std::env::args().collect::<Vec<String>>();
     if argv.len() != 3 {
         return Err(Box::new(std::io::Error::new(
@@ -83,8 +83,8 @@ pub fn establish_mqtt_broker_connection(
 }
 
 fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiver<Vec<u8>>) {
-    if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-        while let Ok(cam_bytes) = rx.recv() {
+    while let Ok(cam_bytes) = rx.recv() {
+        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let res = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
             match res {
                 Ok(_) => {
@@ -114,18 +114,16 @@ fn join_all_threads(children: Vec<JoinHandle<()>>) {
     }
 }
 
-fn subscribe_to_topics(mqtt_client: Arc<Mutex<MQTTClient>>, topics: Vec<String>, cameras_cl: &mut ShCamerasType) {
+fn subscribe_to_topics(
+    mqtt_client: Arc<Mutex<MQTTClient>>,
+    topics: Vec<String>,
+) -> Result<(), Error> {
+    println!("ANTES DEL LOCK DE SUBSCRIBIRME");
     if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-        let res = mqtt_client_lock.mqtt_subscribe(topics);
-        match res {
-            Ok(_) => {
-                println!("Sistema-Camara: Subscripción a exitosa",);
-                receive_messages_from_subscribed_topics(&mqtt_client, cameras_cl);
-            }
-            Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
-        };
+        println!("DENTRO DEL LOCK DE SUBSCRIBIRME");
+        mqtt_client_lock.mqtt_subscribe(topics)?;
     }
-    
+    Ok(())
 }
 pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
     match e.kind() {
@@ -149,12 +147,19 @@ pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
 }
 
 // Recibe mensajes de los topics a los que se ha suscrito
-pub fn receive_messages_from_subscribed_topics(mqtt_client: &Arc<Mutex<MQTTClient>>, cameras_cl: &mut ShCamerasType) {
+pub fn receive_messages_from_subscribed_topics(
+    mqtt_client: &Arc<Mutex<MQTTClient>>,
+    cameras_cl: &mut ShCamerasType,
+) {
     loop {
         if let Ok(mqtt_client) = mqtt_client.lock() {
             match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                //Publish message: camera o dron
-                Ok(msg) => manage_incidents(Incident::from_bytes(msg.get_payload()), cameras_cl),
+                //Publish message: Incident
+                Ok(msg) => {
+                    let incident = Incident::from_bytes(msg.get_payload());
+                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS");
+                    manage_incidents(incident, cameras_cl);
+                }
                 Err(e) => {
                     if !handle_message_receiving_error(e) {
                         break;
@@ -200,9 +205,19 @@ fn main() {
             children.push(handle_2);
 
             let handle_3 = thread::spawn(move || {
-                subscribe_to_topics(mqtt_client_sh_clone_2, vec!["Inc".to_string()], &mut cameras_cloned);
+                println!("ENTRE AL HILO DE SUBSCRIBIRME");
+                let res = subscribe_to_topics(mqtt_client_sh_clone_2.clone(), vec!["Inc".to_string()]);
+                match res {
+                    Ok(_) => {
+                        println!("Sistema-Camara: Subscripción a exitosa");
+                        receive_messages_from_subscribed_topics(&mqtt_client_sh_clone_2, &mut cameras_cloned);
+                    }
+                    Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
+                };
+                println!("Saliendo del hilo de subscribirme");
             });
-            
+
+
             children.push(handle_3);
             // Atender incidentes
             //manage_incidents(&mut cameras_cloned);
