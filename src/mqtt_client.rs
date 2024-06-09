@@ -16,7 +16,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 use crate::fixed_header::FixedHeader;
-use crate::messages::connack_message::ConnackPacket;
+use crate::messages::connack_message::ConnackMessage;
 use crate::messages::puback_message::PubAckMessage;
 use crate::messages::suback_message::SubAckMessage;
 
@@ -49,7 +49,7 @@ impl MQTTClient {
             client_id,
             None, // will_topic
             None, // will_message
-            Some("sistema-monitoreo"),
+            Some("usuario0"),
             Some("rustx123"),
         );
 
@@ -279,7 +279,7 @@ impl MQTTClient {
                     "conn ack",
                 )?;
                 // Entonces tengo el mensaje completo
-                let msg = ConnackPacket::from_bytes(&msg_bytes)?; //
+                let msg = ConnackMessage::from_bytes(&msg_bytes)?; //
                 println!("   Mensaje conn ack completo recibido: {:?}", msg);
 
                 // Marco que el ack fue recibido, para que el otro hilo pueda enterarse

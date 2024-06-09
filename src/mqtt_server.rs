@@ -1,7 +1,10 @@
 use crate::connected_user::User;
 use crate::file_helper::read_lines;
 use crate::fixed_header::FixedHeader;
+use crate::messages::connack_message::ConnackMessage;
+use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
+use crate::messages::connect_return_code::ConnectReturnCode;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -12,9 +15,10 @@ use crate::messages::suback_message::SubAckMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
 use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self};
 use std::time::Duration;
 
@@ -27,15 +31,20 @@ type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 
 #[allow(dead_code)]
 pub struct MQTTServer {
-    users_connected: ShareableUsers,
     streams: ShareableStreams,
+    connected_users: ShareableUsers,
+    publish_msgs_tx: Sender<PublishMessage>, // rx no se puede clonar, mp"SC", pero el tx sí.
 }
 
 impl MQTTServer {
     pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+        //
+        let (tx, rx) = mpsc::channel::<PublishMessage>();
+
         let mqtt_server = Self {
             streams: Arc::new(Mutex::new(vec![])),
-            users_connected: Arc::new(Mutex::new(HashMap::new())),
+            connected_users: Arc::new(Mutex::new(HashMap::new())),
+            publish_msgs_tx: tx, // []
         };
         let listener = create_server(ip, port)?;
 
@@ -49,8 +58,8 @@ impl MQTTServer {
 
         let mqtt_server_hermano = mqtt_server.clone_ref();
 
-        let outgoing_thread = std::thread::spawn(move || loop {
-            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages() {
+        let outgoing_thread = std::thread::spawn(move || {
+            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages(rx) {
                 println!("Error al manejar los mensajes salientes: {:?}", result);
             }
         });
@@ -68,7 +77,7 @@ impl MQTTServer {
     /// Agrega un usuario al hashmap de usuarios conectados
     fn add_user(&self, stream: &Arc<Mutex<TcpStream>>, username: &str) {
         let user = User::new(stream.clone(), username.to_string());
-        if let Ok(mut users) = self.users_connected.lock() {
+        if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
             users.insert(username, user); //inserta el usuario en el hashmap
         }
@@ -97,7 +106,7 @@ impl MQTTServer {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        write_message_to_stream(&connack_response, stream)?;
+        write_message_to_stream(&connack_response.to_bytes(), stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
         // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
@@ -148,14 +157,21 @@ impl MQTTServer {
     fn was_the_session_created_succesfully(
         &self,
         connect_msg: &ConnectMessage,
-    ) -> Result<(bool, [u8; 4]), Error> {
+    ) -> Result<(bool, ConnackMessage), Error> {
         if self.is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
             || self.authenticate(connect_msg.get_user(), connect_msg.get_passwd())
         {
-            let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x00]; // CONNACK (0x20) con retorno 0x00
+            // Aux: volver cuando haya tema desconexiones, acá le estoy pasando siempre un SessionPresent::NotPresentInLastSession. [].
+            let connack_response = ConnackMessage::new(
+                SessionPresent::NotPresentInLastSession,
+                ConnectReturnCode::ConnectionAccepted,
+            );
             Ok((true, connack_response))
         } else {
-            let connack_response: [u8; 4] = [0x20, 0x02, 0x00, 0x05]; // CONNACK (0x20) con retorno 0x05 (Refused, not authorized)
+            let connack_response = ConnackMessage::new(
+                SessionPresent::NotPresentInLastSession,
+                ConnectReturnCode::NotAuthorized,
+            );
             Ok((false, connack_response))
         }
     }
@@ -245,10 +261,14 @@ impl MQTTServer {
     }
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
-    fn add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
-        if let Ok(mut users_connected) = self.users_connected.lock() {
-            for user in users_connected.values_mut() {
-                //users_connected es un hashmap con key=username y value=user
+    fn _add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
+        // inicio probando
+        //self.publish_msgs_tx.send(*msg); // pero cómo le digo de qué user y topic es
+        // dicen mis notas "y que el hilo ppal, que el pcsamiento de iterar x user lo haga el hilo que escribe.
+        // fin probando
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            for user in connected_users.values_mut() {
+                //connected_users es un hashmap con key=username y value=user
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
@@ -287,8 +307,8 @@ impl MQTTServer {
         let mut return_codes = vec![];
 
         // Agrega los topics a los que se suscribió el usuario
-        if let Ok(mut users_connected) = self.users_connected.lock() {
-            if let Some(user) = users_connected.get_mut(username) {
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            if let Some(user) = connected_users.get_mut(username) {
                 for (topic, _qos) in msg.get_topic_filters() {
                     user.add_topic(topic.to_string());
                     return_codes.push(SubscribeReturnCode::QoS1);
@@ -336,8 +356,16 @@ impl MQTTServer {
 
                 self.send_puback(&msg, stream)?;
                 // println!(" Publish:  Antes de add_message_to_subscribers_queue");
-                self.add_message_to_subscribers_queue(&msg)?;
-                // println!(" Publish:  Despues de add_message_to_subscribers_queue");
+
+                // Si llega un publish, lo mando por el channel, del otro lado (el hilo que llama a handle_outgoing_connections)
+                // se encargará de enviarlo al/los suscriptor/es que tenga el topic del mensaje en cuestión.
+                if self.publish_msgs_tx.send(msg).is_err() {
+                    //println!("Error al enviar el PublishMessage al hilo que los procesa.");
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Error al enviar el PublishMessage al hilo que los procesa.",
+                    ));
+                }
             }
             8 => {
                 // Subscribe
@@ -407,7 +435,8 @@ impl MQTTServer {
     fn clone_ref(&self) -> Self {
         Self {
             streams: self.streams.clone(),
-            users_connected: self.users_connected.clone(),
+            connected_users: self.connected_users.clone(),
+            publish_msgs_tx: self.publish_msgs_tx.clone(), // []
         }
     }
 
@@ -449,10 +478,50 @@ impl MQTTServer {
             streams.push(stream);
         }
     }
+
+    /// Recibe los `PublishMessage`s recibidos de los clientes que le envía el otro hilo, y por cada uno,
+    /// lo agrega a la queue de cada suscriptor y lo envía.
+    fn handle_outgoing_messages(&self, rx: Receiver<PublishMessage>) -> Result<(), Error> {
+        while let Ok(msg) = rx.recv() {
+            self.handle_publish_message(msg)?;
+        }
+        Ok(())
+    }
+
+    // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
-    fn handle_outgoing_messages(&self) -> Result<(), Error> {
-        if let Ok(users_connected_locked) = self.users_connected.lock() {
-            for user in users_connected_locked.values() {
+    fn handle_publish_message(&self, msg: PublishMessage) -> Result<(), Error> {
+        // Inicio probando
+        // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            for user in connected_users.values_mut() {
+                //connected_users es un hashmap con key=username y value=user
+                // User/s que se suscribió/eron al topic del PublishMessage:
+                let user_topics = user.get_topics();
+                if user_topics.contains(&(msg.get_topic())) {
+                    //si el usuario está suscrito al topic del mensaje
+                    user.add_message_to_queue(msg.clone());
+                    // Aux: y acá mismo llamar al write que se lo mande.
+                    // aux: el write actualmente hace pop. No tiene sentido hacer add message to queu
+                    // aux: y en la línea siguiente hacerle pop, pero capaz sí tiene sentido que esté en la queue
+                    // aux: por tema desconexiones. Ver [].
+                }
+            }
+        }
+
+        // Aux: se debe desencolar solamente cuando llega el ack. Por eso está en un for separado.
+        // Envía
+        self.pop_and_write()?;
+
+        Ok(())
+    }
+
+    fn pop_and_write(&self) -> Result<(), Error> {
+        // Aux: esto recorre todos los users, todos los topic, y hace pop de un msg de la queue.
+        // aux: eso era xq antes no sabía qué se insertó a cada queue, por hacerlo un hilo diferente;
+        // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
+        if let Ok(connected_users) = self.connected_users.lock() {
+            for user in connected_users.values() {
                 let stream = user.get_stream();
                 let topics = user.get_topics();
                 // println!("TOPICS: {:?}",topics);
