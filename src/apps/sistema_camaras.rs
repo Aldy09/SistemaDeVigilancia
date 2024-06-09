@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 use std::sync::{mpsc, Arc};
-use std::thread::sleep;
+use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 use std::{fs, thread};
 type ShareableCamType = Camera;
@@ -65,87 +65,90 @@ fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
     Ok((ip_cam.to_string(), port))
 }
 
-fn connect_and_publish(broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
-    //let _publish_interval = 4;
-
-    // Cliente usa funciones connect, publish, y subscribe de la lib.
-    let client_id = "sistema-camaras";
+pub fn establish_mqtt_broker_connection(
+    broker_addr: &SocketAddr,
+) -> Result<MQTTClient, Box<dyn std::error::Error>> {
+    let client_id = "Sistema-Camaras";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
-        Ok(mut mqtt_client) => {
-            //info!("Conectado al broker MQTT."); //
+        Ok(mqtt_client) => {
             println!("Cliente: Conectado al broker MQTT.");
-
-            while let Ok(cam_bytes) = rx.recv() {
-                let res = mqtt_client.mqtt_publish("Cam", &cam_bytes);
-                match res {
-                    Ok(_) => {
-                        println!("Sistema-Camara: Hecho un publish");
-                    }
-                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-                };
-
-                /*// Aux ver cómo respetar el "periódicamente", o si sobra, ver [].
-                // Esperamos, para publicar los cambios "periódicamente"
-                sleep(Duration::from_secs(publish_interval));*/
-            }
+            Ok(mqtt_client)
         }
-        Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
+        Err(e) => {
+            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
+            Err(e.into())
+        }
+    }
+}
+
+fn publish_to_topic(mqtt_client: &mut MQTTClient, topic: &str, rx: Receiver<Vec<u8>>) {
+    while let Ok(cam_bytes) = rx.recv() {
+        let res = mqtt_client.mqtt_publish(topic, &cam_bytes);
+        match res {
+            Ok(_) => {
+                println!("Sistema-Camara: Hecho un publish");
+            }
+            Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+        };
+    }
+}
+
+fn get_broker_address() -> SocketAddr {
+    let (ip, port) = load_ip_and_port().unwrap_or_else(|e| {
+        println!("Error al cargar el puerto: {:?}", e);
+        std::process::exit(1);
+    });
+
+    let broker_addr: String = format!("{}:{}", ip, port);
+    broker_addr.parse().expect("Dirección no válida")
+}
+
+fn join_all_threads(children: Vec<JoinHandle<()>>) {
+    for hijo in children {
+        if let Err(e) = hijo.join() {
+            eprintln!("Error al esperar el hilo: {:?}", e);
+        }
     }
 }
 
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    //Establezco la conexión con el servidor
-    let res = load_ip_and_port();
-    let (ip, port) = match res {
-        Ok((ip, port)) => (ip, port),
-        Err(_) => {
-            println!(
-                "Error al cargar la IP de sistema de camaras 
-            y/o puerto del servidor"
-            );
-            return;
+    let broker_addr = get_broker_address();
+    let mut children: Vec<JoinHandle<()>> = vec![];
+
+    match establish_mqtt_broker_connection(&broker_addr) {
+        Ok(mut mqtt_client) => {
+            let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
+            let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
+
+            let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
+
+            // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
+            // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
+            sleep(Duration::from_secs(2));
+
+            let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+            let handle = thread::spawn(move || {
+                abm_cameras(&mut shareable_cameras, tx);
+            });
+            children.push(handle);
+
+            let handle_2 = thread::spawn(move || {
+                publish_to_topic(&mut mqtt_client, "Cam", rx);
+            });
+            children.push(handle_2);
+            // Menú cámaras
+
+            // Atender incidentes
+            manage_incidents(&mut cameras_cloned);
         }
-    };
-
-    // Parseo ip de sistema de cámaras y puerto del servidor
-    let broker_addr: String = format!("{}:{}", ip, port);
-    let broker_addr = broker_addr
-        .parse::<SocketAddr>()
-        .expect("Dirección no válida");
-
-    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-    let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
-    let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
-
-    // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
-    // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
-    sleep(Duration::from_secs(2));
-
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-
-    // Menú cámaras
-    let handle = thread::spawn(move || {
-        abm_cameras(&mut shareable_cameras, tx);
-    });
-
-    // Publicar cámaras
-    let handle_2 = thread::spawn(move || {
-        connect_and_publish(&broker_addr, rx);
-    });
-
-    // Atender incidentes
-    manage_incidents(&mut cameras_cloned);
-
-    // Esperar hijos
-    if handle.join().is_err() {
-        println!("Error al esperar al hijo.");
+        Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
-    if handle_2.join().is_err() {
-        println!("Error al esperar al hijo.");
-    }
+
+    join_all_threads(children);
 }
 
 fn manage_incidents(cameras_cl: &mut ShCamerasType) {
