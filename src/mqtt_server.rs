@@ -5,6 +5,7 @@ use crate::messages::connack_message::ConnackMessage;
 use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
 use crate::messages::connect_return_code::ConnectReturnCode;
+use crate::messages::disconnect_message::DisconnectMessage;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -115,6 +116,11 @@ impl MQTTServer {
         // Procesa el mensaje connect
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
+        
+        // Busca en el hashmap: si ya existía ese cliente, lo desconecta
+        if let Some(client_id) = connect_msg.get_client_id() {
+            self.disconnect_previous_client_if_already_connected(client_id)?;
+        }
 
         write_message_to_stream(&connack_response.to_bytes(), stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
@@ -572,6 +578,22 @@ impl MQTTServer {
                 }
             }
         }
+        Ok(())
+    }
+    
+    /// Busca al client_id en el hashmap de conectados, si ya estaba conectado, le manda disconnect.
+    fn disconnect_previous_client_if_already_connected(&self, client_id: &str) -> Result<(), Error> {
+        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+            if let Some(client) = connected_users_locked.remove(client_id){
+                let msg = DisconnectMessage::new();
+                let stream = client.get_stream();
+
+                write_message_to_stream(&msg.to_bytes(), &stream)?;
+
+            }
+
+        }
+
         Ok(())
     }
 }

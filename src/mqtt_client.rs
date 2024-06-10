@@ -357,6 +357,19 @@ impl MQTTClient {
                 // Entonces tengo el mensaje completo
                 let msg = SubAckMessage::from_bytes(msg_bytes)?;
                 println!("   Mensaje sub ack completo recibido: {:?}", msg);
+            },
+
+            14 => {
+                // Disconnect
+                println!("Mqtt cliente leyendo: recibo disconnect");
+                
+                // Cerramos la conexión con el servidor
+                if let Ok(s) = self.stream.lock() {
+                    match s.shutdown(Shutdown::Both) {
+                        Ok(_) => println!("Conexión terminada con éxito"),
+                        Err(e) => println!("Error al terminar la conexión: {:?}", e),
+                    }
+                }
             }
 
             _ => {
