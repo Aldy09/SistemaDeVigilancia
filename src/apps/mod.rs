@@ -13,3 +13,5 @@ pub mod properties;
 pub mod ui_sistema_monitoreo;
 pub mod vendor;
 pub mod windows;
+pub mod manage_stored_cameras;
+pub mod common_clients;

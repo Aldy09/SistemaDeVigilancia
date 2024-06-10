@@ -1,176 +1,178 @@
 use rustx::apps::camera::Camera;
+use rustx::apps::common_clients::{get_broker_address, join_all_threads};
+use rustx::apps::manage_stored_cameras::read_cameras_from_file;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 use std::sync::{mpsc, Arc};
-use std::thread::sleep;
+use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
-use std::{fs, thread};
+use std::thread;
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
 //use rustx::apps::properties::Properties;
 
 //use std::env::args;
-use std::error::Error;
+use std::io::Error;
 use std::net::SocketAddr;
 
-fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
-    let mut cameras = HashMap::new();
-    let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
-
-    for line in contents.lines() {
-        let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() == 5 {
-            let id: u8 = parts[0].trim().parse().expect("Id no válido");
-            let latitude = parts[1].trim().parse().expect("Latitud no válida");
-            let longitude = parts[2].trim().parse().expect("Longitud no válida");
-            let range = parts[3].trim().parse().expect("Rango no válido");
-            let border_cam: u8 = parts[4].trim().parse().expect("Id no válido");
-            let vec = vec![border_cam];
-
-            let camera = Camera::new(id, latitude, longitude, range, vec);
-            cameras.insert(id, camera);
-        }
-    }
-
-    cameras
-}
-
-///Recibe por consola la dirección IP del cliente y el puerto en el que se desea correr el servidor.
-fn load_ip_and_port() -> Result<(String, u16), Box<dyn Error>> {
-    let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Cantidad de argumentos inválido. Debe ingresar:  la dirección IP de sistema_camaras y 
-            el puerto en el que desea correr el servidor.",
-        )));
-    }
-
-    let ip_cam = &argv[1];
-
-    let port = match argv[2].parse::<u16>() {
-        Ok(port) => port,
-        Err(_) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "El puerto proporcionado no es válido",
-            )))
-        }
-    };
-
-    Ok((ip_cam.to_string(), port))
-}
-
-fn connect_and_publish(broker_addr: &SocketAddr, rx: Receiver<Vec<u8>>) {
-    //let _publish_interval = 4;
-
-    // Cliente usa funciones connect, publish, y subscribe de la lib.
-    let client_id = "sistema-camaras";
+pub fn establish_mqtt_broker_connection(
+    broker_addr: &SocketAddr,
+) -> Result<MQTTClient, Box<dyn std::error::Error>> {
+    let client_id = "Sistema-Camaras";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
-        Ok(mut mqtt_client) => {
-            //info!("Conectado al broker MQTT."); //
+        Ok(mqtt_client) => {
             println!("Cliente: Conectado al broker MQTT.");
+            Ok(mqtt_client)
+        }
+        Err(e) => {
+            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
+            Err(e.into())
+        }
+    }
+}
 
-            while let Ok(cam_bytes) = rx.recv() {
-                let res = mqtt_client.mqtt_publish("Cam", &cam_bytes);
-                match res {
-                    Ok(_) => {
-                        println!("Sistema-Camara: Hecho un publish");
+fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiver<Vec<u8>>) {
+    while let Ok(cam_bytes) = rx.recv() {
+        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+            let res = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
+            match res {
+                Ok(_) => {
+                    println!("Sistema-Camara: Hecho un publish");
+                }
+                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+            };
+        }
+    }
+}
+
+fn subscribe_to_topics(
+    mqtt_client: Arc<Mutex<MQTTClient>>,
+    topics: Vec<String>,
+) -> Result<(), Error> {
+    println!("ANTES DEL LOCK DE SUBSCRIBIRME");
+    if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+        println!("DENTRO DEL LOCK DE SUBSCRIBIRME");
+        mqtt_client_lock.mqtt_subscribe(topics)?;
+    }
+    Ok(())
+}
+pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut => true,
+        std::io::ErrorKind::NotConnected => {
+            println!("Cliente: No hay más PublishMessage's por leer.");
+            false
+        }
+        _ => {
+            println!("Cliente: error al leer los publish messages recibidos.");
+            true
+        }
+    }
+    /*/*if e == RecvTimeoutError::Timeout {
+    }*/
+
+    if e == RecvTimeoutError::Disconnected {
+        println!("Cliente: No hay más PublishMessage's por leer.");
+        break;
+    }*/
+}
+
+// Recibe mensajes de los topics a los que se ha suscrito
+pub fn receive_messages_from_subscribed_topics(
+    mqtt_client: &Arc<Mutex<MQTTClient>>,
+    cameras_cl: &mut ShCamerasType,
+) {
+    loop {
+        if let Ok(mqtt_client) = mqtt_client.lock() {
+            match mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                //Publish message: Incident
+                Ok(msg) => {
+                    let incident = Incident::from_bytes(msg.get_payload());
+                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS");
+                    manage_incidents(incident, cameras_cl);
+                }
+                Err(e) => {
+                    if !handle_message_receiving_error(e) {
+                        break;
                     }
-                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-                };
-
-                /*// Aux ver cómo respetar el "periódicamente", o si sobra, ver [].
-                // Esperamos, para publicar los cambios "periódicamente"
-                sleep(Duration::from_secs(publish_interval));*/
+                }
             }
         }
-        Err(e) => println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e),
     }
 }
 
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
-    //Establezco la conexión con el servidor
-    let res = load_ip_and_port();
-    let (ip, port) = match res {
-        Ok((ip, port)) => (ip, port),
-        Err(_) => {
-            println!(
-                "Error al cargar la IP de sistema de camaras 
-            y/o puerto del servidor"
-            );
-            return;
+    let broker_addr = get_broker_address();
+    let mut children: Vec<JoinHandle<()>> = vec![];
+
+    match establish_mqtt_broker_connection(&broker_addr) {
+        Ok(mqtt_client) => {
+            let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+            let mqtt_client_sh_clone: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
+            let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone);
+
+            let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
+            let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
+
+            let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
+
+            // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
+            // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
+            sleep(Duration::from_secs(2));
+
+            let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+            // Menú cámaras
+            let handle = thread::spawn(move || {
+                abm_cameras(&mut shareable_cameras, tx);
+            });
+            children.push(handle);
+
+            let handle_2 = thread::spawn(move || {
+                publish_to_topic(mqtt_client_sh_clone, "Cam", rx);
+            });
+            children.push(handle_2);
+
+            let handle_3 = thread::spawn(move || {
+                println!("ENTRE AL HILO DE SUBSCRIBIRME");
+                let res =
+                    subscribe_to_topics(mqtt_client_sh_clone_2.clone(), vec!["Inc".to_string()]);
+                match res {
+                    Ok(_) => {
+                        println!("Sistema-Camara: Subscripción a exitosa");
+                        receive_messages_from_subscribed_topics(
+                            &mqtt_client_sh_clone_2,
+                            &mut cameras_cloned,
+                        );
+                    }
+                    Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
+                };
+                println!("Saliendo del hilo de subscribirme");
+            });
+
+            children.push(handle_3);
         }
-    };
-
-    // Parseo ip de sistema de cámaras y puerto del servidor
-    let broker_addr: String = format!("{}:{}", ip, port);
-    let broker_addr = broker_addr
-        .parse::<SocketAddr>()
-        .expect("Dirección no válida");
-
-    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-    let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
-    let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
-
-    // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
-    // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
-    sleep(Duration::from_secs(2));
-
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-
-    // Menú cámaras
-    let handle = thread::spawn(move || {
-        abm_cameras(&mut shareable_cameras, tx);
-    });
-
-    // Publicar cámaras
-    let handle_2 = thread::spawn(move || {
-        connect_and_publish(&broker_addr, rx);
-    });
-
-    // Atender incidentes
-    manage_incidents(&mut cameras_cloned);
-
-    // Esperar hijos
-    if handle.join().is_err() {
-        println!("Error al esperar al hijo.");
+        Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
-    if handle_2.join().is_err() {
-        println!("Error al esperar al hijo.");
-    }
+
+    join_all_threads(children);
 }
 
-fn manage_incidents(cameras_cl: &mut ShCamerasType) {
-    // probando, unos incidentes hardcodeados
-    let mut read_incs: Vec<Incident> = vec![]; // (a mí no me digan, yo quería programar en castellano, xd)
-    let inc1 = Incident::new(1, 1.0, 1.0);
-    let inc2 = Incident::new(2, 5.0, 5.0);
-    let inc3 = Incident::new(3, 15.0, 15.0);
-    let mut inc1_resuelto = Incident::new(1, 1.0, 1.0);
-    inc1_resuelto.set_resolved();
-    read_incs.push(inc1);
-    read_incs.push(inc2);
-    read_incs.push(inc3);
-    read_incs.push(inc1_resuelto);
-    // fin probando
-
+fn manage_incidents(incident: Incident, cameras_cl: &mut ShCamerasType) {
     // Proceso los incidentes
     let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new(); // esto puede ser un atributo..., o no.
 
-    for inc in read_incs {
-        if !incs_being_managed.contains_key(&inc.id) {
-            procesar_incidente_por_primera_vez(cameras_cl, inc, &mut incs_being_managed);
-        } else {
-            procesar_incidente_conocido(cameras_cl, inc, &mut incs_being_managed);
-        }
+    if !incs_being_managed.contains_key(&incident.id) {
+        procesar_incidente_por_primera_vez(cameras_cl, incident, &mut incs_being_managed);
+    } else {
+        procesar_incidente_conocido(cameras_cl, incident, &mut incs_being_managed);
     }
 }
 
