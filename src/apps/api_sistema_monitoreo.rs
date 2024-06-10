@@ -1,5 +1,5 @@
 use std::{
-    net::SocketAddr, process::exit, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
+    net::SocketAddr, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
 };
 
 use std::sync::mpsc::Receiver;

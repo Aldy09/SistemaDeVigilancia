@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::apps::incident::Incident;
-use crate::messages::disconnect_message::DisconnectMessage;
 use crate::messages::publish_message::PublishMessage;
 
 use super::camera::Camera;
@@ -111,6 +110,7 @@ pub struct UISistemaMonitoreo {
     publish_message_rx: Receiver<PublishMessage>,
     places: Places,
     last_incident_id: u8,
+    exit_tx: Sender<bool>,
 }
 
 impl UISistemaMonitoreo {
@@ -137,6 +137,7 @@ impl UISistemaMonitoreo {
             publish_message_rx,
             places: super::vendor::Places::new(),
             last_incident_id: 0,
+            exit_tx,
         }
     }
     fn send_incident(&self, incident: Incident) {
@@ -275,8 +276,13 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             });
                             if ui.button("Salir").clicked() {
+                                // Indicar que se desea salir
+                                match self.exit_tx.send(true) {
+                                    Ok(_) => println!("Iniciando proceso para salir"),
+                                    Err(_) => println!("Error al intentar salir"),
+                                }
                                 
-                                // Handle exit
+                                
                             }
                         });
                     });
