@@ -118,7 +118,11 @@ impl Places {
     }
 
     pub fn remove_place(&mut self, id: u8, place_type: String) {
-        if let Some(index) = self.places.iter().position(|p| p.id == id && p.place_type == place_type) {
+        if let Some(index) = self
+            .places
+            .iter()
+            .position(|p| p.id == id && p.place_type == place_type)
+        {
             self.places.remove(index);
         } else {
             println!("No se encontró un lugar con el id {}", id);

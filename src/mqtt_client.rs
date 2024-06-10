@@ -183,11 +183,11 @@ impl MQTTClient {
         // Lo envío
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &self.stream)?;
-        println!("Mqtt disconnect: bytes \n   {:?}", bytes_msg);
+        println!("Mqtt disconnect: bytes {:?}", bytes_msg);
 
         // Cerramos la conexión con el servidor
-        if let Ok(s) = self.stream.lock(){
-            match s.shutdown(Shutdown::Both){
+        if let Ok(s) = self.stream.lock() {
+            match s.shutdown(Shutdown::Both) {
                 Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
                 Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
             }

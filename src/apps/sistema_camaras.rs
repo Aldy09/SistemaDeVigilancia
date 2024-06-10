@@ -7,9 +7,9 @@ use std::io::{self, Write};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Mutex;
 use std::sync::{mpsc, Arc};
+use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
-use std::thread;
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
@@ -140,7 +140,7 @@ fn main() {
                 publish_to_topic(mqtt_client_sh_clone.clone(), "Cam", cameras_rx);
             });
             children.push(handle_2);
-            
+
             // Recepción del exit
             let exit_handle = thread::spawn(move || {
                 exit_when_asked(mqtt_client_sh_clone_2.clone(), exit_rx);
@@ -397,7 +397,7 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx:
             }
             "4" => {
                 // Aviso al otro hilo que se desea salir
-                match exit_tx.send(true){
+                match exit_tx.send(true) {
                     Ok(_) => println!("Saliendo del programa."),
                     Err(e) => println!("Error al intentar salir: {:?}", e),
                 }

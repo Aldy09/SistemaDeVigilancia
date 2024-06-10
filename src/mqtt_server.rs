@@ -5,7 +5,6 @@ use crate::messages::connack_message::ConnackMessage;
 use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
 use crate::messages::connect_return_code::ConnectReturnCode;
-use crate::messages::disconnect_message::DisconnectMessage;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -80,7 +79,17 @@ impl MQTTServer {
         let user = User::new(stream.clone(), username.to_string());
         if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
+            println!("Username agregado a la lista del server: {:?}", username); // debug
             users.insert(username, user); //inserta el usuario en el hashmap
+        }
+    }
+
+    /// Remueve al usuario `username` del hashmap de usuarios conectados
+    fn remove_user(&self, username: &str) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            users.remove(username);
+            println!("Username removido de la lista del server: {:?}", username);
+            // debug
         }
     }
 
@@ -389,27 +398,29 @@ impl MQTTServer {
                 // Entonces tengo el mensaje completo
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
-            },
+            }
             14 => {
                 // Disconnect
                 println!("Recibo mensaje tipo Disconnect");
-                let msg_bytes = get_whole_message_in_bytes_from_stream(
-                    fixed_header,
-                    stream,
-                    fixed_header_bytes,
-                    "disconnect",
-                )?;
-                let _msg = DisconnectMessage::from_bytes(&msg_bytes);
+                // let msg_bytes = get_whole_message_in_bytes_from_stream(
+                //     fixed_header,
+                //     stream,
+                //     fixed_header_bytes,
+                //     "disconnect",
+                // )?;
+                // let _msg = DisconnectMessage::from_bytes(&msg_bytes);
                 // [] Aux: ver si quiero este "msg" para algo.
 
+                // Eliminar al cliente de connected_users
+                self.remove_user(username);
+
                 // Cerramos la conexión con ese cliente
-                if let Ok(s) = stream.lock(){
-                    match s.shutdown(Shutdown::Both){
+                if let Ok(s) = stream.lock() {
+                    match s.shutdown(Shutdown::Both) {
                         Ok(_) => println!("Conexión terminada con éxito"),
                         Err(e) => println!("Error al terminar la conexión: {:?}", e),
                     }
                 }
-
             }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",

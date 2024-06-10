@@ -159,7 +159,8 @@ impl UISistemaMonitoreo {
             };
             self.places.add_place(new_place);
         } else {
-            self.places.remove_place(camera.get_id(), "Camera".to_string());
+            self.places
+                .remove_place(camera.get_id(), "Camera".to_string());
         }
     }
 
@@ -261,7 +262,9 @@ impl eframe::App for UISistemaMonitoreo {
                                                 longitude,
                                             );
                                             let new_place_incident = Place {
-                                                position: Position::from_lon_lat(longitude, latitude),
+                                                position: Position::from_lon_lat(
+                                                    longitude, latitude,
+                                                ),
                                                 label: format!("Incident {}", incident.get_id()),
                                                 symbol: '⚠',
                                                 style: Style::default(),
@@ -281,8 +284,6 @@ impl eframe::App for UISistemaMonitoreo {
                                     Ok(_) => println!("Iniciando proceso para salir"),
                                     Err(_) => println!("Error al intentar salir"),
                                 }
-                                
-                                
                             }
                         });
                     });

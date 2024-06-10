@@ -1,5 +1,7 @@
 use std::{
-    net::SocketAddr, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
+    net::SocketAddr,
+    sync::{mpsc, Arc, Mutex},
+    thread::{self, JoinHandle},
 };
 
 use std::sync::mpsc::Receiver;
@@ -8,7 +10,11 @@ use crossbeam::channel::{self, Sender};
 
 use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
-use super::{common_clients::{exit_when_asked, get_broker_address, join_all_threads}, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
+use super::{
+    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
+    incident::Incident,
+    ui_sistema_monitoreo::UISistemaMonitoreo,
+};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
@@ -43,14 +49,15 @@ impl SistemaMonitoreo {
 
                 let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh_clone);
 
-                let send_incidents_thread = sistema_monitoreo
-                    .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx);
+                let send_incidents_thread = sistema_monitoreo.spawn_send_incidents_thread(
+                    mqtt_client_incident_sh_clone.clone(),
+                    incident_rx,
+                );
                 children.push(send_incidents_thread);
 
                 let exit_thread = sistema_monitoreo
                     .spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
                 children.push(exit_thread);
-
             }
             Err(e) => println!(
                 "Error al establecer la conexión con el broker MQTT: {:?}",
@@ -193,14 +200,17 @@ impl SistemaMonitoreo {
         }
         new_inc_id
     }
-    
-    fn spawn_exit_thread(&self, mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bool>) -> JoinHandle<()> {
+
+    fn spawn_exit_thread(
+        &self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        exit_rx: Receiver<bool>,
+    ) -> JoinHandle<()> {
         thread::spawn(move || {
-            let _ = exit_when_asked(mqtt_client, exit_rx);
+            exit_when_asked(mqtt_client, exit_rx);
         })
     }
 }
-
 
 pub fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
