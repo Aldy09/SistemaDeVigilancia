@@ -392,12 +392,12 @@ impl MQTTServer {
             },
             14 => {
                 // Disconnect
-                println!("Recibo mensaje tipo PubAck");
+                println!("Recibo mensaje tipo Disconnect");
                 let msg_bytes = get_whole_message_in_bytes_from_stream(
                     fixed_header,
                     stream,
                     fixed_header_bytes,
-                    "pub ack",
+                    "disconnect",
                 )?;
                 let _msg = DisconnectMessage::from_bytes(&msg_bytes);
                 // [] Aux: ver si quiero este "msg" para algo.

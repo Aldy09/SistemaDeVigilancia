@@ -1,5 +1,5 @@
 use rustx::apps::camera::Camera;
-use rustx::apps::common_clients::{get_broker_address, join_all_threads};
+use rustx::apps::common_clients::{exit_when_asked, get_broker_address, join_all_threads};
 use rustx::apps::manage_stored_cameras::read_cameras_from_file;
 use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
@@ -54,9 +54,7 @@ fn subscribe_to_topics(
     mqtt_client: Arc<Mutex<MQTTClient>>,
     topics: Vec<String>,
 ) -> Result<(), Error> {
-    println!("ANTES DEL LOCK DE SUBSCRIBIRME");
     if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-        println!("DENTRO DEL LOCK DE SUBSCRIBIRME");
         mqtt_client_lock.mqtt_subscribe(topics)?;
     }
     Ok(())
@@ -127,28 +125,36 @@ fn main() {
             // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
             sleep(Duration::from_secs(2));
 
-            let (tx, rx) = mpsc::channel::<Vec<u8>>();
+            let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
+            let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
             // Menú cámaras
             let handle = thread::spawn(move || {
-                abm_cameras(&mut shareable_cameras, tx);
+                abm_cameras(&mut shareable_cameras, cameras_tx, exit_tx);
             });
             children.push(handle);
 
             let handle_2 = thread::spawn(move || {
-                publish_to_topic(mqtt_client_sh_clone, "Cam", rx);
+                publish_to_topic(mqtt_client_sh_clone.clone(), "Cam", cameras_rx);
             });
             children.push(handle_2);
+            
+            let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
+
+            let exit_handle = thread::spawn(move || {
+                exit_when_asked(mqtt_client_sh_clone_2.clone(), exit_rx);
+            });
+            children.push(exit_handle);
+
 
             let handle_3 = thread::spawn(move || {
-                println!("ENTRE AL HILO DE SUBSCRIBIRME");
                 let res =
-                    subscribe_to_topics(mqtt_client_sh_clone_2.clone(), vec!["Inc".to_string()]);
+                    subscribe_to_topics(mqtt_client_sh_clone_3.clone(), vec!["Inc".to_string()]);
                 match res {
                     Ok(_) => {
                         println!("Sistema-Camara: Subscripción a exitosa");
                         receive_messages_from_subscribed_topics(
-                            &mqtt_client_sh_clone_2,
+                            &mqtt_client_sh_clone_3,
                             &mut cameras_cloned,
                         );
                     }
@@ -255,7 +261,7 @@ fn procesar_incidente_por_primera_vez(
     };
 }
 
-fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>) {
+fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx: Sender<bool>) {
     // Envía todas las cámaras al inicio
     match cameras.lock() {
         Ok(cams) => {

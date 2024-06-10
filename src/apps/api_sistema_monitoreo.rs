@@ -8,7 +8,7 @@ use crossbeam::channel::{self, Sender};
 
 use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
-use super::{common_clients::{get_broker_address, join_all_threads}, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
+use super::{common_clients::{exit_when_asked, get_broker_address, join_all_threads}, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
@@ -196,25 +196,7 @@ impl SistemaMonitoreo {
     
     fn spawn_exit_thread(&self, mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bool>) -> JoinHandle<()> {
         thread::spawn(move || {
-
-            // Espero que la ui me indique que se desea salir
-            let exit_res = exit_rx.recv();
-            match exit_res {
-                Ok(exit) => {
-                    // Cuando eso ocurre, envío disconnect por mqtt
-                    if exit {
-                        if let Ok(mqtt_locked) = mqtt_client.lock(){
-                            match mqtt_locked.mqtt_disconnect() {
-                                Ok(_) => println!("Saliendo exitosamente"),
-                                Err(e) => println!("Error al salir: {:?}", e),
-                            }
-                        }
-
-                        // Aux: ver si hay que hacer algo más para salir [].
-                    }
-                },
-                Err(e) => println!("Error al recibir por exit_rx {:?}", e),
-            }
+            let _ = exit_when_asked(mqtt_client, exit_rx);
         })
     }
 }
