@@ -110,6 +110,7 @@ pub struct UISistemaMonitoreo {
     publish_message_rx: Receiver<PublishMessage>,
     places: Places,
     last_incident_id: u8,
+    exit_tx: Sender<bool>,
 }
 
 impl UISistemaMonitoreo {
@@ -117,6 +118,7 @@ impl UISistemaMonitoreo {
         egui_ctx: Context,
         tx: Sender<Incident>,
         publish_message_rx: Receiver<PublishMessage>,
+        exit_tx: Sender<bool>,
     ) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
@@ -135,6 +137,7 @@ impl UISistemaMonitoreo {
             publish_message_rx,
             places: super::vendor::Places::new(),
             last_incident_id: 0,
+            exit_tx,
         }
     }
     fn send_incident(&self, incident: Incident) {
@@ -156,7 +159,8 @@ impl UISistemaMonitoreo {
             };
             self.places.add_place(new_place);
         } else {
-            self.places.remove_place(camera.get_id(), "Camera".to_string());
+            self.places
+                .remove_place(camera.get_id(), "Camera".to_string());
         }
     }
 
@@ -258,7 +262,9 @@ impl eframe::App for UISistemaMonitoreo {
                                                 longitude,
                                             );
                                             let new_place_incident = Place {
-                                                position: Position::from_lon_lat(longitude, latitude),
+                                                position: Position::from_lon_lat(
+                                                    longitude, latitude,
+                                                ),
                                                 label: format!("Incident {}", incident.get_id()),
                                                 symbol: '⚠',
                                                 style: Style::default(),
@@ -273,7 +279,11 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             });
                             if ui.button("Salir").clicked() {
-                                // Handle exit
+                                // Indicar que se desea salir
+                                match self.exit_tx.send(true) {
+                                    Ok(_) => println!("Iniciando proceso para salir"),
+                                    Err(_) => println!("Error al intentar salir"),
+                                }
                             }
                         });
                     });

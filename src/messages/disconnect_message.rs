@@ -1,33 +1,33 @@
 use crate::messages::disconnect_fixed_header::FixedHeader;
 
-pub struct Disconnect {
+pub struct DisconnectMessage {
     fixed_header: FixedHeader,
 }
 
-impl Disconnect {
+impl DisconnectMessage {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Disconnect {
+    pub fn new() -> DisconnectMessage {
         let fixed_header = FixedHeader {
             message_type: 0b1110,
             reserved: 0b0000,
             remaining_length: 0,
         };
 
-        Disconnect { fixed_header }
+        DisconnectMessage { fixed_header }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         vec![self.fixed_header.message_type << 4 | self.fixed_header.reserved]
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Disconnect {
+    pub fn from_bytes(bytes: &[u8]) -> DisconnectMessage {
         let fixed_header = FixedHeader {
             message_type: bytes[0] >> 4,
             reserved: bytes[0] & 0b00001111,
             remaining_length: 0,
         };
 
-        Disconnect { fixed_header }
+        DisconnectMessage { fixed_header }
     }
 }
 

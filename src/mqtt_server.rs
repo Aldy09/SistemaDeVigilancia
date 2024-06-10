@@ -5,6 +5,7 @@ use crate::messages::connack_message::ConnackMessage;
 use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
 use crate::messages::connect_return_code::ConnectReturnCode;
+use crate::messages::disconnect_message::DisconnectMessage;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -16,7 +17,7 @@ use crate::messages::subscribe_message::SubscribeMessage;
 use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self};
@@ -79,7 +80,17 @@ impl MQTTServer {
         let user = User::new(stream.clone(), username.to_string());
         if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
+            println!("Username agregado a la lista del server: {:?}", username); // debug
             users.insert(username, user); //inserta el usuario en el hashmap
+        }
+    }
+
+    /// Remueve al usuario `username` del hashmap de usuarios conectados
+    fn remove_user(&self, username: &str) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            users.remove(username);
+            println!("Username removido de la lista del server: {:?}", username);
+            // debug
         }
     }
 
@@ -105,6 +116,11 @@ impl MQTTServer {
         // Procesa el mensaje connect
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
+        
+        // Busca en el hashmap: si ya existía ese cliente, lo desconecta
+        if let Some(client_id) = connect_msg.get_client_id() {
+            self.disconnect_previous_client_if_already_connected(client_id)?;
+        }
 
         write_message_to_stream(&connack_response.to_bytes(), stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
@@ -389,6 +405,29 @@ impl MQTTServer {
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
             }
+            14 => {
+                // Disconnect
+                println!("Recibo mensaje tipo Disconnect");
+                // let msg_bytes = get_whole_message_in_bytes_from_stream(
+                //     fixed_header,
+                //     stream,
+                //     fixed_header_bytes,
+                //     "disconnect",
+                // )?;
+                // let _msg = DisconnectMessage::from_bytes(&msg_bytes);
+                // [] Aux: ver si quiero este "msg" para algo.
+
+                // Eliminar al cliente de connected_users
+                self.remove_user(username);
+
+                // Cerramos la conexión con ese cliente
+                if let Ok(s) = stream.lock() {
+                    match s.shutdown(Shutdown::Both) {
+                        Ok(_) => println!("Conexión terminada con éxito"),
+                        Err(e) => println!("Error al terminar la conexión: {:?}", e),
+                    }
+                }
+            }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",
                 fixed_header
@@ -539,6 +578,22 @@ impl MQTTServer {
                 }
             }
         }
+        Ok(())
+    }
+    
+    /// Busca al client_id en el hashmap de conectados, si ya estaba conectado, le manda disconnect.
+    fn disconnect_previous_client_if_already_connected(&self, client_id: &str) -> Result<(), Error> {
+        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+            if let Some(client) = connected_users_locked.remove(client_id){
+                let msg = DisconnectMessage::new();
+                let stream = client.get_stream();
+
+                write_message_to_stream(&msg.to_bytes(), &stream)?;
+
+            }
+
+        }
+
         Ok(())
     }
 }

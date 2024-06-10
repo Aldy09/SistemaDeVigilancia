@@ -1,14 +1,21 @@
-use std::{io::Error, net::SocketAddr, thread::JoinHandle};
+use std::{
+    io::Error,
+    net::SocketAddr,
+    sync::{mpsc::Receiver, Arc, Mutex},
+    thread::JoinHandle,
+};
+
+use crate::mqtt_client::MQTTClient;
 
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<Error>> {
     let argv = std::env::args().collect::<Vec<String>>();
     if argv.len() != 3 {
         return Err(Box::new(std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        "Cantidad de argumentos inválido. Debe ingresar: la dirección IP y 
+            std::io::ErrorKind::InvalidInput,
+            "Cantidad de argumentos inválido. Debe ingresar: la dirección IP y 
         el puerto en el que desea correr el servidor.",
-    )));
+        )));
     }
     let ip = &argv[1];
     let port = match argv[2].parse::<u16>() {
@@ -39,5 +46,28 @@ pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
         if let Err(e) = hijo.join() {
             eprintln!("Error al esperar el hilo: {:?}", e);
         }
+    }
+}
+
+/// Función a llamar desde un hilo dedicado, para que app escuche si dicha app desea salir.
+/// Al recibir por el rx, se encarga de enviar disconnect de mqtt.
+pub fn exit_when_asked(mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bool>) {
+    // Espero que otro hilo (ej la ui, ej el abm) me indique que se desea salir
+    let exit_res = exit_rx.recv();
+    match exit_res {
+        Ok(exit) => {
+            // Cuando eso ocurre, envío disconnect por mqtt
+            if exit {
+                if let Ok(mqtt_locked) = mqtt_client.lock() {
+                    match mqtt_locked.mqtt_disconnect() {
+                        Ok(_) => println!("Saliendo exitosamente."),
+                        Err(e) => println!("Error al salir: {:?}", e),
+                    }
+                }
+
+                // Aux: ver si hay que hacer algo más para salir [].
+            }
+        }
+        Err(e) => println!("Error al recibir por exit_rx {:?}", e),
     }
 }
