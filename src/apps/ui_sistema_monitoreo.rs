@@ -109,6 +109,7 @@ pub struct UISistemaMonitoreo {
     publish_incident_tx: Sender<Incident>,
     publish_message_rx: Receiver<PublishMessage>,
     places: Places,
+    last_incident_id: u8,
 }
 
 impl UISistemaMonitoreo {
@@ -133,6 +134,7 @@ impl UISistemaMonitoreo {
             publish_incident_tx: tx,
             publish_message_rx,
             places: super::vendor::Places::new(),
+            last_incident_id: 0,
         }
     }
     fn send_incident(&self, incident: Incident) {
@@ -141,20 +143,30 @@ impl UISistemaMonitoreo {
     }
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
-        let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-        let camera_id = camera.get_id();
-        let new_place = Place {
-            position: Position::from_lon_lat(longitude, latitude),
-            label: format!("Camera {}", camera_id),
-            symbol: '📷',
-            style: Style::default(),
-        };
-
-        self.places.add_place(new_place);
+        if camera.is_not_deleted() {
+            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+            let camera_id = camera.get_id();
+            let new_place = Place {
+                position: Position::from_lon_lat(longitude, latitude),
+                label: format!("Camera {}", camera_id),
+                symbol: '📷',
+                style: Style::default(),
+                id: camera_id,
+                place_type: "Camera".to_string(),
+            };
+            self.places.add_place(new_place);
+        } else {
+            self.places.remove_place(camera.get_id(), "Camera".to_string());
+        }
     }
 
     fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
         //cosas del drone
+    }
+
+    pub fn get_next_incident_id(&mut self) -> u8 {
+        self.last_incident_id += 1;
+        self.last_incident_id
     }
 }
 
@@ -240,7 +252,20 @@ impl eframe::App for UISistemaMonitoreo {
                                             let latitude = latitude_text.parse::<f64>().unwrap();
                                             let longitude: f64 =
                                                 longitude_text.parse::<f64>().unwrap();
-                                            let incident = Incident::new(0, latitude, longitude);
+                                            let incident = Incident::new(
+                                                self.get_next_incident_id(),
+                                                latitude,
+                                                longitude,
+                                            );
+                                            let new_place_incident = Place {
+                                                position: Position::from_lon_lat(longitude, latitude),
+                                                label: format!("Incident {}", incident.get_id()),
+                                                symbol: '⚠',
+                                                style: Style::default(),
+                                                id: incident.get_id(),
+                                                place_type: "Incident".to_string(),
+                                            };
+                                            self.places.add_place(new_place_incident);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
