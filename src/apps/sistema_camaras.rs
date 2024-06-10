@@ -319,7 +319,10 @@ fn procesar_incidente_por_primera_vez(
     };
 }
 
-fn send_cameras_to_sist_monitoreo(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
+fn send_cameras_from_file_to_sist_monitoreo(
+    cameras: &mut ShCamerasType,
+    camera_tx: &Sender<Vec<u8>>,
+) {
     match cameras.lock() {
         Ok(cams) => {
             for camera in (*cams).values() {
@@ -332,113 +335,92 @@ fn send_cameras_to_sist_monitoreo(cameras: &mut ShCamerasType, camera_tx: &Sende
     }
 }
 
-fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    print!("Ingrese el ID de la cámara: ");
-                let _ = io::stdout().flush();
-                let mut read_id = String::new();
-                io::stdin()
-                    .read_line(&mut read_id)
-                    .expect("Error al leer la entrada");
-                let id: u8 = read_id.trim().parse().expect("Coordenada X no válida");
-
-                print!("Ingrese Latitud: ");
-                let _ = io::stdout().flush();
-                let mut read_latitude = String::new();
-                io::stdin()
-                    .read_line(&mut read_latitude)
-                    .expect("Error al leer la entrada");
-                let latitude: f64 = read_latitude.trim().parse().expect("Latitud no válida");
-
-                print!("Ingrese Longitud: ");
-                let _ = io::stdout().flush();
-                let mut read_longitude = String::new();
-                io::stdin()
-                    .read_line(&mut read_longitude)
-                    .expect("Error al leer la entrada");
-                let longitude: f64 = read_longitude
-                    .trim()
-                    .parse()
-                    .expect("Coordenada Y no válida");
-
-                print!("Ingrese el rango: ");
-                let _ = io::stdout().flush();
-                let mut read_range = String::new();
-                io::stdin()
-                    .read_line(&mut read_range)
-                    .expect("Error al leer la entrada");
-                let range: u8 = read_range.trim().parse().expect("Rango no válido");
-
-                print!("Ingrese el id de cámara lindante: ");
-                let _ = io::stdout().flush();
-                let mut read_border_cam = String::new();
-                io::stdin()
-                    .read_line(&mut read_border_cam)
-                    .expect("Error al leer la entrada");
-                let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
-
-                // Crea la cámara y la envia
-                let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
-                match cameras.lock() {
-                    Ok(mut cams) => {
-                        if camera_tx.send(new_camera.to_bytes()).is_err() {
-                            println!("Error al enviar cámara por tx desde hilo abm.");
-                        }
-                        cams.insert(id, new_camera);
-                        println!("Cámara agregada con éxito.\n");
-                    }
-                    Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-                };
+fn get_input_abm(prompt: Option<&str>) -> String {
+    if let Some(p) = prompt {
+        print!("{}", p);
+    }
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Error al leer la entrada");
+    input.trim().to_string()
 }
 
-fn show_cameras_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    // Leemos el id de la cámara a eliminar
-    print!("Ingrese el ID de la cámara a eliminar: ");
-    let _ = io::stdout().flush();
-    let mut read_id = String::new();
-    io::stdin()
-        .read_line(&mut read_id)
-        .expect("Error al leer la entrada");
-    let id: u8 = read_id.trim().parse().expect("Id no válido");
-
-    // Eliminamos la cámara
+fn create_and_send_camera_abm(
+    cameras: &mut ShCamerasType,
+    camera_tx: &Sender<Vec<u8>>,
+    id: u8,
+    latitude: f64,
+    longitude: f64,
+    range: u8,
+    border_camera: u8,
+) {
+    let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
     match cameras.lock() {
         Ok(mut cams) => {
-            // Si no estaba en el hashmap, no hago nada, tampoco es error;
-            // else, la elimino, la marco deleted para simplificar la comunicación y la envío
-            if let Some(mut camera_to_delete) = cams.remove(&id) {
-                if camera_to_delete.is_not_deleted() {
-                    // (debería dar siempre true)
-                    camera_to_delete.delete_camera();
-                    if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
-                        println!("Error al enviar cámara por tx desde hilo abm.");
-                    } else {
-                        println!("Cámara eliminada con éxito.\n");
-                    }
+            if camera_tx.send(new_camera.to_bytes()).is_err() {
+                println!("Error al enviar cámara por tx desde hilo abm.");
+            }
+            cams.insert(id, new_camera);
+            println!("Cámara agregada con éxito.\n");
+        }
+        Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
+    };
+}
+
+fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
+    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara: "))
+        .parse()
+        .expect("ID no válido");
+    let latitude: f64 = get_input_abm(Some("Ingrese Latitud: "))
+        .parse()
+        .expect("Latitud no válida");
+    let longitude: f64 = get_input_abm(Some("Ingrese Longitud: "))
+        .parse()
+        .expect("Longitud no válida");
+    let range: u8 = get_input_abm(Some("Ingrese el rango: "))
+        .parse()
+        .expect("Rango no válido");
+    let border_camera: u8 = get_input_abm(Some("Ingrese el id de cámara lindante: "))
+        .parse()
+        .expect("Id no válido");
+
+    create_and_send_camera_abm(
+        cameras,
+        camera_tx,
+        id,
+        latitude,
+        longitude,
+        range,
+        border_camera,
+    );
+}
+
+fn show_cameras_abm(cameras: &mut ShCamerasType) {
+    // Mostramos todas las cámaras
+    println!("Cámaras registradas:\n");
+    match cameras.lock() {
+        Ok(cams) => {
+            for camera in (*cams).values() {
+                // Si no está marcada borrada, mostrarla
+                if camera.is_not_deleted() {
+                    camera.display();
                 };
             }
         }
-        Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
-    };
+        Err(_) => println!("Error al tomar lock de cámaras."),
+    }
 }
 
 fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    // Leemos el id de la cámara a eliminar
-    print!("Ingrese el ID de la cámara a eliminar: ");
-    let _ = io::stdout().flush();
-    let mut read_id = String::new();
-    io::stdin()
-        .read_line(&mut read_id)
-        .expect("Error al leer la entrada");
-    let id: u8 = read_id.trim().parse().expect("Id no válido");
-
-    // Eliminamos la cámara
+    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
+        .parse()
+        .expect("Id no válido");
     match cameras.lock() {
         Ok(mut cams) => {
-            // Si no estaba en el hashmap, no hago nada, tampoco es error;
-            // else, la elimino, la marco deleted para simplificar la comunicación y la envío
             if let Some(mut camera_to_delete) = cams.remove(&id) {
                 if camera_to_delete.is_not_deleted() {
-                    // (debería dar siempre true)
                     camera_to_delete.delete_camera();
                     if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                         println!("Error al enviar cámara por tx desde hilo abm.");
@@ -452,38 +434,37 @@ fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
     };
 }
 
-fn exit_program(exit_tx: &Sender<bool>) {
+fn exit_program_abm(exit_tx: &Sender<bool>) {
     match exit_tx.send(true) {
         Ok(_) => println!("Saliendo del programa."),
         Err(e) => println!("Error al intentar salir: {:?}", e),
     }
 }
 
+fn print_menu_abm() {
+    println!(
+        "      MENÚ
+    1. Agregar cámara
+    2. Mostrar cámaras
+    3. Eliminar cámara
+    4. Salir
+    Ingrese una opción:"
+    );
+}
+
 fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx: Sender<bool>) {
-    send_cameras_to_sist_monitoreo(cameras, &camera_tx);
+    send_cameras_from_file_to_sist_monitoreo(cameras, &camera_tx);
 
     loop {
-        println!(
-            "      MENÚ
-        1. Agregar cámara
-        2. Mostrar cámaras
-        3. Eliminar cámara
-        4. Salir
-        Ingrese una opción:"
-        );
-        let _ = io::stdout().flush();
+        print_menu_abm();
+        let input = get_input_abm(None);
 
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Error al leer la entrada");
-
-        match input.trim() {
+        match &*input {
             "1" => add_camera_abm(cameras, &camera_tx),
-            "2" => show_cameras_abm(cameras, &camera_tx),
+            "2" => show_cameras_abm(cameras),
             "3" => delete_camera_abm(cameras, &camera_tx),
             "4" => {
-                exit_program(&exit_tx);
+                exit_program_abm(&exit_tx);
                 break;
             }
             _ => {
@@ -492,166 +473,3 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx:
         }
     }
 }
-
-// fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx: Sender<bool>) {
-//     // Envía todas las cámaras al inicio
-//     match cameras.lock() {
-//         Ok(cams) => {
-//             for camera in (*cams).values() {
-//                 // Envío la cámara eliminada por el tx
-//                 if camera_tx.send(camera.to_bytes()).is_err() {
-//                     println!("Error al enviar cámara por tx desde hilo abm.");
-//                 }
-//             }
-//         }
-//         Err(_) => println!("Error al tomar lock de cámaras."),
-//     }
-
-//     loop {
-//         println!(
-//             "      MENÚ
-//         1. Agregar cámara
-//         2. Mostrar cámaras
-//         3. Eliminar cámara
-//         4. Salir
-//         Ingrese una opción:"
-//         );
-//         let _ = io::stdout().flush();
-
-//         let mut input = String::new();
-//         io::stdin()
-//             .read_line(&mut input)
-//             .expect("Error al leer la entrada");
-
-//         match input.trim() {
-//             "1" => {
-                // print!("Ingrese el ID de la cámara: ");
-                // let _ = io::stdout().flush();
-                // let mut read_id = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_id)
-                //     .expect("Error al leer la entrada");
-                // let id: u8 = read_id.trim().parse().expect("Coordenada X no válida");
-
-                // print!("Ingrese Latitud: ");
-                // let _ = io::stdout().flush();
-                // let mut read_latitude = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_latitude)
-                //     .expect("Error al leer la entrada");
-                // let latitude: f64 = read_latitude.trim().parse().expect("Latitud no válida");
-
-                // print!("Ingrese Longitud: ");
-                // let _ = io::stdout().flush();
-                // let mut read_longitude = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_longitude)
-                //     .expect("Error al leer la entrada");
-                // let longitude: f64 = read_longitude
-                //     .trim()
-                //     .parse()
-                //     .expect("Coordenada Y no válida");
-
-                // print!("Ingrese el rango: ");
-                // let _ = io::stdout().flush();
-                // let mut read_range = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_range)
-                //     .expect("Error al leer la entrada");
-                // let range: u8 = read_range.trim().parse().expect("Rango no válido");
-
-                // print!("Ingrese el id de cámara lindante: ");
-                // let _ = io::stdout().flush();
-                // let mut read_border_cam = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_border_cam)
-                //     .expect("Error al leer la entrada");
-                // let border_camera: u8 = read_border_cam.trim().parse().expect("Id no válido");
-
-                // // Crea la cámara y la envia
-                // let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
-                // match cameras.lock() {
-                //     Ok(mut cams) => {
-                //         if camera_tx.send(new_camera.to_bytes()).is_err() {
-                //             println!("Error al enviar cámara por tx desde hilo abm.");
-                //         }
-                //         cams.insert(id, new_camera);
-                //         println!("Cámara agregada con éxito.\n");
-                //     }
-                //     Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-                // };
-//             }
-//             "2" => {
-                // // Leemos el id de la cámara a eliminar
-                // print!("Ingrese el ID de la cámara a eliminar: ");
-                // let _ = io::stdout().flush();
-                // let mut read_id = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_id)
-                //     .expect("Error al leer la entrada");
-                // let id: u8 = read_id.trim().parse().expect("Id no válido");
-
-                // // Eliminamos la cámara
-                // match cameras.lock() {
-                //     Ok(mut cams) => {
-                //         // Si no estaba en el hashmap, no hago nada, tampoco es error;
-                //         // else, la elimino, la marco deleted para simplificar la comunicación y la envío
-                //         if let Some(mut camera_to_delete) = cams.remove(&id) {
-                //             if camera_to_delete.is_not_deleted() {
-                //                 // (debería dar siempre true)
-                //                 camera_to_delete.delete_camera();
-                //                 if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
-                //                     println!("Error al enviar cámara por tx desde hilo abm.");
-                //                 } else {
-                //                     println!("Cámara eliminada con éxito.\n");
-                //                 }
-                //             };
-                //         }
-                //     }
-                //     Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
-                // };
-//             }
-//             "3" => {
-                // // Leemos el id de la cámara a eliminar
-                // print!("Ingrese el ID de la cámara a eliminar: ");
-                // let _ = io::stdout().flush();
-                // let mut read_id = String::new();
-                // io::stdin()
-                //     .read_line(&mut read_id)
-                //     .expect("Error al leer la entrada");
-                // let id: u8 = read_id.trim().parse().expect("Id no válido");
-
-                // // Eliminamos la cámara
-                // match cameras.lock() {
-                //     Ok(mut cams) => {
-                //         // Si no estaba en el hashmap, no hago nada, tampoco es error;
-                //         // else, la elimino, la marco deleted para simplificar la comunicación y la envío
-                //         if let Some(mut camera_to_delete) = cams.remove(&id) {
-                //             if camera_to_delete.is_not_deleted() {
-                //                 // (debería dar siempre true)
-                //                 camera_to_delete.delete_camera_abm();
-                //                 if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
-                //                     println!("Error al enviar cámara por tx desde hilo abm.");
-                //                 } else {
-                //                     println!("Cámara eliminada con éxito.\n");
-                //                 }
-                //             };
-                //         }
-                //     }
-                //     Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
-                // };
-//             }
-//             "4" => {
-//                 // Aviso al otro hilo que se desea salir
-//                 match exit_tx.send(true) {
-//                     Ok(_) => println!("Saliendo del programa."),
-//                     Err(e) => println!("Error al intentar salir: {:?}", e),
-//                 }
-//                 break;
-//             }
-//             _ => {
-//                 println!("Opción no válida. Intente nuevamente.\n");
-//             }
-//         }
-//     }
-// }
