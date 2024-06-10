@@ -56,7 +56,7 @@ pub fn exit_when_asked(mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bo
             if exit {
                 if let Ok(mqtt_locked) = mqtt_client.lock(){
                     match mqtt_locked.mqtt_disconnect() {
-                        Ok(_) => println!("Saliendo exitosamente"),
+                        Ok(_) => println!("Saliendo exitosamente."),
                         Err(e) => println!("Error al salir: {:?}", e),
                     }
                 }

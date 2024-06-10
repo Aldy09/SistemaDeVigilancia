@@ -115,6 +115,7 @@ fn main() {
             let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
             let mqtt_client_sh_clone: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
             let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone);
+            let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
 
             let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
             let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
@@ -134,19 +135,19 @@ fn main() {
             });
             children.push(handle);
 
+            // Publicar a topic cam
             let handle_2 = thread::spawn(move || {
                 publish_to_topic(mqtt_client_sh_clone.clone(), "Cam", cameras_rx);
             });
             children.push(handle_2);
             
-            let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
-
+            // Recepción del exit
             let exit_handle = thread::spawn(move || {
                 exit_when_asked(mqtt_client_sh_clone_2.clone(), exit_rx);
             });
             children.push(exit_handle);
 
-
+            // Recibir mensajes mqtt cam y dron
             let handle_3 = thread::spawn(move || {
                 let res =
                     subscribe_to_topics(mqtt_client_sh_clone_3.clone(), vec!["Inc".to_string()]);
@@ -395,7 +396,11 @@ fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx:
                 };
             }
             "4" => {
-                println!("Saliendo del programa.");
+                // Aviso al otro hilo que se desea salir
+                match exit_tx.send(true){
+                    Ok(_) => println!("Saliendo del programa."),
+                    Err(e) => println!("Error al intentar salir: {:?}", e),
+                }
                 break;
             }
             _ => {
