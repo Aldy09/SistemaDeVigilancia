@@ -1,4 +1,5 @@
 use crate::messages::connect_message::ConnectMessage;
+use crate::messages::disconnect_message::DisconnectMessage;
 use crate::messages::publish_flags::PublishFlags;
 use crate::messages::publish_message::PublishMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
@@ -9,7 +10,7 @@ use crate::mqtt_server_client_utils::{
 };
 use std::collections::HashMap;
 use std::io::{self, Error};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -173,6 +174,26 @@ impl MQTTClient {
                 "Error: no está seteado el rx.",
             ))
         }
+    }
+
+    /// Envía mensaje disconnect, y cierra la conexión con el servidor.
+    pub fn mqtt_disconnect(&self) -> Result<(), Error> {
+        let msg = DisconnectMessage::new();
+
+        // Lo envío
+        let bytes_msg = msg.to_bytes();
+        write_message_to_stream(&bytes_msg, &self.stream)?;
+        println!("Mqtt disconnect: bytes \n   {:?}", bytes_msg);
+
+        // Cerramos la conexión con el servidor
+        if let Ok(s) = self.stream.lock(){
+            match s.shutdown(Shutdown::Both){
+                Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
+                Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
+            }
+        }
+
+        Ok(())
     }
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,

@@ -1,7 +1,5 @@
 use std::{
-    net::SocketAddr,
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
+    net::SocketAddr, process::exit, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
 };
 
 use std::sync::mpsc::Receiver;
@@ -22,7 +20,7 @@ impl SistemaMonitoreo {
     pub fn new() -> Self {
         // Crear un canal que acepte mensajes de tipo PublishMessage
         let (publish_message_tx, publish_message_rx) = channel::unbounded::<PublishMessage>();
-        let (tx, rx) = mpsc::channel::<Incident>();
+        let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
 
         let mut children: Vec<JoinHandle<()>> = vec![];
         let broker_addr = get_broker_address();
@@ -31,6 +29,8 @@ impl SistemaMonitoreo {
             incidents: Arc::new(Mutex::new(Vec::new())),
             publish_message_tx,
         };
+
+        let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
         match establish_mqtt_broker_connection(&broker_addr) {
             Ok(mqtt_client) => {
@@ -44,8 +44,13 @@ impl SistemaMonitoreo {
                 let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh_clone);
 
                 let send_incidents_thread = sistema_monitoreo
-                    .spawn_send_incidents_thread(mqtt_client_incident_sh_clone, rx);
+                    .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx);
                 children.push(send_incidents_thread);
+
+                let exit_thread = sistema_monitoreo
+                    .spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
+                children.push(exit_thread);
+
             }
             Err(e) => println!(
                 "Error al establecer la conexión con el broker MQTT: {:?}",
@@ -53,16 +58,15 @@ impl SistemaMonitoreo {
             ),
         }
 
-        let tx_clone = tx.clone();
-
         let _ = eframe::run_native(
             "Sistema Monitoreo",
             Default::default(),
             Box::new(|cc| {
                 Box::new(UISistemaMonitoreo::new(
                     cc.egui_ctx.clone(),
-                    tx_clone,
+                    incident_tx,
                     publish_message_rx,
+                    exit_tx,
                 ))
             }),
         );
@@ -188,6 +192,30 @@ impl SistemaMonitoreo {
             new_inc_id = (incidents.len() + 1) as u8;
         }
         new_inc_id
+    }
+    
+    fn spawn_exit_thread(&self, mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bool>) -> JoinHandle<()> {
+        thread::spawn(move || {
+
+            // Espero que la ui me indique que se desea salir
+            let exit_res = exit_rx.recv();
+            match exit_res {
+                Ok(exit) => {
+                    // Cuando eso ocurre, envío disconnect por mqtt
+                    if exit {
+                        if let Ok(mqtt_locked) = mqtt_client.lock(){
+                            match mqtt_locked.mqtt_disconnect() {
+                                Ok(_) => println!("Saliendo exitosamente"),
+                                Err(e) => println!("Error al salir: {:?}", e),
+                            }
+                        }
+
+                        // Aux: ver si hay que hacer algo más para salir [].
+                    }
+                },
+                Err(e) => println!("Error al recibir por exit_rx {:?}", e),
+            }
+        })
     }
 }
 

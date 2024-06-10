@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::apps::incident::Incident;
+use crate::messages::disconnect_message::DisconnectMessage;
 use crate::messages::publish_message::PublishMessage;
 
 use super::camera::Camera;
@@ -117,6 +118,7 @@ impl UISistemaMonitoreo {
         egui_ctx: Context,
         tx: Sender<Incident>,
         publish_message_rx: Receiver<PublishMessage>,
+        exit_tx: Sender<bool>,
     ) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
@@ -273,6 +275,7 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             });
                             if ui.button("Salir").clicked() {
+                                
                                 // Handle exit
                             }
                         });
