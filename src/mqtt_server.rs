@@ -5,6 +5,7 @@ use crate::messages::connack_message::ConnackMessage;
 use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
 use crate::messages::connect_return_code::ConnectReturnCode;
+use crate::messages::disconnect_message::DisconnectMessage;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
@@ -16,7 +17,7 @@ use crate::messages::subscribe_message::SubscribeMessage;
 use crate::messages::subscribe_return_code::SubscribeReturnCode; // Add the missing import
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self};
@@ -388,6 +389,27 @@ impl MQTTServer {
                 // Entonces tengo el mensaje completo
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
+            },
+            14 => {
+                // Disconnect
+                println!("Recibo mensaje tipo PubAck");
+                let msg_bytes = get_whole_message_in_bytes_from_stream(
+                    fixed_header,
+                    stream,
+                    fixed_header_bytes,
+                    "pub ack",
+                )?;
+                let _msg = DisconnectMessage::from_bytes(&msg_bytes);
+                // [] Aux: ver si quiero este "msg" para algo.
+
+                // Cerramos la conexión con ese cliente
+                if let Ok(s) = stream.lock(){
+                    match s.shutdown(Shutdown::Both){
+                        Ok(_) => println!("Conexión terminada con éxito"),
+                        Err(e) => println!("Error al terminar la conexión: {:?}", e),
+                    }
+                }
+
             }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",
