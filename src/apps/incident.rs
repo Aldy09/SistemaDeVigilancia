@@ -46,6 +46,10 @@ impl Incident {
         bytes
     }
 
+    pub fn get_id(&self) -> u8 {
+        self.id
+    }
+
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
         let id = msg_bytes[0];
         let latitude = f64::from_le_bytes([
