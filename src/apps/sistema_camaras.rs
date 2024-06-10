@@ -13,15 +13,19 @@ use std::time::Duration;
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use rustx::apps::incident::Incident;
+type Channels = (
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+    mpsc::Sender<bool>,
+    mpsc::Receiver<bool>,
+);
 //use rustx::apps::properties::Properties;
 
 //use std::env::args;
 use std::io::Error;
 use std::net::SocketAddr;
 
-pub fn establish_mqtt_broker_connection(
-    broker_addr: &SocketAddr,
-) -> Result<MQTTClient, Box<dyn std::error::Error>> {
+pub fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<MQTTClient, Error> {
     let client_id = "Sistema-Camaras";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
@@ -31,7 +35,7 @@ pub fn establish_mqtt_broker_connection(
         }
         Err(e) => {
             println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
-            Err(e.into())
+            Err(e)
         }
     }
 }
@@ -104,72 +108,125 @@ pub fn receive_messages_from_subscribed_topics(
     }
 }
 
+fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
+    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
+    Arc::new(Mutex::new(cameras))
+}
+
+fn create_channels() -> Channels {
+    let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
+    let (exit_tx, exit_rx) = mpsc::channel::<bool>();
+    (cameras_tx, cameras_rx, exit_tx, exit_rx)
+}
+
+fn spawn_abm_cameras_thread(
+    shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+    cameras_tx: mpsc::Sender<Vec<u8>>,
+    exit_tx: mpsc::Sender<bool>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        abm_cameras(&mut shareable_cameras.clone(), cameras_tx, exit_tx);
+    })
+}
+
+fn spawn_publish_to_topic_thread(
+    mqtt_client_sh: Arc<Mutex<MQTTClient>>,
+    cameras_rx: mpsc::Receiver<Vec<u8>>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        publish_to_topic(mqtt_client_sh, "Cam", cameras_rx);
+    })
+}
+
+fn spawn_exit_when_asked_thread(
+    mqtt_client_sh_clone_1: Arc<Mutex<MQTTClient>>,
+    exit_rx: mpsc::Receiver<bool>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        exit_when_asked(mqtt_client_sh_clone_1, exit_rx);
+    })
+}
+
+fn spawn_subscribe_to_topics_thread(
+    mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>>,
+    mqtt_client_sh_clone_3: Arc<Mutex<MQTTClient>>,
+    cameras_cloned: &mut Arc<Mutex<HashMap<u8, Camera>>>,
+) -> JoinHandle<()> {
+    let mut cameras_cloned_2 = cameras_cloned.clone();
+    thread::spawn(move || {
+        let res = subscribe_to_topics(mqtt_client_sh_clone_2, vec!["Inc".to_string()]);
+        match res {
+            Ok(_) => {
+                println!("Sistema-Camara: Subscripción a exitosa");
+                receive_messages_from_subscribed_topics(
+                    &mqtt_client_sh_clone_3,
+                    &mut cameras_cloned_2,
+                );
+            }
+            Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
+        };
+        println!("Saliendo del hilo de subscribirme");
+    })
+}
+
+fn spawn_threads(
+    mqtt_client: MQTTClient,
+    shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+    cameras_tx: mpsc::Sender<Vec<u8>>,
+    cameras_rx: mpsc::Receiver<Vec<u8>>,
+    exit_tx: mpsc::Sender<bool>,
+    exit_rx: mpsc::Receiver<bool>,
+) -> Vec<JoinHandle<()>> {
+    let mut children: Vec<JoinHandle<()>> = vec![];
+
+    let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+    let mqtt_client_sh_clone_1: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
+    let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone_1);
+    let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
+
+    let mut cameras_cloned = shareable_cameras.clone();
+
+    children.push(spawn_abm_cameras_thread(
+        shareable_cameras,
+        cameras_tx,
+        exit_tx,
+    ));
+    children.push(spawn_publish_to_topic_thread(mqtt_client_sh, cameras_rx));
+    children.push(spawn_exit_when_asked_thread(
+        mqtt_client_sh_clone_1,
+        exit_rx,
+    ));
+    children.push(spawn_subscribe_to_topics_thread(
+        mqtt_client_sh_clone_2,
+        mqtt_client_sh_clone_3,
+        &mut cameras_cloned,
+    ));
+
+    children
+}
+
 fn main() {
     println!("SISTEMA DE CAMARAS\n");
 
     let broker_addr = get_broker_address();
-    let mut children: Vec<JoinHandle<()>> = vec![];
 
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(mqtt_client) => {
-            let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-            let mqtt_client_sh_clone: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
-            let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone);
-            let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
-
-            let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-            let mut shareable_cameras = Arc::new(Mutex::new(cameras)); // Lo que se comparte es el Cameras completo, x eso lo tenemos que wrappear en arc mutex
-
-            let mut cameras_cloned = shareable_cameras.clone(); // ahora sí es cierto que este clone es el del arc y da una ref (antes sí lo estábamos clonando sin querer)
-
-            // [] aux, probando: un sleep para que empiece todo 'a la vez', y me dé tiempo a levantar las shells
-            // y le dé tiempo a conectarse por mqtt, así se van intercalando los hilos a ver si funcionan bien los locks.
-            sleep(Duration::from_secs(2));
-
-            let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
-            let (exit_tx, exit_rx) = mpsc::channel::<bool>();
-
-            // Menú cámaras
-            let handle = thread::spawn(move || {
-                abm_cameras(&mut shareable_cameras, cameras_tx, exit_tx);
-            });
-            children.push(handle);
-
-            // Publicar a topic cam
-            let handle_2 = thread::spawn(move || {
-                publish_to_topic(mqtt_client_sh_clone.clone(), "Cam", cameras_rx);
-            });
-            children.push(handle_2);
-
-            // Recepción del exit
-            let exit_handle = thread::spawn(move || {
-                exit_when_asked(mqtt_client_sh_clone_2.clone(), exit_rx);
-            });
-            children.push(exit_handle);
-
-            // Recibir mensajes mqtt cam y dron
-            let handle_3 = thread::spawn(move || {
-                let res =
-                    subscribe_to_topics(mqtt_client_sh_clone_3.clone(), vec!["Inc".to_string()]);
-                match res {
-                    Ok(_) => {
-                        println!("Sistema-Camara: Subscripción a exitosa");
-                        receive_messages_from_subscribed_topics(
-                            &mqtt_client_sh_clone_3,
-                            &mut cameras_cloned,
-                        );
-                    }
-                    Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
-                };
-                println!("Saliendo del hilo de subscribirme");
-            });
-
-            children.push(handle_3);
+            let shareable_cameras = create_cameras();
+            sleep(Duration::from_secs(2)); // Sleep to start everything 'at the same time'
+            let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
+            let children = spawn_threads(
+                mqtt_client,
+                shareable_cameras,
+                cameras_tx,
+                cameras_rx,
+                exit_tx,
+                exit_rx,
+            );
+            join_all_threads(children);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
-
-    join_all_threads(children);
 }
 
 fn manage_incidents(incident: Incident, cameras_cl: &mut ShCamerasType) {
