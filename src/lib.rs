@@ -8,3 +8,5 @@ pub mod mqtt_server_client_utils;
 
 pub mod mqtt_client;
 pub mod mqtt_server;
+
+pub mod broker_errors;

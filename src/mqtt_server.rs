@@ -116,7 +116,7 @@ impl MQTTServer {
         // Procesa el mensaje connect
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
-        
+
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
             self.disconnect_previous_client_if_already_connected(client_id)?;
@@ -580,18 +580,19 @@ impl MQTTServer {
         }
         Ok(())
     }
-    
+
     /// Busca al client_id en el hashmap de conectados, si ya estaba conectado, le manda disconnect.
-    fn disconnect_previous_client_if_already_connected(&self, client_id: &str) -> Result<(), Error> {
+    fn disconnect_previous_client_if_already_connected(
+        &self,
+        client_id: &str,
+    ) -> Result<(), Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-            if let Some(client) = connected_users_locked.remove(client_id){
+            if let Some(client) = connected_users_locked.remove(client_id) {
                 let msg = DisconnectMessage::new();
                 let stream = client.get_stream();
 
                 write_message_to_stream(&msg.to_bytes(), &stream)?;
-
             }
-
         }
 
         Ok(())
