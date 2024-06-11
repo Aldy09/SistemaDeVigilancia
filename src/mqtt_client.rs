@@ -357,12 +357,12 @@ impl MQTTClient {
                 // Entonces tengo el mensaje completo
                 let msg = SubAckMessage::from_bytes(msg_bytes)?;
                 println!("   Mensaje sub ack completo recibido: {:?}", msg);
-            },
+            }
 
             14 => {
                 // Disconnect
                 println!("Mqtt cliente leyendo: recibo disconnect");
-                
+
                 // Cerramos la conexión con el servidor
                 if let Ok(s) = self.stream.lock() {
                     match s.shutdown(Shutdown::Both) {

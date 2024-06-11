@@ -1,6 +1,8 @@
 pub mod api_sistema_monitoreo;
+pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
+pub mod common_client_errors;
 pub mod common_clients;
 pub mod dron;
 pub mod dron_app;
@@ -9,6 +11,7 @@ pub mod incident;
 pub mod incident_state;
 pub mod local_tiles;
 pub mod manage_stored_cameras;
+pub mod monitoreo_errors;
 pub mod places;
 pub mod plugins;
 pub mod properties;
