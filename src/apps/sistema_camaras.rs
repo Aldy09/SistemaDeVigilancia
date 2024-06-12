@@ -5,8 +5,8 @@ use rustx::mqtt_client::MQTTClient;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Mutex;
 use std::sync::{mpsc, Arc};
+use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
@@ -87,7 +87,7 @@ pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
 // Recibe mensajes de los topics a los que se ha suscrito
 pub fn receive_messages_from_subscribed_topics(
     mqtt_client: &Arc<Mutex<MQTTClient>>,
-    cameras_cl: &mut ShCamerasType,
+    cameras: &mut ShCamerasType,
 ) {
     loop {
         if let Ok(mqtt_client) = mqtt_client.lock() {
@@ -95,8 +95,11 @@ pub fn receive_messages_from_subscribed_topics(
                 //Publish message: Incident
                 Ok(msg) => {
                     let incident = Incident::from_bytes(msg.get_payload());
-                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS");
-                    manage_incidents(incident, cameras_cl);
+                    println!(
+                        "ME LLEGO EL INCIDENTE A SISTEMA CAMARAS, inc: {:?}",
+                        incident
+                    );
+                    manage_incidents(incident, cameras);
                 }
                 Err(e) => {
                     if !handle_message_receiving_error(e) {
@@ -148,18 +151,17 @@ fn spawn_exit_when_asked_thread(
 }
 
 fn spawn_subscribe_to_topics_thread(
-    mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>>,
-    mqtt_client_sh_clone_3: Arc<Mutex<MQTTClient>>,
+    mqtt_client: Arc<Mutex<MQTTClient>>,
     cameras_cloned: &mut Arc<Mutex<HashMap<u8, Camera>>>,
 ) -> JoinHandle<()> {
     let mut cameras_cloned_2 = cameras_cloned.clone();
     thread::spawn(move || {
-        let res = subscribe_to_topics(mqtt_client_sh_clone_2, vec!["Inc".to_string()]);
+        let res = subscribe_to_topics(mqtt_client.clone(), vec!["Inc".to_string()]);
         match res {
             Ok(_) => {
                 println!("Sistema-Camara: Subscripción a exitosa");
                 receive_messages_from_subscribed_topics(
-                    &mqtt_client_sh_clone_3,
+                    &mqtt_client.clone(),
                     &mut cameras_cloned_2,
                 );
             }
@@ -180,26 +182,23 @@ fn spawn_threads(
     let mut children: Vec<JoinHandle<()>> = vec![];
 
     let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-    let mqtt_client_sh_clone_1: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
-    let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone_1);
-    let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
-
-    let mut cameras_cloned = shareable_cameras.clone();
 
     children.push(spawn_abm_cameras_thread(
-        shareable_cameras,
+        shareable_cameras.clone(),
         cameras_tx,
         exit_tx,
     ));
-    children.push(spawn_publish_to_topic_thread(mqtt_client_sh, cameras_rx));
+    children.push(spawn_publish_to_topic_thread(
+        mqtt_client_sh.clone(),
+        cameras_rx,
+    ));
     children.push(spawn_exit_when_asked_thread(
-        mqtt_client_sh_clone_1,
+        mqtt_client_sh.clone(),
         exit_rx,
     ));
     children.push(spawn_subscribe_to_topics_thread(
-        mqtt_client_sh_clone_2,
-        mqtt_client_sh_clone_3,
-        &mut cameras_cloned,
+        mqtt_client_sh.clone(),
+        &mut shareable_cameras.clone(),
     ));
 
     children
@@ -229,14 +228,14 @@ fn main() {
     }
 }
 
-fn manage_incidents(incident: Incident, cameras_cl: &mut ShCamerasType) {
+fn manage_incidents(incident: Incident, cameras: &mut ShCamerasType) {
     // Proceso los incidentes
     let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new(); // esto puede ser un atributo..., o no.
 
     if !incs_being_managed.contains_key(&incident.id) {
-        procesar_incidente_por_primera_vez(cameras_cl, incident, &mut incs_being_managed);
+        procesar_incidente_por_primera_vez(cameras, incident, &mut incs_being_managed);
     } else {
-        procesar_incidente_conocido(cameras_cl, incident, &mut incs_being_managed);
+        procesar_incidente_conocido(cameras, incident, &mut incs_being_managed);
     }
 }
 
@@ -244,7 +243,7 @@ fn manage_incidents(incident: Incident, cameras_cl: &mut ShCamerasType) {
 /// Procesa un incidente cuando un incidente con ese mismo id ya fue recibido anteriormente.
 /// Si su estado es resuelto, vuelve el estado de la/s cámara/s que lo atendían, a ahorro de energía.
 fn procesar_incidente_conocido(
-    cameras_cl: &mut ShCamerasType,
+    cameras: &mut ShCamerasType,
     inc: Incident,
     incs_being_managed: &mut HashMap<u8, Vec<u8>>,
 ) {
@@ -260,7 +259,7 @@ fn procesar_incidente_conocido(
             // Cambio el estado de las cámaras que lo manejaban, otra vez a ahorro de energía
             // solamente si el incidente en cuestión era el único que manejaban (si tenía más incidentes en rango, sigue estando activa)
             for camera_id in cams_managing_inc {
-                match cameras_cl.lock() {
+                match cameras.lock() {
                     Ok(mut cams) => {
                         // Actualizo las cámaras en cuestión
                         if let Some(camera_to_update) = cams.get_mut(camera_id) {
@@ -284,45 +283,72 @@ fn procesar_incidente_conocido(
 
 /// Procesa un incidente cuando el mismo fue recibido por primera vez.
 /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
-/// en caso afirmativo, cambia estado de la cámara a activo.
+/// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
 fn procesar_incidente_por_primera_vez(
-    cameras_cl: &mut ShCamerasType,
+    cameras: &mut ShCamerasType,
     inc: Incident,
     incs_being_managed: &mut HashMap<u8, Vec<u8>>,
 ) {
-    println!("Proceso el incidente {} por primera vez", inc.id);
-    // Recorremos cada una de las cámaras, para ver si el inc está en su rango
-    match cameras_cl.lock() {
+    match cameras.lock() {
         Ok(mut cams) => {
-            for (cam_id, camera) in cams.iter_mut() {
-                //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
+            println!("Proceso el incidente {} por primera vez", inc.id);
+            let cameras_that_follow_inc =
+                get_id_of_cameras_that_will_change_state_to_active(&mut cams, &inc);
 
-                if camera.will_register(inc.pos()) {
-                    println!(
-                        "Está en rango de cam: {}, cambiando su estado a activo.",
-                        cam_id
-                    ); // [] ver lindantes
-                    camera.append_to_incs_being_managed(inc.id);
-                    incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
-                    println!(
-                        "  la cámara queda:\n   cam id y lista de incs: {:?}",
-                        camera.get_id_e_incs_for_debug_display()
-                    );
-
-                    // aux: acá puedo quedarme con los ids de las lindantes
-                    // y afuera del if let procesar esto mismo pero para lindantes
-                    // Complejidad de eso #revisable (capaz podrían marcarse...) [] ver
-                }
+            // El vector tiene los ids de todas las cámaras que deben cambiar a activo
+            for cam_id in &cameras_that_follow_inc {
+                if let Some(bordering_cam) = cams.get_mut(cam_id) {
+                    // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
+                    bordering_cam.append_to_incs_being_managed(inc.id);
+                };
             }
+            // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+            incs_being_managed.insert(inc.id, cameras_that_follow_inc);
         }
-        Err(e) => println!("Error lockeando cameras al atender incidentes {:?}", e),
-    };
+        Err(_) => todo!(),
+    }
 }
 
-fn send_cameras_from_file_to_sist_monitoreo(
-    cameras: &mut ShCamerasType,
-    camera_tx: &Sender<Vec<u8>>,
-) {
+/// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente.
+fn get_id_of_cameras_that_will_change_state_to_active(
+    //cameras: &mut ShCamerasType,
+    cams: &mut MutexGuard<'_, HashMap<u8, Camera>>,
+    inc: &Incident,
+) -> Vec<u8> {
+    let mut cameras_that_follow_inc = vec![];
+
+    // Recorremos cada una de las cámaras, para ver si el inc está en su rango
+    for (cam_id, camera) in cams.iter_mut() {
+        if camera.will_register(inc.pos()) {
+            println!(
+                "Está en rango de cam: {}, cambiando su estado a activo.",
+                cam_id
+            ); // [] ver lindantes
+               // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
+               //camera.append_to_incs_being_managed(inc.id);
+               //let mut cameras_that_follow_inc = vec![*cam_id];
+            cameras_that_follow_inc.push(*cam_id);
+
+            for bordering_cam_id in camera.get_bordering_cams() {
+                /*if let Some(bordering_cam) = cams.get_mut(&bordering_cam_id){ // <--- Aux: quiero esto, pero no me deja xq 2 veces mut :( (ni siquiera me deja con get sin mut).
+                    bordering_cam.append_to_incs_being_managed(inc.id); // <-- falta esta línea, que no se puede xq 2 veces mut
+                    cameras_that_follow_inc.push(*bordering_cam_id);
+                };*/
+                cameras_that_follow_inc.push(*bordering_cam_id); // Aux: quizás haya que pensar otro diseño, xq si no puedo hacer el bloque comentado de acá arriba se complica.
+            }
+            /*// Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+            incs_being_managed.insert(inc.id, cameras_that_follow_inc);*/
+            println!(
+                "  la cámara queda:\n   cam id y lista de incs: {:?}",
+                camera.get_id_e_incs_for_debug_display()
+            );
+        }
+    }
+
+    cameras_that_follow_inc
+}
+
+fn send_cameras_from_file_to_publish(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
     match cameras.lock() {
         Ok(cams) => {
             for camera in (*cams).values() {
@@ -354,14 +380,22 @@ fn create_and_send_camera_abm(
     latitude: f64,
     longitude: f64,
     range: u8,
-    border_camera: u8,
 ) {
-    let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
+    // Crea la nueva cámara con los datos ingresados en el abm
+    let mut new_camera = Camera::new(id, latitude, longitude, range);
+
     match cameras.lock() {
         Ok(mut cams) => {
+            // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
+            for camera in cams.values_mut() {
+                camera.mutually_add_if_bordering(&mut new_camera);
+            }
+
+            // Envía la nueva cámara por tx, para ser publicada por el otro hilo
             if camera_tx.send(new_camera.to_bytes()).is_err() {
                 println!("Error al enviar cámara por tx desde hilo abm.");
             }
+            // Guarda la nueva cámara
             cams.insert(id, new_camera);
             println!("Cámara agregada con éxito.\n");
         }
@@ -382,19 +416,8 @@ fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
     let range: u8 = get_input_abm(Some("Ingrese el rango: "))
         .parse()
         .expect("Rango no válido");
-    let border_camera: u8 = get_input_abm(Some("Ingrese el id de cámara lindante: "))
-        .parse()
-        .expect("Id no válido");
 
-    create_and_send_camera_abm(
-        cameras,
-        camera_tx,
-        id,
-        latitude,
-        longitude,
-        range,
-        border_camera,
-    );
+    create_and_send_camera_abm(cameras, camera_tx, id, latitude, longitude, range);
 }
 
 fn show_cameras_abm(cameras: &mut ShCamerasType) {
@@ -422,6 +445,15 @@ fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
             if let Some(mut camera_to_delete) = cams.remove(&id) {
                 if camera_to_delete.is_not_deleted() {
                     camera_to_delete.delete_camera();
+
+                    // Recorre las cámaras ya existentes, eliminando la cámara a eliminar como lindante de la que corresponda, terminando la eliminación
+                    for camera in cams.values_mut() {
+                        camera.remove_from_list_if_bordering(&mut camera_to_delete);
+                    }
+
+                    // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
+                    // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
+                    // de las demás ya que eso solo es relevante para sistema camaras)
                     if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                         println!("Error al enviar cámara por tx desde hilo abm.");
                     } else {
@@ -453,7 +485,8 @@ fn print_menu_abm() {
 }
 
 fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx: Sender<bool>) {
-    send_cameras_from_file_to_sist_monitoreo(cameras, &camera_tx);
+    // Publicar cámaras al inicio
+    send_cameras_from_file_to_publish(cameras, &camera_tx);
 
     loop {
         print_menu_abm();
