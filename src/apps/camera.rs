@@ -102,8 +102,9 @@ impl Camera {
     }
 
     /// Devuelve un vector con los ids de sus cámaras lindantes.
-    pub fn get_bordering_cams(&self) -> Vec<u8> {
-        self.border_cameras.to_vec()
+    pub fn get_bordering_cams(&mut self) -> &mut Vec<u8> {
+        //self.border_cameras.to_vec()
+        &mut self.border_cameras
     }
 
     /// Agrega el inc_id a su lista de incidentes a los que le presta atención,

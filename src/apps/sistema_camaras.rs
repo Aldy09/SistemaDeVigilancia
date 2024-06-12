@@ -184,22 +184,20 @@ fn spawn_threads(
     let mqtt_client_sh_clone_2: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh_clone_1);
     let mqtt_client_sh_clone_3 = mqtt_client_sh_clone_2.clone();
 
-    let mut cameras_cloned = shareable_cameras.clone();
-
     children.push(spawn_abm_cameras_thread(
-        shareable_cameras,
+        shareable_cameras.clone(),
         cameras_tx,
         exit_tx,
     ));
-    children.push(spawn_publish_to_topic_thread(mqtt_client_sh, cameras_rx));
+    children.push(spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
     children.push(spawn_exit_when_asked_thread(
-        mqtt_client_sh_clone_1,
+        mqtt_client_sh.clone(),
         exit_rx,
     ));
     children.push(spawn_subscribe_to_topics_thread(
-        mqtt_client_sh_clone_2,
-        mqtt_client_sh_clone_3,
-        &mut cameras_cloned,
+        mqtt_client_sh.clone(),
+        mqtt_client_sh.clone(),
+        &mut shareable_cameras.clone(),
     ));
 
     children
@@ -284,15 +282,15 @@ fn procesar_incidente_conocido(
 
 /// Procesa un incidente cuando el mismo fue recibido por primera vez.
 /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
-/// en caso afirmativo, cambia estado de la cámara a activo.
+/// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
 fn procesar_incidente_por_primera_vez(
-    cameras_cl: &mut ShCamerasType,
+    cameras: &mut ShCamerasType,
     inc: Incident,
     incs_being_managed: &mut HashMap<u8, Vec<u8>>,
 ) {
     println!("Proceso el incidente {} por primera vez", inc.id);
     // Recorremos cada una de las cámaras, para ver si el inc está en su rango
-    match cameras_cl.lock() {
+    match cameras.lock() {
         Ok(mut cams) => {
             for (cam_id, camera) in cams.iter_mut() {
                 //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
@@ -302,16 +300,23 @@ fn procesar_incidente_por_primera_vez(
                         "Está en rango de cam: {}, cambiando su estado a activo.",
                         cam_id
                     ); // [] ver lindantes
+                    // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
                     camera.append_to_incs_being_managed(inc.id);
-                    incs_being_managed.insert(inc.id, vec![*cam_id]); // podría estar fuera, pero ver orden en q qdan appendeados al vec si hay más de una
+                    let mut cameras_that_follow_inc = vec![*cam_id];
+
+                    for bordering_cam_id in camera.get_bordering_cams() {
+                        /*if let Some(bordering_cam) = cams.get_mut(&bordering_cam_id){ // <--- Aux: quiero esto, pero no me deja xq 2 veces mut :( (ni siquiera me deja con get sin mut).
+                            bordering_cam.append_to_incs_being_managed(inc.id); // <-- falta esta línea, que no se puede xq 2 veces mut
+                            cameras_that_follow_inc.push(*bordering_cam_id);
+                        };*/
+                        cameras_that_follow_inc.push(*bordering_cam_id); // Aux: quizás haya que pensar otro diseño, xq si no puedo hacer el bloque comentado de acá arriba se complica.
+                    }
+                    // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+                    incs_being_managed.insert(inc.id, cameras_that_follow_inc);
                     println!(
                         "  la cámara queda:\n   cam id y lista de incs: {:?}",
                         camera.get_id_e_incs_for_debug_display()
                     );
-
-                    // aux: acá puedo quedarme con los ids de las lindantes
-                    // y afuera del if let procesar esto mismo pero para lindantes
-                    // Complejidad de eso #revisable (capaz podrían marcarse...) [] ver
                 }
             }
         }
