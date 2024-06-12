@@ -95,7 +95,7 @@ pub fn receive_messages_from_subscribed_topics(
                 //Publish message: Incident
                 Ok(msg) => {
                     let incident = Incident::from_bytes(msg.get_payload());
-                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS");
+                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS, inc: {:?}", incident);
                     manage_incidents(incident, cameras);
                 }
                 Err(e) => {
@@ -284,11 +284,35 @@ fn procesar_incidente_por_primera_vez(
     incs_being_managed: &mut HashMap<u8, Vec<u8>>,
 ) {
     println!("Proceso el incidente {} por primera vez", inc.id);
+    let cameras_that_follow_inc = get_id_of_cameras_that_will_change_state_to_active(cameras, &inc);
+    
+    // Aux: workaround, ver []. En este punto [ya solté la ref mutable], y
+    // el vector tiene los ids de todas las cámaras que deben cambiar a activo
+    match cameras.lock() {
+        Ok(mut cams) => {
+            for cam_id in &cameras_that_follow_inc {                
+                if let Some(bordering_cam) = cams.get_mut(cam_id){ 
+                    bordering_cam.append_to_incs_being_managed(inc.id);
+                };            
+            }
+            // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+            incs_being_managed.insert(inc.id, cameras_that_follow_inc);
+        },
+        Err(_) => todo!(),
+    }
+    
+}
+
+/// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente.
+fn get_id_of_cameras_that_will_change_state_to_active(
+    cameras: &mut ShCamerasType,
+    inc: &Incident,
+) -> Vec<u8> {
+    let mut cameras_that_follow_inc = vec![];
     // Recorremos cada una de las cámaras, para ver si el inc está en su rango
     match cameras.lock() {
         Ok(mut cams) => {
             for (cam_id, camera) in cams.iter_mut() {
-                //let mut _bordering_cams: Vec<Camera> = vec![]; // lindantes
 
                 if camera.will_register(inc.pos()) {
                     println!(
@@ -297,7 +321,8 @@ fn procesar_incidente_por_primera_vez(
                     ); // [] ver lindantes
                     // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
                     camera.append_to_incs_being_managed(inc.id);
-                    let mut cameras_that_follow_inc = vec![*cam_id];
+                    //let mut cameras_that_follow_inc = vec![*cam_id];
+                    cameras_that_follow_inc.push(*cam_id);
 
                     for bordering_cam_id in camera.get_bordering_cams() {
                         /*if let Some(bordering_cam) = cams.get_mut(&bordering_cam_id){ // <--- Aux: quiero esto, pero no me deja xq 2 veces mut :( (ni siquiera me deja con get sin mut).
@@ -306,8 +331,8 @@ fn procesar_incidente_por_primera_vez(
                         };*/
                         cameras_that_follow_inc.push(*bordering_cam_id); // Aux: quizás haya que pensar otro diseño, xq si no puedo hacer el bloque comentado de acá arriba se complica.
                     }
-                    // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                    incs_being_managed.insert(inc.id, cameras_that_follow_inc);
+                    /*// Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+                    incs_being_managed.insert(inc.id, cameras_that_follow_inc);*/
                     println!(
                         "  la cámara queda:\n   cam id y lista de incs: {:?}",
                         camera.get_id_e_incs_for_debug_display()
@@ -317,6 +342,7 @@ fn procesar_incidente_por_primera_vez(
         }
         Err(e) => println!("Error lockeando cameras al atender incidentes {:?}", e),
     };
+    cameras_that_follow_inc
 }
 
 fn send_cameras_from_file_to_publish(
