@@ -194,7 +194,11 @@ impl Camera {
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        rad <= range
+
+        let adjusted_range = range/10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
+
+        rad <= (adjusted_range)
     }
 }
 
@@ -227,4 +231,46 @@ mod test {
     //     assert_eq!(camera.will_register((3.0, 4.8)), false);
     //     assert_eq!(camera.will_register((3.0, 4.9)), false);
     // }
+
+    #[test]
+    fn test_2_camaras_cercanas_son_lindantes(){
+        //     Aux: obelisco: lon -58.3861838  lat: -34.6037344
+
+        let lat = -34.6037344;
+        let lon = -58.3861838;
+        let range = 10;
+        let incr = 0.0000005;
+        let mut cam_1 = Camera::new(1, lat, lon, range, vec![]);
+
+        // Otra cámara, con misma longitud, y latitud apenas incrementada
+        let mut cam_2 = Camera::new(2, lat+incr, lon, range, vec![]);
+
+        cam_1.mutually_add_if_bordering(&mut cam_2);
+        // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
+
+        // Se han agregado mutuamente, xq sí qentraron dentro del border_range para ser consideradas lindantes
+        assert!(cam_1.border_cameras.contains(&cam_2.get_id()));
+        assert!(cam_2.border_cameras.contains(&cam_1.get_id()));
+    }
+
+    #[test]
+    fn test_3_camaras_lejanas_no_son_lindantes(){
+        //     Aux: obelisco: lon -58.3861838  lat: -34.6037344
+
+        let lat = -34.6037344;
+        let lon = -58.3861838;
+        let range = 10;
+        let incr = 0.0000005;
+        let mut cam_1 = Camera::new(1, lat, lon, range, vec![]);
+
+        // Otra cámara, con misma longitud, y latitud MUY incrementada
+        let mut cam_2 = Camera::new(2, lat+10.0*incr, lon, range, vec![]);
+
+        cam_1.mutually_add_if_bordering(&mut cam_2);
+        // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
+
+        // No se han agregado mutuamente, xq no entraron dentro del border_range para ser consideradas lindantes
+        assert!(!cam_1.border_cameras.contains(&cam_2.get_id()));
+        assert!(!cam_2.border_cameras.contains(&cam_1.get_id()));
+    }
 }
