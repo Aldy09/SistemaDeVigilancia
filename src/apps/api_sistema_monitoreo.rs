@@ -41,13 +41,12 @@ impl SistemaMonitoreo {
         match establish_mqtt_broker_connection(&broker_addr) {
             Ok(mqtt_client) => {
                 let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-                let mqtt_client_sh_clone: Arc<Mutex<MQTTClient>> = Arc::clone(&mqtt_client_sh);
 
                 let send_subscribe_thread =
-                    sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh);
+                    sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone());
                 children.push(send_subscribe_thread);
 
-                let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh_clone);
+                let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
                 let send_incidents_thread = sistema_monitoreo.spawn_send_incidents_thread(
                     mqtt_client_incident_sh_clone.clone(),
