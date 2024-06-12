@@ -92,10 +92,7 @@ impl Camera {
     /// está en el rango de la cámara `Self`.
     pub fn will_register(&self, (latitude, longitude): (f64, f64)) -> bool {
         //hacer que la funcion retorne true si el incidente esta en el rango de la camara
-        let x = self.latitude - latitude;
-        let y = self.longitude - longitude;
-        let distance = (x.powi(2) + y.powi(2)).sqrt();
-        distance <= self.range as f64
+        self.is_within_range_from_self(latitude, longitude, self.range as f64)
     }
 
     /// Modifica su estado al recibido por parámetro, y se marca un atributo
@@ -165,14 +162,12 @@ impl Camera {
     // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
-        // Calcula si se encuentra la cámara dentro del border_range
-        let lat_dist = self.latitude - candidate_bordering.get_latitude();
-        let long_dist = self.longitude - candidate_bordering.get_longitude();
-        let rad = f64::sqrt(lat_dist.powf(2.0) + long_dist.powf(2.0));
+        
         let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+        let in_range = self.is_within_range_from_self(candidate_bordering.get_latitude(), candidate_bordering.get_longitude(), const_border_range);
 
         // Si sí, se agregan mutuamente como lindantes
-        if rad <= const_border_range {
+        if in_range {
             self.border_cameras.push(candidate_bordering.get_id());
             candidate_bordering.border_cameras.push(self.id);
         }
@@ -180,19 +175,26 @@ impl Camera {
     }
     
     pub fn remove_from_list_if_bordering(&mut self, camera_to_delete: &mut Camera) {
-        // Calcula si se encuentra la cámara dentro del border_range
-        let lat_dist = self.latitude - camera_to_delete.get_latitude();
-        let long_dist = self.longitude - camera_to_delete.get_longitude();
-        let rad = f64::sqrt(lat_dist.powf(2.0) + long_dist.powf(2.0));
-        let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+        
+        // Aux: en realidad no necesito recalcular esto para borrarla; "si es lindante" en este contexto es "si está en la lista".
+        //let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+        //let in_range = self.is_within_range_from_self(camera_to_delete.get_latitude(), camera_to_delete.get_longitude(), const_border_range);
 
-        // Todo esto de arriba debería ser una fn privada
+        //if in_range {
         // Busco la pos del id de la camera_to_delete en mi lista de lindantes, y la elimino
-        if rad <= const_border_range {
-            if let Some(pos) = self.border_cameras.iter().position(|id| *id == camera_to_delete.get_id()){
-                self.border_cameras.remove(pos);
-            }
+        if let Some(pos) = self.border_cameras.iter().position(|id| *id == camera_to_delete.get_id()){
+            self.border_cameras.remove(pos);
         }
+        //}
+    }
+    
+    /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro del rango pasado
+    fn is_within_range_from_self(&self, latitude: f64, longitude: f64, range: f64) -> bool {
+        let lat_dist = self.latitude - latitude;
+        let long_dist = self.longitude - longitude;
+        let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
+
+        rad <= range
     }
 }
 
