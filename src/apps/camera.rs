@@ -1,3 +1,4 @@
+
 use crate::apps::camera_state::CameraState;
 
 #[derive(Debug, PartialEq)]
@@ -159,6 +160,23 @@ impl Camera {
 
     pub fn get_id(&self) -> u8 {
         self.id
+    }
+
+    // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
+    // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
+    pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
+        // Calcula si se encuentra la cámara dentro del border_range
+        let lat_dist = self.latitude - candidate_bordering.get_latitude();
+        let long_dist = self.longitude - candidate_bordering.get_longitude();
+        let rad = f64::sqrt(lat_dist.powf(2.0) + long_dist.powf(2.0));
+        let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+
+        // Si sí, se agregan mutuamente como lindantes
+        if rad <= const_border_range {
+            self.border_cameras.push(candidate_bordering.get_id());
+            candidate_bordering.border_cameras.push(self.id);
+        }
+
     }
 }
 
