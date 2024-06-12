@@ -178,6 +178,22 @@ impl Camera {
         }
 
     }
+    
+    pub fn remove_from_list_if_bordering(&mut self, camera_to_delete: &mut Camera) {
+        // Calcula si se encuentra la cámara dentro del border_range
+        let lat_dist = self.latitude - camera_to_delete.get_latitude();
+        let long_dist = self.longitude - camera_to_delete.get_longitude();
+        let rad = f64::sqrt(lat_dist.powf(2.0) + long_dist.powf(2.0));
+        let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+
+        // Todo esto de arriba debería ser una fn privada
+        // Busco la pos del id de la camera_to_delete en mi lista de lindantes, y la elimino
+        if rad <= const_border_range {
+            if let Some(pos) = self.border_cameras.iter().position(|id| *id == camera_to_delete.get_id()){
+                self.border_cameras.remove(pos);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

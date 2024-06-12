@@ -356,12 +356,21 @@ fn create_and_send_camera_abm(
     range: u8,
     border_camera: u8,
 ) {
-    let new_camera = Camera::new(id, latitude, longitude, range, vec![border_camera]);
+    // Crea la nueva cámara con los datos ingresados en el abm
+    let mut new_camera = Camera::new(id, latitude, longitude, range, vec![]);
+    
     match cameras.lock() {
         Ok(mut cams) => {
+            // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
+            for camera in cams.values_mut() {
+                camera.mutually_add_if_bordering(&mut new_camera);        
+            }
+
+            // Envía la nueva cámara por tx, para ser publicada por el otro hilo
             if camera_tx.send(new_camera.to_bytes()).is_err() {
                 println!("Error al enviar cámara por tx desde hilo abm.");
             }
+            // Guarda la nueva cámara
             cams.insert(id, new_camera);
             println!("Cámara agregada con éxito.\n");
         }
@@ -422,6 +431,15 @@ fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
             if let Some(mut camera_to_delete) = cams.remove(&id) {
                 if camera_to_delete.is_not_deleted() {
                     camera_to_delete.delete_camera();
+
+                    // Recorre las cámaras ya existentes, eliminando la cámara a eliminar como lindante de la que corresponda, terminando la eliminación
+                    for camera in cams.values_mut() {
+                        camera.remove_from_list_if_bordering(&mut camera_to_delete);
+                    }
+
+                    // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
+                    // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
+                    // de las demás ya que eso solo es relevante para sistema camaras)
                     if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                         println!("Error al enviar cámara por tx desde hilo abm.");
                     } else {
