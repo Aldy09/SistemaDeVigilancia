@@ -353,11 +353,10 @@ fn create_and_send_camera_abm(
     id: u8,
     latitude: f64,
     longitude: f64,
-    range: u8,
-    border_camera: u8,
+    range: u8
 ) {
     // Crea la nueva cámara con los datos ingresados en el abm
-    let mut new_camera = Camera::new(id, latitude, longitude, range, vec![]);
+    let mut new_camera = Camera::new(id, latitude, longitude, range);
     
     match cameras.lock() {
         Ok(mut cams) => {
@@ -391,9 +390,6 @@ fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
     let range: u8 = get_input_abm(Some("Ingrese el rango: "))
         .parse()
         .expect("Rango no válido");
-    let border_camera: u8 = get_input_abm(Some("Ingrese el id de cámara lindante: "))
-        .parse()
-        .expect("Id no válido");
 
     create_and_send_camera_abm(
         cameras,
@@ -401,8 +397,7 @@ fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
         id,
         latitude,
         longitude,
-        range,
-        border_camera,
+        range
     );
 }
 

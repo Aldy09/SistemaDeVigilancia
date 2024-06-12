@@ -23,14 +23,14 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(id: u8, latitude: f64, longitude: f64, range: u8, border_cameras: Vec<u8>) -> Self {
+    pub fn new(id: u8, latitude: f64, longitude: f64, range: u8) -> Self {
         Self {
             id,
             latitude,
             longitude,
             state: CameraState::SavingMode,
             range,
-            border_cameras,
+            border_cameras: vec![],
             deleted: false,
             incs_being_managed: vec![],
         }
@@ -209,7 +209,7 @@ mod test {
 
     #[test]
     fn test_1_camera_to_y_from_bytes() {
-        let camera = Camera::new(12, 3.0, 4.0, 5, vec![6]);
+        let camera = Camera::new(12, 3.0, 4.0, 5);
 
         let bytes = camera.to_bytes();
 
@@ -240,10 +240,10 @@ mod test {
         let lon = -58.3861838;
         let range = 10;
         let incr = 0.0000005;
-        let mut cam_1 = Camera::new(1, lat, lon, range, vec![]);
+        let mut cam_1 = Camera::new(1, lat, lon, range);
 
         // Otra cámara, con misma longitud, y latitud apenas incrementada
-        let mut cam_2 = Camera::new(2, lat+incr, lon, range, vec![]);
+        let mut cam_2 = Camera::new(2, lat+incr, lon, range);
 
         cam_1.mutually_add_if_bordering(&mut cam_2);
         // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
@@ -261,10 +261,10 @@ mod test {
         let lon = -58.3861838;
         let range = 10;
         let incr = 0.0000005;
-        let mut cam_1 = Camera::new(1, lat, lon, range, vec![]);
+        let mut cam_1 = Camera::new(1, lat, lon, range);
 
         // Otra cámara, con misma longitud, y latitud MUY incrementada
-        let mut cam_2 = Camera::new(2, lat+10.0*incr, lon, range, vec![]);
+        let mut cam_2 = Camera::new(2, lat+10.0*incr, lon, range);
 
         cam_1.mutually_add_if_bordering(&mut cam_2);
         // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214

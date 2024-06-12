@@ -14,10 +14,8 @@ pub fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
             let latitude = parts[1].trim().parse().expect("Latitud no válida");
             let longitude = parts[2].trim().parse().expect("Longitud no válida");
             let range = parts[3].trim().parse().expect("Rango no válido");
-            let border_cam: u8 = parts[4].trim().parse().expect("Id no válido"); // ignorar la lindante por un momento, ahora borramos esto del arch.
-            let border_cams_vec = vec![]; //vec![border_cam];
 
-            let mut new_camera = Camera::new(id, latitude, longitude, range, border_cams_vec);
+            let mut new_camera = Camera::new(id, latitude, longitude, range);
 
             // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
             for camera in cameras.values_mut() {
