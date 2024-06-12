@@ -19,7 +19,7 @@ pub fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
 
             // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
             for camera in cameras.values_mut() {
-                camera.mutually_add_if_bordering(&mut new_camera);                
+                camera.mutually_add_if_bordering(&mut new_camera);
             }
 
             // Guarda la nueva cámara

@@ -95,7 +95,10 @@ pub fn receive_messages_from_subscribed_topics(
                 //Publish message: Incident
                 Ok(msg) => {
                     let incident = Incident::from_bytes(msg.get_payload());
-                    println!("ME LLEGO EL INCIDENTE A SISTEMA CAMARAS, inc: {:?}", incident);
+                    println!(
+                        "ME LLEGO EL INCIDENTE A SISTEMA CAMARAS, inc: {:?}",
+                        incident
+                    );
                     manage_incidents(incident, cameras);
                 }
                 Err(e) => {
@@ -185,7 +188,10 @@ fn spawn_threads(
         cameras_tx,
         exit_tx,
     ));
-    children.push(spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
+    children.push(spawn_publish_to_topic_thread(
+        mqtt_client_sh.clone(),
+        cameras_rx,
+    ));
     children.push(spawn_exit_when_asked_thread(
         mqtt_client_sh.clone(),
         exit_rx,
@@ -285,22 +291,21 @@ fn procesar_incidente_por_primera_vez(
 ) {
     println!("Proceso el incidente {} por primera vez", inc.id);
     let cameras_that_follow_inc = get_id_of_cameras_that_will_change_state_to_active(cameras, &inc);
-    
+
     // Aux: workaround, ver []. En este punto [ya solté la ref mutable], y
     // el vector tiene los ids de todas las cámaras que deben cambiar a activo
     match cameras.lock() {
         Ok(mut cams) => {
-            for cam_id in &cameras_that_follow_inc {                
-                if let Some(bordering_cam) = cams.get_mut(cam_id){ 
+            for cam_id in &cameras_that_follow_inc {
+                if let Some(bordering_cam) = cams.get_mut(cam_id) {
                     bordering_cam.append_to_incs_being_managed(inc.id);
-                };            
+                };
             }
             // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
             incs_being_managed.insert(inc.id, cameras_that_follow_inc);
-        },
+        }
         Err(_) => todo!(),
     }
-    
 }
 
 /// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente.
@@ -313,13 +318,12 @@ fn get_id_of_cameras_that_will_change_state_to_active(
     match cameras.lock() {
         Ok(mut cams) => {
             for (cam_id, camera) in cams.iter_mut() {
-
                 if camera.will_register(inc.pos()) {
                     println!(
                         "Está en rango de cam: {}, cambiando su estado a activo.",
                         cam_id
                     ); // [] ver lindantes
-                    // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
+                       // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
                     camera.append_to_incs_being_managed(inc.id);
                     //let mut cameras_that_follow_inc = vec![*cam_id];
                     cameras_that_follow_inc.push(*cam_id);
@@ -345,10 +349,7 @@ fn get_id_of_cameras_that_will_change_state_to_active(
     cameras_that_follow_inc
 }
 
-fn send_cameras_from_file_to_publish(
-    cameras: &mut ShCamerasType,
-    camera_tx: &Sender<Vec<u8>>,
-) {
+fn send_cameras_from_file_to_publish(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
     match cameras.lock() {
         Ok(cams) => {
             for camera in (*cams).values() {
@@ -379,16 +380,16 @@ fn create_and_send_camera_abm(
     id: u8,
     latitude: f64,
     longitude: f64,
-    range: u8
+    range: u8,
 ) {
     // Crea la nueva cámara con los datos ingresados en el abm
     let mut new_camera = Camera::new(id, latitude, longitude, range);
-    
+
     match cameras.lock() {
         Ok(mut cams) => {
             // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
             for camera in cams.values_mut() {
-                camera.mutually_add_if_bordering(&mut new_camera);        
+                camera.mutually_add_if_bordering(&mut new_camera);
             }
 
             // Envía la nueva cámara por tx, para ser publicada por el otro hilo
@@ -417,14 +418,7 @@ fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
         .parse()
         .expect("Rango no válido");
 
-    create_and_send_camera_abm(
-        cameras,
-        camera_tx,
-        id,
-        latitude,
-        longitude,
-        range
-    );
+    create_and_send_camera_abm(cameras, camera_tx, id, latitude, longitude, range);
 }
 
 fn show_cameras_abm(cameras: &mut ShCamerasType) {

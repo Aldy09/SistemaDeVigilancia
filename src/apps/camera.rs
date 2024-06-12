@@ -1,4 +1,3 @@
-
 use crate::apps::camera_state::CameraState;
 
 #[derive(Debug, PartialEq)]
@@ -163,41 +162,45 @@ impl Camera {
     // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
-        
         let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
-        let in_range = self.is_within_range_from_self(candidate_bordering.get_latitude(), candidate_bordering.get_longitude(), const_border_range);
+        let in_range = self.is_within_range_from_self(
+            candidate_bordering.get_latitude(),
+            candidate_bordering.get_longitude(),
+            const_border_range,
+        );
 
         // Si sí, se agregan mutuamente como lindantes
         if in_range {
             self.border_cameras.push(candidate_bordering.get_id());
             candidate_bordering.border_cameras.push(self.id);
         }
-
     }
-    
+
     pub fn remove_from_list_if_bordering(&mut self, camera_to_delete: &mut Camera) {
-        
         // Aux: en realidad no necesito recalcular esto para borrarla; "si es lindante" en este contexto es "si está en la lista".
         //let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
         //let in_range = self.is_within_range_from_self(camera_to_delete.get_latitude(), camera_to_delete.get_longitude(), const_border_range);
 
         //if in_range {
         // Busco la pos del id de la camera_to_delete en mi lista de lindantes, y la elimino
-        if let Some(pos) = self.border_cameras.iter().position(|id| *id == camera_to_delete.get_id()){
+        if let Some(pos) = self
+            .border_cameras
+            .iter()
+            .position(|id| *id == camera_to_delete.get_id())
+        {
             self.border_cameras.remove(pos);
         }
         //}
     }
-    
+
     /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro del rango pasado
     fn is_within_range_from_self(&self, latitude: f64, longitude: f64, range: f64) -> bool {
         let lat_dist = self.latitude - latitude;
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-
-        let adjusted_range = range/10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
-        // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
+        let adjusted_range = range / 10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+                                                 // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
 
         rad <= (adjusted_range)
     }
@@ -234,7 +237,7 @@ mod test {
     // }
 
     #[test]
-    fn test_2_camaras_cercanas_son_lindantes(){
+    fn test_2_camaras_cercanas_son_lindantes() {
         //     Aux: obelisco: lon -58.3861838  lat: -34.6037344
 
         let lat = -34.6037344;
@@ -244,7 +247,7 @@ mod test {
         let mut cam_1 = Camera::new(1, lat, lon, range);
 
         // Otra cámara, con misma longitud, y latitud apenas incrementada
-        let mut cam_2 = Camera::new(2, lat+incr, lon, range);
+        let mut cam_2 = Camera::new(2, lat + incr, lon, range);
 
         cam_1.mutually_add_if_bordering(&mut cam_2);
         // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
@@ -255,7 +258,7 @@ mod test {
     }
 
     #[test]
-    fn test_3_camaras_lejanas_no_son_lindantes(){
+    fn test_3_camaras_lejanas_no_son_lindantes() {
         //     Aux: obelisco: lon -58.3861838  lat: -34.6037344
 
         let lat = -34.6037344;
@@ -265,7 +268,7 @@ mod test {
         let mut cam_1 = Camera::new(1, lat, lon, range);
 
         // Otra cámara, con misma longitud, y latitud MUY incrementada
-        let mut cam_2 = Camera::new(2, lat+10.0*incr, lon, range);
+        let mut cam_2 = Camera::new(2, lat + 10.0 * incr, lon, range);
 
         cam_1.mutually_add_if_bordering(&mut cam_2);
         // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
