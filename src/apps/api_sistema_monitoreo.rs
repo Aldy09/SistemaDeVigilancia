@@ -6,7 +6,9 @@ use std::{
 
 use crossbeam_channel::Sender;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
+
 use std::sync::mpsc::Receiver as MpscReceiver;
+use std::sync::mpsc::Sender as MpscSender;
 
 use crate::{logger::Logger, messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
@@ -67,15 +69,13 @@ impl SistemaMonitoreo {
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
         let logger = Logger::new(logger_rx);
-
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+        let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
         let send_subscribe_thread =
             sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone());
         children.push(send_subscribe_thread);
-
-        let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
         let send_incidents_thread = sistema_monitoreo
             .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx);
@@ -88,6 +88,17 @@ impl SistemaMonitoreo {
             sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
         children.push(exit_thread);
 
+        self.spawn_ui_thread(incident_tx, publish_message_rx, exit_tx);
+
+        children
+    }
+
+    pub fn spawn_ui_thread(
+        &self,
+        incident_tx: MpscSender<Incident>,
+        publish_message_rx: CrossbeamReceiver<PublishMessage>,
+        exit_tx: MpscSender<bool>,
+    ) {
         let _ = eframe::run_native(
             "Sistema Monitoreo",
             Default::default(),
@@ -100,8 +111,6 @@ impl SistemaMonitoreo {
                 ))
             }),
         );
-
-        children
     }
 
     pub fn spawn_send_incidents_thread(
