@@ -24,7 +24,7 @@ impl SistDronProperties {
         // Y ahora buscamos las properties específicas que usará el dron, y las cargamos a los campos de este struct
         let max_battery_lvl: u8;
         if let Some(prop) = global_properties.get("max_battery_lvl") {
-            max_battery_lvl = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            max_battery_lvl = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "max_battery_lvl"))?;
         } else {
             println!("No se encontró la propiedad 'max_battery_lvl");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad max_battery_lvl."));
@@ -32,7 +32,7 @@ impl SistDronProperties {
         
         let min_operational_battery_lvl: u8;
         if let Some(prop) = global_properties.get("min_operational_battery_lvl") {
-            min_operational_battery_lvl = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            min_operational_battery_lvl = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "min_operational_battery_lvl"))?;
         } else {
             println!("No se encontró la propiedad 'min_operational_battery_lvl");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
@@ -40,7 +40,7 @@ impl SistDronProperties {
 
         let range: u8;
         if let Some(prop) = global_properties.get("range") {
-            range = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            range = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "range"))?;
         } else {
             println!("No se encontró la propiedad 'range");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
@@ -48,15 +48,15 @@ impl SistDronProperties {
 
         let stay_at_inc_time: u8;
         if let Some(prop) = global_properties.get("stay_at_inc_time") {
-            stay_at_inc_time = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            stay_at_inc_time = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "stay_at_inc_time"))?;
         } else {
             println!("No se encontró la propiedad 'stay_at_inc_time");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
         }
 
         let range_center_lat: f64;
-        if let Some(prop) = global_properties.get("range") {
-            range_center_lat = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+        if let Some(prop) = global_properties.get("range_center_lat") {
+            range_center_lat = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "range_center_lat"))?;
         } else {
             println!("No se encontró la propiedad 'range_center_lat");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
@@ -64,7 +64,7 @@ impl SistDronProperties {
 
         let range_center_lon: f64;
         if let Some(prop) = global_properties.get("range_center_lon") {
-            range_center_lon = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            range_center_lon = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "range_center_lon"))?;
         } else {
             println!("No se encontró la propiedad 'range_center_lon");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
@@ -72,7 +72,7 @@ impl SistDronProperties {
 
         let mantainance_lat: f64;
         if let Some(prop) = global_properties.get("mantainance_lat") {
-            mantainance_lat = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            mantainance_lat = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "mantainance_lat"))?;
         } else {
             println!("No se encontró la propiedad 'mantainance_lat");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
@@ -80,7 +80,7 @@ impl SistDronProperties {
 
         let mantainance_lon: f64;
         if let Some(prop) = global_properties.get("mantainance_lon") {
-            mantainance_lon = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, ""))?;
+            mantainance_lon = prop.parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "mantainance_lon"))?;
         } else {
             println!("No se encontró la propiedad 'mantainance_lon");
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));

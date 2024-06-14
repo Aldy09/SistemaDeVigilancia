@@ -83,6 +83,25 @@ impl DronCurrentInfo {
             state,
         }
     }
+
+    // Getters
+    /// Devuelve el id
+    pub fn get_id(&self) -> u8 {
+        self.id
+    }
+    /// Devuelve latitud y longitud en las que dron se encuentra actualmente
+    pub fn get_current_position(&self) -> (f64, f64) {
+        (self.latitude, self.longitude)
+    }
+    /// Devuelve el nivel de batería actual
+    pub fn get_battery_lvl(&self) -> u8 {
+        self.id
+    }
+    /// Devuelve el estado en que dron se encuentra actualmente
+    pub fn get_state(&self) -> u8 {
+        self.state
+    }
+
 }
 
 #[cfg(test)]
