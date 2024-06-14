@@ -21,18 +21,12 @@ impl Dron {
     /// (Aux: otra posibilidad era que inicie desde la posición de mantenimiento, y vuele hacia el range_center; pero ahí ya ver en qué estado iniciaría)
     pub fn new(id: u8) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
-        let properties_file = "src/apps/sistema_dron.properties";//"sistema_dron.properties";//"./sistema_dron.properties";
+        let properties_file = "src/apps/sistema_dron.properties";
         let dron_properties = SistDronProperties::new(properties_file)?;
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
         let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
-        let current_info = DronCurrentInfo::new(
-            id,
-            rng_center_lat,
-            rng_center_lon,
-            100,
-            1,
-        );
+        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, 1);
 
         Ok(Dron {
             current_info,
@@ -58,7 +52,7 @@ mod test {
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
         let dron = Dron::new(1).unwrap();
-        
+
         assert_eq!(dron.current_info.get_id(), 1);
         assert_eq!(dron.current_info.get_state(), 1); // estado activo
     }
@@ -66,12 +60,13 @@ mod test {
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
         let dron = Dron::new(1).unwrap();
-        
+
         // El dron inicia desde esta posición.
         // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
         //  aux: quizás sería necesario involucrar al id en la cuenta, ej una lat base + id*algún_factor, para espaciarlos en el mapa al iniciar. Ver [].
-        assert_eq!(dron.current_info.get_current_position(), dron.dron_properties.get_range_center_position());
+        assert_eq!(
+            dron.current_info.get_current_position(),
+            dron.dron_properties.get_range_center_position()
+        );
     }
-
-
 }

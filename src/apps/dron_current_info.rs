@@ -101,7 +101,6 @@ impl DronCurrentInfo {
     pub fn get_state(&self) -> u8 {
         self.state
     }
-
 }
 
 #[cfg(test)]

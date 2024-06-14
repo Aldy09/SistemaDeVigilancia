@@ -18,7 +18,7 @@ impl Properties {
         for line in reader.lines() {
             let line = line?;
             let mut parts = line.splitn(2, '=');
-            
+
             let opt_key = parts.next();
             let opt_value = parts.next();
 
@@ -30,10 +30,10 @@ impl Properties {
             // En este punto ya sabemos que no fue error
             if let Some(key) = opt_key {
                 let key_to_store = key.trim().to_string();
-                if let Some(value) = opt_value{
+                if let Some(value) = opt_value {
                     let value_to_store = value.trim().to_string();
 
-                    // Se guarda el par clave - valor         
+                    // Se guarda el par clave - valor
                     props.insert(key_to_store, value_to_store);
                 }
             }

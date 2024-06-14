@@ -15,7 +15,7 @@ pub mod monitoreo_errors;
 pub mod places;
 pub mod plugins;
 pub mod properties;
+pub mod sist_dron_properties;
 pub mod ui_sistema_monitoreo;
 pub mod vendor;
 pub mod windows;
-pub mod sist_dron_properties;
