@@ -4,11 +4,11 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use std::sync::mpsc::Receiver;
+use crossbeam_channel::Sender;
+use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
+use std::sync::mpsc::Receiver as MpscReceiver;
 
-use crossbeam::channel::{self, Sender};
-
-use crate::{messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
+use crate::{logger::Logger, messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
 use super::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
@@ -20,49 +20,73 @@ use super::{
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
     pub publish_message_tx: Sender<PublishMessage>,
+    pub logger_tx: mpsc::Sender<Incident>,
 }
 
 impl SistemaMonitoreo {
     pub fn new() -> Self {
-        // Crear un canal que acepte mensajes de tipo PublishMessage
-        let (publish_message_tx, publish_message_rx) = channel::unbounded::<PublishMessage>();
-        let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
-
-        let mut children: Vec<JoinHandle<()>> = vec![];
         let broker_addr = get_broker_address();
+
+        let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
+        let (logger_tx, logger_rx) = mpsc::channel::<Incident>();
 
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             publish_message_tx,
+            logger_tx,
         };
-
-        let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
         match establish_mqtt_broker_connection(&broker_addr) {
             Ok(mqtt_client) => {
-                let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-
-                let send_subscribe_thread =
-                    sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone());
-                children.push(send_subscribe_thread);
-
-                let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
-
-                let send_incidents_thread = sistema_monitoreo.spawn_send_incidents_thread(
-                    mqtt_client_incident_sh_clone.clone(),
-                    incident_rx,
+                let child_threads = sistema_monitoreo.spawn_threads(
+                    mqtt_client,
+                    &sistema_monitoreo,
+                    logger_rx,
+                    publish_message_rx,
                 );
-                children.push(send_incidents_thread);
 
-                let exit_thread = sistema_monitoreo
-                    .spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
-                children.push(exit_thread);
+                join_all_threads(child_threads);
             }
             Err(e) => println!(
                 "Error al establecer la conexión con el broker MQTT: {:?}",
                 e
             ),
         }
+
+        sistema_monitoreo
+    }
+
+    pub fn spawn_threads(
+        &self,
+        mqtt_client: MQTTClient,
+        sistema_monitoreo: &SistemaMonitoreo,
+        logger_rx: MpscReceiver<Incident>,
+        publish_message_rx: CrossbeamReceiver<PublishMessage>,
+    ) -> Vec<JoinHandle<()>> {
+        let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
+        let (exit_tx, exit_rx) = mpsc::channel::<bool>();
+
+        let logger = Logger::new(logger_rx);
+
+        let mut children: Vec<JoinHandle<()>> = vec![];
+        let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+
+        let send_subscribe_thread =
+            sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone());
+        children.push(send_subscribe_thread);
+
+        let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
+
+        let send_incidents_thread = sistema_monitoreo
+            .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx);
+        children.push(send_incidents_thread);
+
+        let save_messages_in_logger_thread = spawn_receive_incidents_thread(logger);
+        children.push(save_messages_in_logger_thread);
+
+        let exit_thread =
+            sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
+        children.push(exit_thread);
 
         let _ = eframe::run_native(
             "Sistema Monitoreo",
@@ -77,35 +101,29 @@ impl SistemaMonitoreo {
             }),
         );
 
-        join_all_threads(children);
-
-        sistema_monitoreo
+        children
     }
 
     pub fn spawn_send_incidents_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
-        rx: Receiver<Incident>,
+        rx: MpscReceiver<Incident>,
     ) -> JoinHandle<()> {
+        let self_clone = self.clone_ref();
         thread::spawn(move || loop {
             while let Ok(msg) = rx.recv() {
-                publish_incident(msg, &mqtt_client);
+                let msg_clone = msg.clone();
+                self_clone.logger_tx.send(msg).unwrap();
+                publish_incident(msg_clone, &mqtt_client);
             }
         })
     }
-
-    // pub fn clone_ref(&self) -> Self {
-    //     Self {
-    //         incidents: self.incidents.clone(),
-    //         camera_tx: self.camera_tx.clone(),
-    //         dron_tx: self.dron_tx.clone(),
-    //     }
-    // }
 
     pub fn clone_ref(&self) -> Self {
         Self {
             incidents: self.incidents.clone(),
             publish_message_tx: self.publish_message_tx.clone(),
+            logger_tx: self.logger_tx.clone(),
         }
     }
 
@@ -203,12 +221,20 @@ impl SistemaMonitoreo {
     fn spawn_exit_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
-        exit_rx: Receiver<bool>,
+        exit_rx: MpscReceiver<bool>,
     ) -> JoinHandle<()> {
         thread::spawn(move || {
             exit_when_asked(mqtt_client, exit_rx);
         })
     }
+}
+
+fn spawn_receive_incidents_thread(logger: Logger) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        while let Ok(msg) = logger.logger_rx.recv() {
+            logger.write_in_file(msg);
+        }
+    })
 }
 
 pub fn establish_mqtt_broker_connection(
