@@ -25,10 +25,11 @@ impl Dron {
         let dron_properties = SistDronProperties::new(properties_file)?;
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
+        let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
         let current_info = DronCurrentInfo::new(
             id,
-            dron_properties.range_center_lat,
-            dron_properties.range_center_lon,
+            rng_center_lat,
+            rng_center_lon,
             100,
             1,
         );
@@ -60,6 +61,16 @@ mod test {
         
         assert_eq!(dron.current_info.get_id(), 1);
         assert_eq!(dron.current_info.get_state(), 1); // estado activo
+    }
+
+    #[test]
+    fn test_2_dron_se_inicia_con_posicion_correcta() {
+        let dron = Dron::new(1).unwrap();
+        
+        // El dron inicia desde esta posición.
+        // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
+        //  aux: quizás sería necesario involucrar al id en la cuenta, ej una lat base + id*algún_factor, para espaciarlos en el mapa al iniciar. Ver [].
+        assert_eq!(dron.current_info.get_current_position(), dron.dron_properties.get_range_center_position());
     }
 
 

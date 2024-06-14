@@ -9,8 +9,8 @@ pub struct SistDronProperties {
     range: u8,
     stay_at_inc_time: u8, // Tiempo a permanencer en la ubicación del incidente, desde la llegada, en segundos.
     // Range center, porque un dron se mueve, al terminar de atender incidente vuelve a este range center
-    pub range_center_lat: f64, // Aux: #ToDo: Capaz es mejor tener una Posicion, para no tener mil f64s sueltos []
-    pub range_center_lon: f64,
+    range_center_lat: f64, // Aux: #ToDo: Capaz es mejor tener una Posicion, para no tener mil f64s sueltos []
+    range_center_lon: f64,
     // Posicion de la central, para volver a cargarse la batería cuando se alcanza el min_operational_battery_lvl
     mantainance_lat: f64,
     mantainance_lon: f64,
@@ -99,5 +99,10 @@ impl SistDronProperties {
             mantainance_lon,       
         })
 
+    }
+
+    /// Devuelve latitud y longitud del centro del rango, a la que volverá el dron luego de terminar de resolver un incidente
+    pub fn get_range_center_position(&self) -> (f64, f64) {
+        (self.range_center_lat, self.range_center_lon)
     }
 }
