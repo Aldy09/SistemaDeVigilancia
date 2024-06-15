@@ -1,4 +1,4 @@
-pub mod api_sistema_monitoreo;
+pub mod sistema_monitoreo;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
