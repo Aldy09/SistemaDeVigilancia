@@ -10,19 +10,17 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::Sender as MpscSender;
 
-use crate::{logger::Logger, messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
+use crate::{logger::Logger, messages::publish_message::PublishMessage, mqtt_client::MQTTClient, structs_to_save_in_logger::StructsToSaveInLogger};
 
 use super::{
-    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
-    incident::Incident,
-    ui_sistema_monitoreo::UISistemaMonitoreo,
+    app_type::AppType, common_clients::{exit_when_asked, get_broker_address, join_all_threads}, incident::Incident, ui_sistema_monitoreo::UISistemaMonitoreo
 };
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
     pub publish_message_tx: Sender<PublishMessage>,
-    pub logger_tx: mpsc::Sender<Incident>,
+    pub logger_tx: mpsc::Sender<StructsToSaveInLogger>,
 }
 
 impl SistemaMonitoreo {
@@ -30,7 +28,7 @@ impl SistemaMonitoreo {
         let broker_addr = get_broker_address();
 
         let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
-        let (logger_tx, logger_rx) = mpsc::channel::<Incident>();
+        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
 
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
@@ -62,7 +60,7 @@ impl SistemaMonitoreo {
         &self,
         mqtt_client: MQTTClient,
         sistema_monitoreo: &SistemaMonitoreo,
-        logger_rx: MpscReceiver<Incident>,
+        logger_rx: MpscReceiver<StructsToSaveInLogger>,
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
     ) -> Vec<JoinHandle<()>> {
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
@@ -119,8 +117,8 @@ impl SistemaMonitoreo {
         let self_clone = self.clone_ref();
         thread::spawn(move || loop {
             while let Ok(msg) = rx.recv() {
-                let msg_clone = msg.clone();
-                self_clone.logger_tx.send(msg).unwrap();
+                let msg_clone = msg.clone(); 
+                self_clone.logger_tx.send(StructsToSaveInLogger::AppType(AppType::Incident(msg))).unwrap();
                 publish_incident(msg_clone, &mqtt_client);
             }
         })

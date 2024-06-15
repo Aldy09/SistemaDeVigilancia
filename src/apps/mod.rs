@@ -19,4 +19,5 @@ pub mod properties;
 pub mod ui_sistema_monitoreo;
 pub mod vendor;
 pub mod windows;
+pub mod app_type;
 

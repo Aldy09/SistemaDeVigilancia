@@ -1,3 +1,11 @@
-Incident { id: 1, latitude: -99.0, longitude: -88.0, state: ActiveIncident, sent: false }
-Incident { id: 1, latitude: -34.0, longitude: -54.0, state: ActiveIncident, sent: false }
-Incident { id: 1, latitude: -55.0, longitude: -9999.0, state: ActiveIncident, sent: false }
+Camera(Camera { id: 2, latitude: -34.604687, longitude: -58.385445, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 0, latitude: -34.604656, longitude: -58.386112, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 6, latitude: -34.604206, longitude: -58.385258, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 9, latitude: -34.603603, longitude: -58.386677, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 8, latitude: -34.6029, longitude: -58.385887, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 7, latitude: -34.60473, longitude: -58.387062, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 3, latitude: -34.603756, longitude: -58.385357, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 5, latitude: -34.603924, longitude: -58.38688, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 1, latitude: -34.603878, longitude: -58.386562, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Camera(Camera { id: 4, latitude: -34.604042, longitude: -58.38635, state: SavingMode, range: 3, border_cameras: [], deleted: false, incs_being_managed: [] })
+Incident(Incident { id: 1, latitude: -55.0, longitude: -99.0, state: ActiveIncident, sent: false })

@@ -10,6 +10,7 @@ use crate::apps::camera_state::CameraState;
 /// - border_cameras: vector con los ids de sus cámaras lindantes;
 /// - deleted: campo que indica si la Camera ha pasado por un borrado lógico en el sistema central de cámaras;
 /// - incs_being_managed: vector con los ids de los incidentes a los que la Camera está prestando atención, esto es, ids de los incidentes que ocasionan que esta Camera esté en estado activo.
+#[derive(Clone)]
 pub struct Camera {
     id: u8,
     latitude: f64,

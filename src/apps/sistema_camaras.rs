@@ -2,13 +2,13 @@ type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
-use std::sync::mpsc::Receiver as MpscReceiver;
 //use std::sync::mpsc::Sender as MpscSender;
 type Channels = (
     mpsc::Sender<Vec<u8>>,
@@ -22,23 +22,21 @@ type Channels = (
 use std::io::Error;
 use std::net::SocketAddr;
 
-use crate::{
-    logger::Logger,
-    mqtt_client::MQTTClient
-};
+use crate::structs_to_save_in_logger::StructsToSaveInLogger;
+use crate::{logger::Logger, mqtt_client::MQTTClient};
 
 use crate::apps::{
-        incident::Incident,
-        camera::Camera,
-        common_clients::{get_broker_address, join_all_threads, exit_when_asked},
-        manage_stored_cameras::read_cameras_from_file,
-    };
+    camera::Camera,
+    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
+    incident::Incident,
+    manage_stored_cameras::read_cameras_from_file,
+};
 
-
+use super::app_type::AppType;
 
 pub struct SistemaCamaras {
     pub cameras_tx: mpsc::Sender<Vec<u8>>,
-    pub logger_tx: mpsc::Sender<Incident>,
+    pub logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     pub exit_tx: mpsc::Sender<bool>,
 }
 
@@ -47,7 +45,7 @@ impl SistemaCamaras {
         println!("SISTEMA DE CAMARAS\n");
 
         let broker_addr = get_broker_address();
-        let (logger_tx, logger_rx) = mpsc::channel::<Incident>();
+        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
         let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
 
         let sistema_camaras: SistemaCamaras = Self {
@@ -60,7 +58,13 @@ impl SistemaCamaras {
             Ok(mqtt_client) => {
                 let shareable_cameras = create_cameras();
                 sleep(Duration::from_secs(2)); // Sleep to start everything 'at the same time'
-                let children = sistema_camaras.spawn_threads(mqtt_client, shareable_cameras, cameras_rx, logger_rx, exit_rx);
+                let children = sistema_camaras.spawn_threads(
+                    mqtt_client,
+                    shareable_cameras,
+                    cameras_rx,
+                    logger_rx,
+                    exit_rx,
+                );
                 join_all_threads(children);
             }
             Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
@@ -72,7 +76,10 @@ impl SistemaCamaras {
     fn spawn_threads(
         &self,
         mqtt_client: MQTTClient,
-        shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>, cameras_rx: MpscReceiver<Vec<u8>>, logger_rx: MpscReceiver<Incident>, exit_rx: MpscReceiver<bool>
+        shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+        cameras_rx: MpscReceiver<Vec<u8>>,
+        logger_rx: MpscReceiver<StructsToSaveInLogger>,
+        exit_rx: MpscReceiver<bool>,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
@@ -82,7 +89,7 @@ impl SistemaCamaras {
 
         let self_clone = self.clone_ref();
 
-        children.push(spawn_abm_cameras_thread(
+        children.push(self.spawn_abm_cameras_thread(
             shareable_cameras.clone(),
             self_clone.cameras_tx,
             self_clone.exit_tx,
@@ -100,8 +107,11 @@ impl SistemaCamaras {
             &mut shareable_cameras.clone(),
         ));
 
+        children.push(spawn_receive_messages_thread(logger));
+
         children
     }
+
     pub fn clone_ref(&self) -> Self {
         Self {
             cameras_tx: self.cameras_tx.clone(),
@@ -109,6 +119,201 @@ impl SistemaCamaras {
             exit_tx: self.exit_tx.clone(),
         }
     }
+
+    fn send_cameras_from_file_to_publish(
+        &self,
+        cameras: &mut ShCamerasType,
+        camera_tx: &Sender<Vec<u8>>,
+    ) {
+        match cameras.lock() {
+            Ok(cams) => {
+                for camera in (*cams).values() {
+                    let camera_clone = camera.clone();
+                    self.logger_tx
+                        .send(StructsToSaveInLogger::AppType(AppType::Camera(
+                            camera_clone,
+                        )))
+                        .unwrap();
+                    if camera_tx.send(camera.to_bytes()).is_err() {
+                        println!("Error al enviar cámara por tx desde hilo abm.");
+                    }
+                }
+            }
+            Err(_) => println!("Error al tomar lock de cámaras."),
+        }
+    }
+
+    pub fn abm_cameras(
+        &self,
+        cameras: &mut ShCamerasType,
+        camera_tx: Sender<Vec<u8>>,
+        exit_tx: Sender<bool>,
+    ) {
+        // Publicar cámaras al inicio
+        self.send_cameras_from_file_to_publish(cameras, &camera_tx);
+
+        loop {
+            print_menu_abm();
+            let input = get_input_abm(None);
+
+            match &*input {
+                "1" => add_camera_abm(cameras, &camera_tx),
+                "2" => show_cameras_abm(cameras),
+                "3" => delete_camera_abm(cameras, &camera_tx),
+                "4" => {
+                    exit_program_abm(&exit_tx);
+                    break;
+                }
+                _ => {
+                    println!("Opción no válida. Intente nuevamente.\n");
+                }
+            }
+        }
+    }
+
+    fn spawn_abm_cameras_thread(
+        &self,
+        shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+        cameras_tx: mpsc::Sender<Vec<u8>>,
+        exit_tx: mpsc::Sender<bool>,
+    ) -> JoinHandle<()> {
+        let self_clone = self.clone_ref();
+        thread::spawn(move || {
+            self_clone.abm_cameras(&mut shareable_cameras.clone(), cameras_tx, exit_tx);
+        })
+    }
+}
+
+fn spawn_receive_messages_thread(logger: Logger) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        while let Ok(msg) = logger.logger_rx.recv() {
+            println!("RECIBI MENSAJE DE LOGGER EN SISTEMA CAMARAS: {:?}", msg);
+            logger.write_in_file(msg);
+        }
+    })
+}
+
+pub fn show_cameras_abm(cameras: &mut ShCamerasType) {
+    // Mostramos todas las cámaras
+    println!("Cámaras registradas:\n");
+    match cameras.lock() {
+        Ok(cams) => {
+            for camera in (*cams).values() {
+                // Si no está marcada borrada, mostrarla
+                if camera.is_not_deleted() {
+                    camera.display();
+                };
+            }
+        }
+        Err(_) => println!("Error al tomar lock de cámaras."),
+    }
+}
+
+pub fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
+    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
+        .parse()
+        .expect("Id no válido");
+    match cameras.lock() {
+        Ok(mut cams) => {
+            if let Some(mut camera_to_delete) = cams.remove(&id) {
+                if camera_to_delete.is_not_deleted() {
+                    camera_to_delete.delete_camera();
+
+                    // Recorre las cámaras ya existentes, eliminando la cámara a eliminar como lindante de la que corresponda, terminando la eliminación
+                    for camera in cams.values_mut() {
+                        camera.remove_from_list_if_bordering(&mut camera_to_delete);
+                    }
+
+                    // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
+                    // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
+                    // de las demás ya que eso solo es relevante para sistema camaras)
+                    if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
+                        println!("Error al enviar cámara por tx desde hilo abm.");
+                    } else {
+                        println!("Cámara eliminada con éxito.\n");
+                    }
+                };
+            }
+        }
+        Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
+    };
+}
+
+pub fn exit_program_abm(exit_tx: &Sender<bool>) {
+    match exit_tx.send(true) {
+        Ok(_) => println!("Saliendo del programa."),
+        Err(e) => println!("Error al intentar salir: {:?}", e),
+    }
+}
+
+pub fn print_menu_abm() {
+    println!(
+        "      MENÚ
+    1. Agregar cámara
+    2. Mostrar cámaras
+    3. Eliminar cámara
+    4. Salir
+    Ingrese una opción:"
+    );
+}
+
+pub fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
+    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara: "))
+        .parse()
+        .expect("ID no válido");
+    let latitude: f64 = get_input_abm(Some("Ingrese Latitud: "))
+        .parse()
+        .expect("Latitud no válida");
+    let longitude: f64 = get_input_abm(Some("Ingrese Longitud: "))
+        .parse()
+        .expect("Longitud no válida");
+    let range: u8 = get_input_abm(Some("Ingrese el rango: "))
+        .parse()
+        .expect("Rango no válido");
+
+    create_and_send_camera_abm(cameras, camera_tx, id, latitude, longitude, range);
+}
+
+pub fn create_and_send_camera_abm(
+    cameras: &mut ShCamerasType,
+    camera_tx: &Sender<Vec<u8>>,
+    id: u8,
+    latitude: f64,
+    longitude: f64,
+    range: u8,
+) {
+    // Crea la nueva cámara con los datos ingresados en el abm
+    let mut new_camera = Camera::new(id, latitude, longitude, range);
+
+    match cameras.lock() {
+        Ok(mut cams) => {
+            // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
+            for camera in cams.values_mut() {
+                camera.mutually_add_if_bordering(&mut new_camera);
+            }
+
+            // Envía la nueva cámara por tx, para ser publicada por el otro hilo
+            if camera_tx.send(new_camera.to_bytes()).is_err() {
+                println!("Error al enviar cámara por tx desde hilo abm.");
+            }
+            // Guarda la nueva cámara
+            cams.insert(id, new_camera);
+            println!("Cámara agregada con éxito.\n");
+        }
+        Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
+    };
+}
+
+pub fn get_input_abm(prompt: Option<&str>) -> String {
+    if let Some(p) = prompt {
+        print!("{}", p);
+    }
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Error al leer la entrada");
+    input.trim().to_string()
 }
 
 pub fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<MQTTClient, Error> {
@@ -206,16 +411,6 @@ fn create_channels() -> Channels {
     let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
     let (exit_tx, exit_rx) = mpsc::channel::<bool>();
     (cameras_tx, cameras_rx, exit_tx, exit_rx)
-}
-
-fn spawn_abm_cameras_thread(
-    shareable_cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-    cameras_tx: mpsc::Sender<Vec<u8>>,
-    exit_tx: mpsc::Sender<bool>,
-) -> JoinHandle<()> {
-    thread::spawn(move || {
-        abm_cameras(&mut shareable_cameras.clone(), cameras_tx, exit_tx);
-    })
 }
 
 fn spawn_publish_to_topic_thread(
@@ -377,161 +572,8 @@ fn get_id_of_cameras_that_will_change_state_to_active(
     cameras_that_follow_inc
 }
 
-fn send_cameras_from_file_to_publish(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    match cameras.lock() {
-        Ok(cams) => {
-            for camera in (*cams).values() {
-                if camera_tx.send(camera.to_bytes()).is_err() {
-                    println!("Error al enviar cámara por tx desde hilo abm.");
-                }
-            }
-        }
-        Err(_) => println!("Error al tomar lock de cámaras."),
-    }
-}
-
-fn get_input_abm(prompt: Option<&str>) -> String {
-    if let Some(p) = prompt {
-        print!("{}", p);
-    }
-    let _ = io::stdout().flush();
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Error al leer la entrada");
-    input.trim().to_string()
-}
-
-fn create_and_send_camera_abm(
-    cameras: &mut ShCamerasType,
-    camera_tx: &Sender<Vec<u8>>,
-    id: u8,
-    latitude: f64,
-    longitude: f64,
-    range: u8,
-) {
-    // Crea la nueva cámara con los datos ingresados en el abm
-    let mut new_camera = Camera::new(id, latitude, longitude, range);
-
-    match cameras.lock() {
-        Ok(mut cams) => {
-            // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
-            for camera in cams.values_mut() {
-                camera.mutually_add_if_bordering(&mut new_camera);
-            }
-
-            // Envía la nueva cámara por tx, para ser publicada por el otro hilo
-            if camera_tx.send(new_camera.to_bytes()).is_err() {
-                println!("Error al enviar cámara por tx desde hilo abm.");
-            }
-            // Guarda la nueva cámara
-            cams.insert(id, new_camera);
-            println!("Cámara agregada con éxito.\n");
-        }
-        Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-    };
-}
-
-fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara: "))
-        .parse()
-        .expect("ID no válido");
-    let latitude: f64 = get_input_abm(Some("Ingrese Latitud: "))
-        .parse()
-        .expect("Latitud no válida");
-    let longitude: f64 = get_input_abm(Some("Ingrese Longitud: "))
-        .parse()
-        .expect("Longitud no válida");
-    let range: u8 = get_input_abm(Some("Ingrese el rango: "))
-        .parse()
-        .expect("Rango no válido");
-
-    create_and_send_camera_abm(cameras, camera_tx, id, latitude, longitude, range);
-}
-
-fn show_cameras_abm(cameras: &mut ShCamerasType) {
-    // Mostramos todas las cámaras
-    println!("Cámaras registradas:\n");
-    match cameras.lock() {
-        Ok(cams) => {
-            for camera in (*cams).values() {
-                // Si no está marcada borrada, mostrarla
-                if camera.is_not_deleted() {
-                    camera.display();
-                };
-            }
-        }
-        Err(_) => println!("Error al tomar lock de cámaras."),
-    }
-}
-
-fn delete_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
-    let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
-        .parse()
-        .expect("Id no válido");
-    match cameras.lock() {
-        Ok(mut cams) => {
-            if let Some(mut camera_to_delete) = cams.remove(&id) {
-                if camera_to_delete.is_not_deleted() {
-                    camera_to_delete.delete_camera();
-
-                    // Recorre las cámaras ya existentes, eliminando la cámara a eliminar como lindante de la que corresponda, terminando la eliminación
-                    for camera in cams.values_mut() {
-                        camera.remove_from_list_if_bordering(&mut camera_to_delete);
-                    }
-
-                    // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
-                    // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
-                    // de las demás ya que eso solo es relevante para sistema camaras)
-                    if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
-                        println!("Error al enviar cámara por tx desde hilo abm.");
-                    } else {
-                        println!("Cámara eliminada con éxito.\n");
-                    }
-                };
-            }
-        }
-        Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
-    };
-}
-
-fn exit_program_abm(exit_tx: &Sender<bool>) {
-    match exit_tx.send(true) {
-        Ok(_) => println!("Saliendo del programa."),
-        Err(e) => println!("Error al intentar salir: {:?}", e),
-    }
-}
-
-fn print_menu_abm() {
-    println!(
-        "      MENÚ
-    1. Agregar cámara
-    2. Mostrar cámaras
-    3. Eliminar cámara
-    4. Salir
-    Ingrese una opción:"
-    );
-}
-
-fn abm_cameras(cameras: &mut ShCamerasType, camera_tx: Sender<Vec<u8>>, exit_tx: Sender<bool>) {
-    // Publicar cámaras al inicio
-    send_cameras_from_file_to_publish(cameras, &camera_tx);
-
-    loop {
-        print_menu_abm();
-        let input = get_input_abm(None);
-
-        match &*input {
-            "1" => add_camera_abm(cameras, &camera_tx),
-            "2" => show_cameras_abm(cameras),
-            "3" => delete_camera_abm(cameras, &camera_tx),
-            "4" => {
-                exit_program_abm(&exit_tx);
-                break;
-            }
-            _ => {
-                println!("Opción no válida. Intente nuevamente.\n");
-            }
-        }
+impl Default for SistemaCamaras {
+    fn default() -> Self {
+        Self::new()
     }
 }
