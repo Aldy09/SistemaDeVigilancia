@@ -46,8 +46,8 @@ name = "sistema_monitoreo_main"
 path = "src/apps/sistema_monitoreo_main.rs"
 
 [[bin]]
-name = "sistema_camaras"
-path = "src/apps/sistema_camaras.rs"
+name = "sistema_camaras_main"
+path = "src/apps/sistema_camaras_main.rs"
 
 [[bin]]
 name = "generar_camaras"
