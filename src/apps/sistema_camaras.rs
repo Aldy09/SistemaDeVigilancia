@@ -157,7 +157,10 @@ impl SistemaCamaras {
             let input = get_input_abm(None);
 
             match &*input {
-                "1" => add_camera_abm(cameras, &camera_tx),
+                "1" => {
+                    let camera = create_camera_abm();
+                    self.send_camera_abm(cameras, &camera_tx, camera);
+                }
                 "2" => show_cameras_abm(cameras),
                 "3" => delete_camera_abm(cameras, &camera_tx),
                 "4" => {
@@ -181,6 +184,36 @@ impl SistemaCamaras {
         thread::spawn(move || {
             self_clone.abm_cameras(&mut shareable_cameras.clone(), cameras_tx, exit_tx);
         })
+    }
+
+    pub fn send_camera_abm(
+        &self,
+        cameras: &mut ShCamerasType,
+        camera_tx: &Sender<Vec<u8>>,
+        new_camera: Camera,
+    ) {
+        let mut camera_clone = new_camera.clone();
+        match cameras.lock() {
+            Ok(mut cams) => {
+                // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
+                for camera in cams.values_mut() {
+                    camera.mutually_add_if_bordering(&mut camera_clone);
+                }
+                self.logger_tx
+                    .send(StructsToSaveInLogger::AppType(AppType::Camera(
+                        camera_clone.clone(),
+                    )))
+                    .unwrap();
+                // Envía la nueva cámara por tx, para ser publicada por el otro hilo
+                if camera_tx.send(new_camera.to_bytes()).is_err() {
+                    println!("Error al enviar cámara por tx desde hilo abm.");
+                }
+                // Guarda la nueva cámara
+                cams.insert(camera_clone.get_id(), camera_clone);
+                println!("Cámara agregada con éxito.\n");
+            }
+            Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
+        };
     }
 }
 
@@ -257,7 +290,7 @@ pub fn print_menu_abm() {
     );
 }
 
-pub fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) {
+pub fn create_camera_abm() -> Camera {
     let id: u8 = get_input_abm(Some("Ingrese el ID de la cámara: "))
         .parse()
         .expect("ID no válido");
@@ -271,37 +304,7 @@ pub fn add_camera_abm(cameras: &mut ShCamerasType, camera_tx: &Sender<Vec<u8>>) 
         .parse()
         .expect("Rango no válido");
 
-    create_and_send_camera_abm(cameras, camera_tx, id, latitude, longitude, range);
-}
-
-pub fn create_and_send_camera_abm(
-    cameras: &mut ShCamerasType,
-    camera_tx: &Sender<Vec<u8>>,
-    id: u8,
-    latitude: f64,
-    longitude: f64,
-    range: u8,
-) {
-    // Crea la nueva cámara con los datos ingresados en el abm
-    let mut new_camera = Camera::new(id, latitude, longitude, range);
-
-    match cameras.lock() {
-        Ok(mut cams) => {
-            // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
-            for camera in cams.values_mut() {
-                camera.mutually_add_if_bordering(&mut new_camera);
-            }
-
-            // Envía la nueva cámara por tx, para ser publicada por el otro hilo
-            if camera_tx.send(new_camera.to_bytes()).is_err() {
-                println!("Error al enviar cámara por tx desde hilo abm.");
-            }
-            // Guarda la nueva cámara
-            cams.insert(id, new_camera);
-            println!("Cámara agregada con éxito.\n");
-        }
-        Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
-    };
+    Camera::new(id, latitude, longitude, range)
 }
 
 pub fn get_input_abm(prompt: Option<&str>) -> String {
