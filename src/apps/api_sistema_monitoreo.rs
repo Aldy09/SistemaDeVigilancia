@@ -73,20 +73,18 @@ impl SistemaMonitoreo {
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
-        let send_subscribe_thread =
-            sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone());
-        children.push(send_subscribe_thread);
+        children.push(sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone()));
 
-        let send_incidents_thread = sistema_monitoreo
-            .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx);
-        children.push(send_incidents_thread);
+        children.push(
+            sistema_monitoreo
+                .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
+        );
 
-        let save_messages_in_logger_thread = spawn_receive_incidents_thread(logger);
-        children.push(save_messages_in_logger_thread);
+        children.push(spawn_receive_incidents_thread(logger));
 
-        let exit_thread =
-            sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx);
-        children.push(exit_thread);
+        children.push(
+            sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx),
+        );
 
         self.spawn_ui_thread(incident_tx, publish_message_rx, exit_tx);
 
