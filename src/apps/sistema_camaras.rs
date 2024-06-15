@@ -22,6 +22,8 @@ type Channels = (
 use std::io::Error;
 use std::net::SocketAddr;
 
+use crate::messages::message_type::MessageType;
+
 use crate::structs_to_save_in_logger::StructsToSaveInLogger;
 use crate::{logger::Logger, mqtt_client::MQTTClient};
 
@@ -102,7 +104,7 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
-        children.push(spawn_subscribe_to_topics_thread(
+        children.push(self.spawn_subscribe_to_topics_thread(
             mqtt_client_sh.clone(),
             &mut shareable_cameras.clone(),
         ));
@@ -214,6 +216,51 @@ impl SistemaCamaras {
             }
             Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
         };
+    }
+
+    fn subscribe_to_topics(&self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        topics: Vec<String>,
+    ) -> Result<(), Error> {
+        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+            let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
+            match res_subscribe {
+                Ok(subscribe_message) => {
+                    self.logger_tx
+                        .send(StructsToSaveInLogger::MessageType(MessageType::Subscribe(
+                            subscribe_message,
+                        )))
+                        .unwrap();
+                }
+                Err(e) => {
+                    println!("Sistema-Camara: Error al subscribirse {:?}", e);
+                    return Err(e);
+                }
+            };
+        }
+        Ok(())
+    }
+
+    fn spawn_subscribe_to_topics_thread(&self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        cameras_cloned: &mut Arc<Mutex<HashMap<u8, Camera>>>,
+    ) -> JoinHandle<()> {
+        let mut cameras_cloned_2 = cameras_cloned.clone();
+        let self_clone = self.clone_ref();
+        thread::spawn(move || {
+            let res = self_clone.subscribe_to_topics(mqtt_client.clone(), vec!["Inc".to_string()]);
+            match res {
+                Ok(_) => {
+                    println!("Sistema-Camara: Subscripción a exitosa");
+                    receive_messages_from_subscribed_topics(
+                        &mqtt_client.clone(),
+                        &mut cameras_cloned_2,
+                    );
+                }
+                Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
+            };
+            println!("Saliendo del hilo de subscribirme");
+        })
     }
 }
 
@@ -348,15 +395,7 @@ fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiv
     }
 }
 
-fn subscribe_to_topics(
-    mqtt_client: Arc<Mutex<MQTTClient>>,
-    topics: Vec<String>,
-) -> Result<(), Error> {
-    if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-        mqtt_client_lock.mqtt_subscribe(topics)?;
-    }
-    Ok(())
-}
+
 pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
     match e.kind() {
         std::io::ErrorKind::TimedOut => true,
@@ -434,26 +473,7 @@ fn spawn_exit_when_asked_thread(
     })
 }
 
-fn spawn_subscribe_to_topics_thread(
-    mqtt_client: Arc<Mutex<MQTTClient>>,
-    cameras_cloned: &mut Arc<Mutex<HashMap<u8, Camera>>>,
-) -> JoinHandle<()> {
-    let mut cameras_cloned_2 = cameras_cloned.clone();
-    thread::spawn(move || {
-        let res = subscribe_to_topics(mqtt_client.clone(), vec!["Inc".to_string()]);
-        match res {
-            Ok(_) => {
-                println!("Sistema-Camara: Subscripción a exitosa");
-                receive_messages_from_subscribed_topics(
-                    &mqtt_client.clone(),
-                    &mut cameras_cloned_2,
-                );
-            }
-            Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
-        };
-        println!("Saliendo del hilo de subscribirme");
-    })
-}
+
 
 fn manage_incidents(incident: Incident, cameras: &mut ShCamerasType) {
     // Proceso los incidentes
