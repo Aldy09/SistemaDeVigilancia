@@ -1,4 +1,5 @@
 pub mod sistema_monitoreo;
+pub mod sistema_camaras;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
