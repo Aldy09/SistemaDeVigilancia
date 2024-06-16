@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.79.0
+        override: true
     - name: Update apt-get # (intento de fix al Install gtk fallido)
       run: sudo apt-get update
     - name: Install GTK
