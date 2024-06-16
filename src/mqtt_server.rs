@@ -49,18 +49,18 @@ impl MQTTServer {
         };
         let listener = create_server(ip, port)?;
 
-        let mqtt_server_hijo = mqtt_server.clone_ref();
+        let mqtt_server_child = mqtt_server.clone_ref();
 
         let incoming_thread = std::thread::spawn(move || {
-            if let Err(result) = mqtt_server_hijo.handle_incoming_connections(listener) {
+            if let Err(result) = mqtt_server_child.handle_incoming_connections(listener) {
                 println!("Error al manejar las conexiones entrantes: {:?}", result);
             }
         });
 
-        let mqtt_server_hermano = mqtt_server.clone_ref();
+        let mqtt_server_another_child = mqtt_server.clone_ref();
 
         let outgoing_thread = std::thread::spawn(move || {
-            if let Err(result) = mqtt_server_hermano.handle_outgoing_messages(rx) {
+            if let Err(result) = mqtt_server_another_child.handle_outgoing_messages(rx) {
                 println!("Error al manejar los mensajes salientes: {:?}", result);
             }
         });
@@ -201,16 +201,16 @@ impl MQTTServer {
         // Inicio
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         let ceros: &[u8; 2] = &[0; 2];
-        let mut vacio: bool;
+        let mut empty: bool;
 
-        //vacio = &fixed_header_info.0 == ceros;
+        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
                 println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
-                vacio = &fixed_header_info.0 == ceros;
+                empty = &fixed_header_info.0 == ceros;
                 break;
             };
             thread::sleep(Duration::from_millis(300)); // []
@@ -220,9 +220,9 @@ impl MQTTServer {
         /*println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
         let ceros: &[u8; 2] = &[0; 2];
-        let mut vacio = &fixed_header_info.0 == ceros;
+        let mut empty = &fixed_header_info.0 == ceros;
         */
-        while !vacio {
+        while !empty {
             self.continue_with_conection(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
                                                                                  // Leo para la siguiente iteración
                                                                                  // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
@@ -232,7 +232,7 @@ impl MQTTServer {
                 if let Ok((fixed_h, fixed_h_buf)) = get_fixed_header_from_stream(stream) {
                     // Guardo lo leído y comparo para siguiente vuelta del while
                     fixed_header_info = (fixed_h, fixed_h_buf);
-                    vacio = &fixed_header_info.0 == ceros;
+                    empty = &fixed_header_info.0 == ceros;
                     break;
                 };
                 thread::sleep(Duration::from_millis(300)); // []
@@ -442,7 +442,7 @@ impl MQTTServer {
         // Probando
         let fixed_header_info: ([u8; 2], FixedHeader);
 
-        //vacio = &fixed_header_info.0 == ceros;
+        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
@@ -488,10 +488,10 @@ impl MQTTServer {
             match stream_client {
                 Ok(stream_client) => {
                     let stream_client_sh = Arc::new(Mutex::new(stream_client));
-                    let self_hijo = self.clone_ref();
-                    self_hijo.add_stream_to_vec(stream_client_sh.clone());
+                    let self_child = self.clone_ref();
+                    self_child.add_stream_to_vec(stream_client_sh.clone());
                     let handle = std::thread::spawn(move || {
-                        let _ = self_hijo.handle_client(&stream_client_sh);
+                        let _ = self_child.handle_client(&stream_client_sh);
                     });
                     handles.push(handle);
                 }

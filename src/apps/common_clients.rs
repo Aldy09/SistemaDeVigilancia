@@ -42,8 +42,8 @@ pub fn get_broker_address() -> SocketAddr {
 }
 
 pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
-    for hijo in children {
-        if let Err(e) = hijo.join() {
+    for child in children {
+        if let Err(e) = child.join() {
             eprintln!("Error al esperar el hilo: {:?}", e);
         }
     }
