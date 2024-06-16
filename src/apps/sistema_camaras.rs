@@ -96,7 +96,7 @@ impl SistemaCamaras {
             self_clone.cameras_tx,
             self_clone.exit_tx,
         ));
-        children.push(spawn_publish_to_topic_thread(
+        children.push(self.spawn_publish_to_topic_thread(
             mqtt_client_sh.clone(),
             cameras_rx,
         ));
@@ -262,6 +262,36 @@ impl SistemaCamaras {
             println!("Saliendo del hilo de subscribirme");
         })
     }
+
+    fn publish_to_topic(&self, mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiver<Vec<u8>>) {
+        while let Ok(cam_bytes) = rx.recv() {
+            if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
+                match res_publish {
+                    Ok(publish_message) => {
+                        self.logger_tx
+                            .send(StructsToSaveInLogger::MessageType(MessageType::Publish(
+                                publish_message,
+                            )))
+                            .unwrap();
+                    }
+                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                };
+            }
+        }
+    }
+
+
+    pub fn spawn_publish_to_topic_thread(&self,
+        mqtt_client_sh: Arc<Mutex<MQTTClient>>,
+        cameras_rx: mpsc::Receiver<Vec<u8>>,
+    ) -> JoinHandle<()> {
+        let self_clone = self.clone_ref();
+        thread::spawn(move || {
+            self_clone.publish_to_topic(mqtt_client_sh, "Cam", cameras_rx);
+        })
+    }
+
 }
 
 fn spawn_receive_messages_thread(logger: Logger) -> JoinHandle<()> {
@@ -381,19 +411,7 @@ pub fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<MQTT
     }
 }
 
-fn publish_to_topic(mqtt_client: Arc<Mutex<MQTTClient>>, topic: &str, rx: Receiver<Vec<u8>>) {
-    while let Ok(cam_bytes) = rx.recv() {
-        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-            let res = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
-            match res {
-                Ok(_) => {
-                    println!("Sistema-Camara: Hecho un publish");
-                }
-                Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
-            };
-        }
-    }
-}
+
 
 
 pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
@@ -455,14 +473,7 @@ fn create_channels() -> Channels {
     (cameras_tx, cameras_rx, exit_tx, exit_rx)
 }
 
-fn spawn_publish_to_topic_thread(
-    mqtt_client_sh: Arc<Mutex<MQTTClient>>,
-    cameras_rx: mpsc::Receiver<Vec<u8>>,
-) -> JoinHandle<()> {
-    thread::spawn(move || {
-        publish_to_topic(mqtt_client_sh, "Cam", cameras_rx);
-    })
-}
+
 
 fn spawn_exit_when_asked_thread(
     mqtt_client_sh_clone_1: Arc<Mutex<MQTTClient>>,
