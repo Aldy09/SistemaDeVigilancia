@@ -44,7 +44,7 @@ impl MQTTClient {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
         let stream = Arc::new(Mutex::new(stream_tcp));
-    
+
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
             client_id,
@@ -132,7 +132,10 @@ impl MQTTClient {
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
-    pub fn mqtt_subscribe(&mut self, topics_to_subscribe: Vec<String>) -> Result<SubscribeMessage, Error> {
+    pub fn mqtt_subscribe(
+        &mut self,
+        topics_to_subscribe: Vec<String>,
+    ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
