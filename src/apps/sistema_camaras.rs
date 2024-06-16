@@ -1,5 +1,7 @@
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
+use crate::messages::publish_message::PublishMessage;
+use crate::structs_to_save_in_logger::OperationType;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::mpsc::Receiver as MpscReceiver;
@@ -123,6 +125,20 @@ impl SistemaCamaras {
         }
     }
 
+    fn send_camera_data(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
+        let camera_clone = camera.clone();
+        self.logger_tx
+            .send(StructsToSaveInLogger::AppType(
+                "Sistema Camaras".to_string(),
+                AppType::Camera(camera_clone.clone()),
+                OperationType::Sent,
+            ))
+            .unwrap();
+        if camera_tx.send(camera.to_bytes()).is_err() {
+            println!("Error al enviar cámara por tx desde hilo abm.");
+        }
+    }
+
     fn send_cameras_from_file_to_publish(
         &self,
         cameras: &mut ShCamerasType,
@@ -131,15 +147,7 @@ impl SistemaCamaras {
         match cameras.lock() {
             Ok(cams) => {
                 for camera in (*cams).values() {
-                    let camera_clone = camera.clone();
-                    self.logger_tx
-                        .send(StructsToSaveInLogger::AppType(AppType::Camera(
-                            camera_clone,
-                        )))
-                        .unwrap();
-                    if camera_tx.send(camera.to_bytes()).is_err() {
-                        println!("Error al enviar cámara por tx desde hilo abm.");
-                    }
+                    self.send_camera_data(camera, camera_tx);
                 }
             }
             Err(_) => println!("Error al tomar lock de cámaras."),
@@ -147,7 +155,7 @@ impl SistemaCamaras {
     }
 
     pub fn abm_cameras(
-        &self,
+        &mut self,
         cameras: &mut ShCamerasType,
         camera_tx: Sender<Vec<u8>>,
         exit_tx: Sender<bool>,
@@ -183,37 +191,50 @@ impl SistemaCamaras {
         cameras_tx: mpsc::Sender<Vec<u8>>,
         exit_tx: mpsc::Sender<bool>,
     ) -> JoinHandle<()> {
-        let self_clone = self.clone_ref();
+        let mut self_clone = self.clone_ref();
         thread::spawn(move || {
             self_clone.abm_cameras(&mut shareable_cameras.clone(), cameras_tx, exit_tx);
         })
     }
 
+    fn process_camera(
+        &mut self,
+        cams: &mut HashMap<u8, ShareableCamType>,
+        camera_clone: Camera,
+        camera_tx: &Sender<Vec<u8>>,
+    ) {
+        // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
+        for camera in cams.values_mut() {
+            camera.mutually_add_if_bordering(&mut camera_clone.clone());
+        }
+        //Envia la camara al log.txt
+        self.logger_tx
+            .send(StructsToSaveInLogger::AppType(
+                "Sistema Camaras".to_string(),
+                AppType::Camera(camera_clone.clone()),
+                OperationType::Sent,
+            ))
+            .unwrap();
+        // Envía la nueva cámara por tx, para ser publicada por el otro hilo
+        if camera_tx.send(camera_clone.to_bytes()).is_err() {
+            println!("Error al enviar cámara por tx desde hilo abm.");
+        }
+        // Guarda la nueva cámara
+        cams.insert(camera_clone.get_id(), camera_clone);
+        println!("Cámara agregada con éxito.\n");
+    }
+
     pub fn send_camera_abm(
-        &self,
+        &mut self,
         cameras: &mut ShCamerasType,
         camera_tx: &Sender<Vec<u8>>,
         new_camera: Camera,
     ) {
-        let mut camera_clone = new_camera.clone();
+        let camera_clone = new_camera.clone();
+
         match cameras.lock() {
             Ok(mut cams) => {
-                // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
-                for camera in cams.values_mut() {
-                    camera.mutually_add_if_bordering(&mut camera_clone);
-                }
-                self.logger_tx
-                    .send(StructsToSaveInLogger::AppType(AppType::Camera(
-                        camera_clone.clone(),
-                    )))
-                    .unwrap();
-                // Envía la nueva cámara por tx, para ser publicada por el otro hilo
-                if camera_tx.send(new_camera.to_bytes()).is_err() {
-                    println!("Error al enviar cámara por tx desde hilo abm.");
-                }
-                // Guarda la nueva cámara
-                cams.insert(camera_clone.get_id(), camera_clone);
-                println!("Cámara agregada con éxito.\n");
+                self.process_camera(&mut cams, camera_clone, camera_tx);
             }
             Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
         };
@@ -229,9 +250,11 @@ impl SistemaCamaras {
             match res_subscribe {
                 Ok(subscribe_message) => {
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(MessageType::Subscribe(
-                            subscribe_message,
-                        )))
+                        .send(StructsToSaveInLogger::MessageType(
+                            "Sistema Camaras".to_string(),
+                            MessageType::Subscribe(subscribe_message),
+                            OperationType::Sent,
+                        ))
                         .unwrap();
                 }
                 Err(e) => {
@@ -255,9 +278,11 @@ impl SistemaCamaras {
                 match res_publish {
                     Ok(publish_message) => {
                         self.logger_tx
-                            .send(StructsToSaveInLogger::MessageType(MessageType::Publish(
-                                publish_message,
-                            )))
+                            .send(StructsToSaveInLogger::MessageType(
+                                "Sistema Camaras".to_string(),
+                                MessageType::Publish(publish_message),
+                                OperationType::Sent,
+                            ))
                             .unwrap();
                     }
                     Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
@@ -286,6 +311,18 @@ impl SistemaCamaras {
         }
     }
 
+    fn handle_received_message(&mut self, msg: PublishMessage, cameras: &mut ShCamerasType) {
+        let incident = Incident::from_bytes(msg.get_payload());
+        self.logger_tx
+            .send(StructsToSaveInLogger::AppType(
+                "Sistema Camaras".to_string(),
+                AppType::Incident(incident.clone()),
+                OperationType::Received,
+            ))
+            .unwrap();
+        self.manage_incidents(incident, cameras);
+    }
+
     // Recibe mensajes de los topics a los que se ha suscrito
     pub fn receive_messages_from_subscribed_topics(
         &mut self,
@@ -295,15 +332,7 @@ impl SistemaCamaras {
         loop {
             if let Ok(mqtt_client) = mqtt_client.lock() {
                 match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    //Publish message: Incident
-                    Ok(msg) => {
-                        let incident = Incident::from_bytes(msg.get_payload());
-                        println!(
-                            "ME LLEGO EL INCIDENTE A SISTEMA CAMARAS, inc: {:?}",
-                            incident
-                        );
-                        self.manage_incidents(incident, cameras);
-                    }
+                    Ok(msg) => self.handle_received_message(msg, cameras),
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;

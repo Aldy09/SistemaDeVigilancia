@@ -14,7 +14,7 @@ use crate::{
     logger::Logger,
     messages::{message_type::MessageType, publish_message::PublishMessage},
     mqtt_client::MQTTClient,
-    structs_to_save_in_logger::StructsToSaveInLogger,
+    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
 };
 
 use super::{
@@ -126,10 +126,13 @@ impl SistemaMonitoreo {
         thread::spawn(move || loop {
             while let Ok(msg) = rx.recv() {
                 let msg_clone = msg.clone();
-                self_clone
-                    .logger_tx
-                    .send(StructsToSaveInLogger::AppType(AppType::Incident(msg)))
-                    .unwrap();
+                self_clone.logger_tx
+                        .send(StructsToSaveInLogger::AppType(
+                            "Sistema Monitoreo".to_string(),
+                            AppType::Incident(msg),
+                            OperationType::Sent,
+                        ))
+                        .unwrap();
                 self_clone.publish_incident(msg_clone, &mqtt_client);
             }
         })
@@ -172,9 +175,11 @@ impl SistemaMonitoreo {
             match res_sub {
                 Ok(subscribe_message) => {
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(MessageType::Subscribe(
-                            subscribe_message,
-                        )))
+                        .send(StructsToSaveInLogger::MessageType(
+                            "Sistema Monitoreo".to_string(),
+                            MessageType::Subscribe(subscribe_message),
+                            OperationType::Sent,
+                        ))
                         .unwrap();
                 }
                 Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
@@ -188,7 +193,16 @@ impl SistemaMonitoreo {
             if let Ok(mqtt_client) = mqtt_client.lock() {
                 match mqtt_client.mqtt_receive_msg_from_subs_topic() {
                     //Publish message: camera o dron
-                    Ok(msg) => self.send_publish_message_to_ui(msg),
+                    Ok(publish_message) => {
+                        self.logger_tx
+                            .send(StructsToSaveInLogger::MessageType(
+                                "Sistema Monitoreo".to_string(),
+                                MessageType::Publish(publish_message.clone()),
+                                OperationType::Received,
+                            ))
+                            .unwrap();
+                        self.send_publish_message_to_ui(publish_message)
+                    } 
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;
@@ -242,9 +256,11 @@ impl SistemaMonitoreo {
             match res_publish {
                 Ok(publish_message) => {
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(MessageType::Publish(
-                            publish_message,
-                        )))
+                        .send(StructsToSaveInLogger::MessageType(
+                            "Sistema Monitoreo".to_string(),
+                            MessageType::Publish(publish_message),
+                            OperationType::Sent,
+                        ))
                         .unwrap();
                 }
                 Err(e) => {
