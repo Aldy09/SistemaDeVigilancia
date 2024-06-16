@@ -126,13 +126,14 @@ impl SistemaMonitoreo {
         thread::spawn(move || loop {
             while let Ok(msg) = rx.recv() {
                 let msg_clone = msg.clone();
-                self_clone.logger_tx
-                        .send(StructsToSaveInLogger::AppType(
-                            "Sistema Monitoreo".to_string(),
-                            AppType::Incident(msg),
-                            OperationType::Sent,
-                        ))
-                        .unwrap();
+                self_clone
+                    .logger_tx
+                    .send(StructsToSaveInLogger::AppType(
+                        "Sistema Monitoreo".to_string(),
+                        AppType::Incident(msg),
+                        OperationType::Sent,
+                    ))
+                    .unwrap();
                 self_clone.publish_incident(msg_clone, &mqtt_client);
             }
         })
@@ -202,7 +203,7 @@ impl SistemaMonitoreo {
                             ))
                             .unwrap();
                         self.send_publish_message_to_ui(publish_message)
-                    } 
+                    }
                     Err(e) => {
                         if !handle_message_receiving_error(e) {
                             break;

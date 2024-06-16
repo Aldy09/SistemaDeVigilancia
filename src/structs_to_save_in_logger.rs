@@ -6,7 +6,6 @@ pub enum OperationType {
     Received,
 }
 
-
 #[derive(Debug)]
 pub enum StructsToSaveInLogger {
     AppType(String, AppType, OperationType),
