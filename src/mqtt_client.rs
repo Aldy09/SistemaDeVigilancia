@@ -27,7 +27,7 @@ use crate::messages::suback_message::SubAckMessage;
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
-    handle_hijo: Option<JoinHandle<()>>,
+    handle_child: Option<JoinHandle<()>>,
     rx: Option<Receiver<PublishMessage>>,
     available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
@@ -64,22 +64,22 @@ impl MQTTClient {
         let (mut mqtt, tx) = MQTTClient::mqtt_new(stream);
         //
 
-        let self_p_hijo = mqtt.clone_refs_para_hijo_lectura();
+        let self_p_child = mqtt.clone_refs_for_child_read();
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
         let h: JoinHandle<()> = thread::spawn(move || {
-            let _res = self_p_hijo.leer_desde_server(&tx); // []
+            let _res = self_p_child.read_from_server(&tx); // []
         });
-        mqtt.set_hijo_a_esperar(h);
+        mqtt.set_child_to_wait(h);
 
         // Fin inicializaciones.
 
         // Espero que el hijo que lee reciba y me informe que recibió el ack.
-        let mut llega_el_ack = false;
-        while !llega_el_ack {
-            if let Ok(llega_connack) = mqtt.read_connack.lock() {
-                if *llega_connack {
+        let mut ack_is_comming = false;
+        while !ack_is_comming {
+            if let Ok(connack_is_comming) = mqtt.read_connack.lock() {
+                if *connack_is_comming {
                     // Llegó el ack
-                    llega_el_ack = true;
+                    ack_is_comming = true;
                     println!("CONN: LLEGA EL ACK"); // debug []
                 }
             }
@@ -93,7 +93,7 @@ impl MQTTClient {
 
         let mqtt = MQTTClient {
             stream: stream.clone(),
-            handle_hijo: None,
+            handle_child: None,
             rx: Some(rx),
             available_packet_id: 0,
             read_connack: Arc::new(Mutex::new(false)),
@@ -202,8 +202,8 @@ impl MQTTClient {
 
     /// Función que debe ser llamada por cada cliente que utilice la librería,
     /// como último paso, al finalizar.
-    pub fn finalizar(&mut self) {
-        if let Some(h) = self.handle_hijo.take() {
+    pub fn finish(&mut self) {
+        if let Some(h) = self.handle_child.take() {
             let res = h.join();
             if res.is_err() {
                 println!("Mqtt cliente: error al esperar hijo de lectura.");
@@ -212,18 +212,18 @@ impl MQTTClient {
     }
 
     /// Setea el handle del hijo para poder esperarlo y terminar correctamente.
-    fn set_hijo_a_esperar(&mut self, h: JoinHandle<()>) {
-        self.handle_hijo = Some(h);
+    fn set_child_to_wait(&mut self, h: JoinHandle<()>) {
+        self.handle_child = Some(h);
     }
 
     /// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
     /// que utiliza el MQTTClient para el cual se está llamando a esta función, con la diferencia de que
     /// los campos para esperar al hijo y para recibir mensajes publish están seteados en `None` ya que no son
     /// de interés para un hijo del MQTTClient original.
-    fn clone_refs_para_hijo_lectura(&self) -> Self {
+    fn clone_refs_for_child_read(&self) -> Self {
         Self {
             stream: self.stream.clone(),
-            handle_hijo: None,
+            handle_child: None,
             rx: None,
             available_packet_id: self.available_packet_id,
             read_connack: self.read_connack.clone(),
@@ -232,23 +232,23 @@ impl MQTTClient {
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
-    fn leer_desde_server(&self, tx: &Sender<PublishMessage>) -> Result<(), Error> {
+    fn read_from_server(&self, tx: &Sender<PublishMessage>) -> Result<(), Error> {
         // Este bloque de código de acá abajo es similar a lo que hay en server,
         // pero la función que lee un mensaje lo procesa de manera diferente.
 
         // Inicio primer mensaje
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         let ceros: &[u8; 2] = &[0; 2];
-        let mut vacio: bool;
+        let mut empty: bool;
 
-        //vacio = &fixed_header_info.0 == ceros;
+        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&self.stream.clone()) {
                 println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
-                vacio = &fixed_header_info.0 == ceros;
+                empty = &fixed_header_info.0 == ceros;
                 break;
             };
             thread::sleep(Duration::from_millis(300)); // []
@@ -257,10 +257,10 @@ impl MQTTClient {
 
         /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
         let ceros: &[u8; 2] = &[0; 2];
-        let mut vacio = &fixed_header_info.0 == ceros;*/
-        while !vacio {
+        let mut empty = &fixed_header_info.0 == ceros;*/
+        while !empty {
             println!("Mqtt cliente leyendo: siguiente msj");
-            self.leer_un_mensaje(&fixed_header_info, tx)?; // esta función lee UN mensaje.
+            self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.
 
             // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
             // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
@@ -272,7 +272,7 @@ impl MQTTClient {
                     println!("While: leí bien.");
                     // Guardo lo leído y comparo para siguiente vuelta del while
                     fixed_header_info = (fixed_h_buf, fixed_h);
-                    vacio = &fixed_header_info.0 == ceros;
+                    empty = &fixed_header_info.0 == ceros;
                     break;
                 };
                 thread::sleep(Duration::from_millis(300)); // []
@@ -282,7 +282,7 @@ impl MQTTClient {
     }
 
     /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
-    fn leer_un_mensaje(
+    fn read_a_message(
         &self,
         fixed_header_info: &([u8; 2], FixedHeader),
         tx: &Sender<PublishMessage>,
