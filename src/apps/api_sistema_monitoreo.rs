@@ -121,7 +121,7 @@ impl SistemaMonitoreo {
 
     pub fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finalizar();
+            mqtt_client.finish();
         }
     }
 
@@ -254,7 +254,7 @@ pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
 
 pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
     if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        mqtt_client.finalizar();
+        mqtt_client.finish();
     }
 }
 
