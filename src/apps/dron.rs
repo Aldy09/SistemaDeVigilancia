@@ -26,7 +26,7 @@ impl Dron {
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
         let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
-        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, 1);
+        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, super::dron_state::DronState::ExpectingToRecvIncident);
 
         Ok(Dron {
             current_info,
@@ -47,6 +47,8 @@ impl Dron {
 #[cfg(test)]
 
 mod test {
+    use crate::apps::dron_state::DronState;
+
     use super::Dron;
 
     #[test]
@@ -54,7 +56,7 @@ mod test {
         let dron = Dron::new(1).unwrap();
 
         assert_eq!(dron.current_info.get_id(), 1);
-        assert_eq!(dron.current_info.get_state(), 1); // estado activo
+        assert_eq!(dron.current_info.get_state(), &DronState::ExpectingToRecvIncident); // estado activo
     }
 
     #[test]
