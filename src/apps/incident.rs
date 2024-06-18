@@ -85,7 +85,7 @@ impl Incident {
             sent: false,
         }
     }
-    
+
     /// Devuelve el estado del incidente.
     pub fn get_state(&self) -> &IncidentState {
         &self.state

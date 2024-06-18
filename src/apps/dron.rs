@@ -1,6 +1,13 @@
-use std::{io::Error, sync::{Arc, Mutex}};
+use std::{
+    io::Error,
+    sync::{Arc, Mutex},
+};
 
-use crate::{apps::{dron_state::DronState, incident::Incident, incident_state::IncidentState}, messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
+use crate::{
+    apps::{dron_state::DronState, incident::Incident, incident_state::IncidentState},
+    messages::publish_message::PublishMessage,
+    mqtt_client::MQTTClient,
+};
 
 use super::{dron_current_info::DronCurrentInfo, sist_dron_properties::SistDronProperties};
 
@@ -30,7 +37,13 @@ impl Dron {
         // Aux, #ToDo, hacer una función para que la posición rance_center sea distinta para cada dron
         // aux: ej que tomen la get_range_center_position como base, y se ubiquen (ej en grilla) con + self id*factor (o algo por el estilo).
         let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
-        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, DronState::ExpectingToRecvIncident);
+        let current_info = DronCurrentInfo::new(
+            id,
+            rng_center_lat,
+            rng_center_lon,
+            100,
+            DronState::ExpectingToRecvIncident,
+        );
 
         let dron = Dron {
             current_info,
@@ -45,14 +58,12 @@ impl Dron {
             mantainance_lat: -34.30,
             mantainance_lon: -58.30,*/
         };
-        
-        // 
 
-        
+        //
+
         //
         Ok(dron)
     }
-
 
     // Aux: puede estar en un common xq es copypaste de la de monitoreo
     fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) {
@@ -92,8 +103,10 @@ impl Dron {
         }
     }
 
-    /// Recibe mensajes de los topics a los que se ha suscrito
+    /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron
+    /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
     fn receive_messages_from_subscribed_topics(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+        let mut inc_id_to_resolve: Option<u8> = None; // Aux: ver si esto no es mejor que está en un atributo del self. [].
         // Loop que lee msjs que le envía el mqtt_client
         loop {
             if let Ok(mqtt_client) = mqtt_client.lock() {
@@ -101,8 +114,8 @@ impl Dron {
                     //Publish message: inc o dron
                     Ok(msg) => {
                         // aux, ver []: no quiero devolverlo, si lo devuelvo corto el loop, y yo quiero seguir leyendo
-                        let _res = self.process_recvd_msg(msg);
-                    },
+                        let _res = self.process_recvd_msg(msg, &mut inc_id_to_resolve);
+                    }
                     Err(e) => {
                         // Si es false, corta el loop porque no hay más mensajes por leer
                         if !self.handle_message_receiving_error(e) {
@@ -115,42 +128,52 @@ impl Dron {
     }
 
     /// Recibe un mensaje de los topics a los que se suscribió, y lo procesa    
-    fn process_recvd_msg(&mut self, msg: PublishMessage) -> Result<(), Error> {
+    fn process_recvd_msg(&mut self, msg: PublishMessage, inc_id_to_resolve: &mut Option<u8>) -> Result<(), Error> {
         match msg.get_topic().as_str() {
-            "Inc" => self.process_valid_inc(msg.get_payload()),
+            "Inc" => self.process_valid_inc(msg.get_payload(), inc_id_to_resolve),
             "Dron" => self.process_valid_dron(msg.get_payload()),
-            _ => Err(Error::new(std::io::ErrorKind::InvalidData, "Topic no conocido")),
+            _ => Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Topic no conocido",
+            )),
         }
     }
-    
+
     /// Recibe un incidente, analiza si está o no resuelto y actúa acorde.
-    fn process_valid_inc(&mut self, payload: Vec<u8>) -> Result<(), Error> {
+    fn process_valid_inc(&mut self, payload: Vec<u8>, inc_id_to_resolve: &mut Option<u8>) -> Result<(), Error> {
         println!("{:?}", payload);
         let inc = Incident::from_bytes(payload);
         match *inc.get_state() {
-            IncidentState::ActiveIncident => self.manage_incident(inc),
-            IncidentState::ResolvedIncident => self.go_back_to_range_center_position(),
-        } 
+            IncidentState::ActiveIncident => self.manage_incident(inc, inc_id_to_resolve),
+            IncidentState::ResolvedIncident => self.go_back_if_my_inc_was_resolved(inc, inc_id_to_resolve),
+        }
         Ok(())
     }
 
     /// Publica su estado, y analiza condiciones para desplazarse.
-    fn manage_incident(&mut self, incident: Incident) {
-        // Analizar condiciones para saber si se desplazará a la pos del incidente        
+    fn manage_incident(&mut self, incident: Incident, inc_id_to_resolve: &mut Option<u8>) {
+        // Analizar condiciones para saber si se desplazará a la pos del incidente
         //  - batería es mayor al nivel bateria minima
-        let enough_battery = self.current_info.get_battery_lvl() >= self.dron_properties.get_min_operational_battery_lvl();
-        //  - inc.pos dentro del rango //area_de_operacion_asignada
+        let enough_battery = self.current_info.get_battery_lvl()
+            >= self.dron_properties.get_min_operational_battery_lvl();
+        //  - inc.pos dentro del rango
         let (inc_lat, inc_lon) = incident.pos();
-        let inc_in_range = self.is_within_range_from_self(inc_lat, inc_lon, self.dron_properties.get_range());
-        
-        if enough_battery && inc_in_range {
-            println!("Dio true, me desplazaré a la pos del inc.");
-            // aux: acá hay que hacer una función que use la destination_pos y la pos actual. Volver []
+        let inc_in_range =
+            self.is_within_range_from_self(inc_lat, inc_lon, self.dron_properties.get_range());
 
-            self.current_info.set_state(DronState::RespondingToIncident);
+        if enough_battery {
+            if inc_in_range {
+                println!("Dio true, me desplazaré a la pos del inc.");
+                *inc_id_to_resolve = Some(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
+                // aux: acá hay que hacer una función que use la destination_pos=inc pos y la pos actual. Volver []
 
+                self.current_info.set_state(DronState::RespondingToIncident);
+            }
+        } else {
+            // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
+            self.current_info.set_state(DronState::Mantainance);
+            // aux: acá hay que hacer una función que use la destination_pos=mantenimiento y la pos actual. Volver [] <--- para ir a mantenimiento
         }
-
     }
 
     /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro de su rango
@@ -166,17 +189,28 @@ impl Dron {
         rad <= (adjusted_range)
     }
 
-    
-    
+    /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
+    /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
+    /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
+    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident, inc_id_to_resolve: &mut Option<u8>){
+        if let Some(my_inc_id) = inc_id_to_resolve {
+            if inc.get_id() == *my_inc_id {
+                self.go_back_to_range_center_position();                
+            }
+        }
+
+    }
+
     /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado
     /// para continuar escuchando incidentes.
     fn go_back_to_range_center_position(&mut self) {
         // Volver al range center
         let _destination_pos = self.dron_properties.get_range_center_position();
         // aux: acá hay que hacer una función que use la destination_pos y la pos actual. Volver []
-        
+
         // Una vez que llegué: Setear estado en el Expectingnoseque
-        self.current_info.set_state(DronState::ExpectingToRecvIncident);
+        self.current_info
+            .set_state(DronState::ExpectingToRecvIncident);
         todo!()
     }
 
@@ -199,7 +233,10 @@ mod test {
         let dron = Dron::new(1).unwrap();
 
         assert_eq!(dron.current_info.get_id(), 1);
-        assert_eq!(dron.current_info.get_state(), &DronState::ExpectingToRecvIncident); // estado activo
+        assert_eq!(
+            dron.current_info.get_state(),
+            &DronState::ExpectingToRecvIncident
+        ); // estado activo
     }
 
     #[test]

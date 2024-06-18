@@ -128,7 +128,7 @@ impl SistDronProperties {
     pub fn get_min_operational_battery_lvl(&self) -> u8 {
         self.min_operational_battery_lvl
     }
-    
+
     pub fn get_range(&self) -> f64 {
         self.range as f64
     }

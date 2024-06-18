@@ -5,8 +5,6 @@ pub enum DronState {
     ExpectingToRecvIncident,
     RespondingToIncident,
     Mantainance,
-
-
 }
 
 impl DronState {
@@ -23,7 +21,10 @@ impl DronState {
             1 => Ok(DronState::ExpectingToRecvIncident),
             2 => Ok(DronState::RespondingToIncident),
             3 => Ok(DronState::Mantainance),
-            _ => Err(Error::new(ErrorKind::InvalidInput, "Estado de dron no válido")),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Estado de dron no válido",
+            )),
         }
     }
 }

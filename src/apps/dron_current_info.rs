@@ -86,10 +86,11 @@ impl DronCurrentInfo {
                 battery_lvl,
                 state,
             }),
-            Err(_) => Err(Error::new(ErrorKind::InvalidInput, "Error al leer el state")),
+            Err(_) => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Error al leer el state",
+            )),
         }
-
-        
     }
 
     // Getters
@@ -109,7 +110,7 @@ impl DronCurrentInfo {
     pub fn get_state(&self) -> &DronState {
         &self.state
     }
-    
+
     pub fn set_state(&mut self, new_state: DronState) {
         self.state = new_state;
     }
