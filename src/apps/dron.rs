@@ -14,12 +14,12 @@ use super::{dron_current_info::DronCurrentInfo, sist_dron_properties::SistDronPr
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
 /// ya que lo demás son constantes para el funcionamiento del Dron.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Dron {
     // El id y su posición y estado actuales se encuentran en el siguiente struct
     current_info: DronCurrentInfo,
 
-    // Y a continuación, constantes cargadas desde un arch de configuración
+    // Constantes cargadas desde un arch de configuración
     dron_properties: SistDronProperties,
 }
 
@@ -106,15 +106,14 @@ impl Dron {
     /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron
     /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
     fn receive_messages_from_subscribed_topics(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-        let mut inc_id_to_resolve: Option<u8> = None; // Aux: ver si esto no es mejor que está en un atributo del self. [].
         // Loop que lee msjs que le envía el mqtt_client
         loop {
-            if let Ok(mqtt_client) = mqtt_client.lock() {
-                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
+            if let Ok(mqtt_client_l) = mqtt_client.lock() {
+                match mqtt_client_l.mqtt_receive_msg_from_subs_topic() {
                     //Publish message: inc o dron
                     Ok(msg) => {
                         // aux, ver []: no quiero devolverlo, si lo devuelvo corto el loop, y yo quiero seguir leyendo
-                        let _res = self.process_recvd_msg(msg, &mut inc_id_to_resolve);
+                        let _res = self.process_recvd_msg(msg, mqtt_client);
                     }
                     Err(e) => {
                         // Si es false, corta el loop porque no hay más mensajes por leer
@@ -128,9 +127,13 @@ impl Dron {
     }
 
     /// Recibe un mensaje de los topics a los que se suscribió, y lo procesa    
-    fn process_recvd_msg(&mut self, msg: PublishMessage, inc_id_to_resolve: &mut Option<u8>) -> Result<(), Error> {
+    fn process_recvd_msg(
+        &mut self,
+        msg: PublishMessage,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         match msg.get_topic().as_str() {
-            "Inc" => self.process_valid_inc(msg.get_payload(), inc_id_to_resolve),
+            "Inc" => self.process_valid_inc(msg.get_payload(), mqtt_client),
             "Dron" => self.process_valid_dron(msg.get_payload()),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -140,18 +143,28 @@ impl Dron {
     }
 
     /// Recibe un incidente, analiza si está o no resuelto y actúa acorde.
-    fn process_valid_inc(&mut self, payload: Vec<u8>, inc_id_to_resolve: &mut Option<u8>) -> Result<(), Error> {
+    fn process_valid_inc(
+        &mut self,
+        payload: Vec<u8>,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         println!("{:?}", payload);
         let inc = Incident::from_bytes(payload);
         match *inc.get_state() {
-            IncidentState::ActiveIncident => self.manage_incident(inc, inc_id_to_resolve),
-            IncidentState::ResolvedIncident => self.go_back_if_my_inc_was_resolved(inc, inc_id_to_resolve),
+            IncidentState::ActiveIncident => self.manage_incident(inc, mqtt_client),
+            IncidentState::ResolvedIncident => {
+                self.go_back_if_my_inc_was_resolved(inc);
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     /// Publica su estado, y analiza condiciones para desplazarse.
-    fn manage_incident(&mut self, incident: Incident, inc_id_to_resolve: &mut Option<u8>) {
+    fn manage_incident(
+        &mut self,
+        incident: Incident,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         // Analizar condiciones para saber si se desplazará a la pos del incidente
         //  - batería es mayor al nivel bateria minima
         let enough_battery = self.current_info.get_battery_lvl()
@@ -164,8 +177,13 @@ impl Dron {
         if enough_battery {
             if inc_in_range {
                 println!("Dio true, me desplazaré a la pos del inc.");
-                *inc_id_to_resolve = Some(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
-                // aux: acá hay que hacer una función que use la destination_pos=inc pos y la pos actual. Volver []
+                self.current_info.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
+                                                                            // aux: acá hay que hacer una función que use la destination_pos=inc pos y la pos actual. Volver []
+
+                // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b
+                if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+                    mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
+                }
 
                 self.current_info.set_state(DronState::RespondingToIncident);
             }
@@ -174,6 +192,8 @@ impl Dron {
             self.current_info.set_state(DronState::Mantainance);
             // aux: acá hay que hacer una función que use la destination_pos=mantenimiento y la pos actual. Volver [] <--- para ir a mantenimiento
         }
+
+        Ok(())
     }
 
     /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro de su rango
@@ -192,13 +212,12 @@ impl Dron {
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
     /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
     /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
-    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident, inc_id_to_resolve: &mut Option<u8>){
-        if let Some(my_inc_id) = inc_id_to_resolve {
-            if inc.get_id() == *my_inc_id {
-                self.go_back_to_range_center_position();                
+    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident) {
+        if let Some(my_inc_id) = self.current_info.get_inc_id_to_resolve() {
+            if inc.get_id() == my_inc_id {
+                self.go_back_to_range_center_position();
             }
         }
-
     }
 
     /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado

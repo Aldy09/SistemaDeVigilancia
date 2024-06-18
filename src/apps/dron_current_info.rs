@@ -11,6 +11,7 @@ pub struct DronCurrentInfo {
     longitude: f64,
     battery_lvl: u8,
     state: DronState, // esto en realidad es un enum, volver [].
+    inc_id_to_resolve: Option<u8>,
 }
 
 #[allow(dead_code)]
@@ -26,6 +27,7 @@ impl DronCurrentInfo {
             longitude,
             battery_lvl,
             state,
+            inc_id_to_resolve: None,
         }
     }
 
@@ -38,6 +40,13 @@ impl DronCurrentInfo {
         bytes.extend_from_slice(&self.battery_lvl.to_be_bytes());
         //bytes.push(self.state.to_byte()[0]); // <-- así sería si fuera un enum en vez de un u8.
         bytes.extend_from_slice(&self.state.to_byte());
+
+        // El id del incidente que se está resolviendo:
+        let mut inc_id_to_send = 0;
+        if let Some(inc_id) = self.inc_id_to_resolve {
+            inc_id_to_send = inc_id;
+        }
+        bytes.extend_from_slice(&inc_id_to_send.to_be_bytes());
         bytes
     }
 
@@ -77,7 +86,16 @@ impl DronCurrentInfo {
         idx += b_size;
 
         let state_res = DronState::from_byte([bytes[idx]]);
+        idx += b_size;
+
+        // Leo el inc id to resolve
+        let mut inc_id_to_resolve = None;
+        let read_inc_id = u8::from_be_bytes([bytes[idx]]);
+        if read_inc_id != 0 {
+            inc_id_to_resolve = Some(read_inc_id);
+        }
         //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
+
         match state_res {
             Ok(state) => Ok(DronCurrentInfo {
                 id,
@@ -85,6 +103,7 @@ impl DronCurrentInfo {
                 longitude,
                 battery_lvl,
                 state,
+                inc_id_to_resolve,
             }),
             Err(_) => Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -111,8 +130,19 @@ impl DronCurrentInfo {
         &self.state
     }
 
+    // Setea el estado del dron
     pub fn set_state(&mut self, new_state: DronState) {
         self.state = new_state;
+    }
+
+    // Devuelve el id del incidente que el dron se encuentra actualmente resolviendo
+    pub fn get_inc_id_to_resolve(&self) -> Option<u8> {
+        self.inc_id_to_resolve
+    }
+
+    // Setea el id del incidente que el dron se encuentra actualmente resolviendo
+    pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
+        self.inc_id_to_resolve = Some(inc_id);
     }
 }
 
@@ -121,13 +151,31 @@ mod test {
     use crate::apps::{dron_current_info::DronCurrentInfo, dron_state::DronState};
 
     #[test]
-    fn test_1_dron_to_y_from_bytes() {
+    fn test_1a_dron_to_y_from_bytes() {
         let dron = DronCurrentInfo {
             id: 1,
             latitude: -34.0,
             longitude: -58.0,
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
+            inc_id_to_resolve: None,
+        };
+
+        let bytes = dron.to_bytes();
+        let reconstructed_dron = DronCurrentInfo::from_bytes(bytes);
+
+        assert_eq!(reconstructed_dron.unwrap(), dron);
+    }
+
+    #[test]
+    fn test_1b_dron_to_y_from_bytes() {
+        let dron = DronCurrentInfo {
+            id: 1,
+            latitude: -34.0,
+            longitude: -58.0,
+            battery_lvl: 100,
+            state: DronState::ExpectingToRecvIncident,
+            inc_id_to_resolve: Some(18),
         };
 
         let bytes = dron.to_bytes();
