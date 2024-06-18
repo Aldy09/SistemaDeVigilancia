@@ -135,12 +135,35 @@ impl Dron {
     }
 
     /// Publica su estado, y analiza condiciones para desplazarse.
-    fn manage_incident(&self, _incident: Incident) {
-        // Analizar condiciones para saber si se desplazará a la pos del incidente
-        // aux: inc.pos dentro del area_de_operacion_asignada
+    fn manage_incident(&mut self, incident: Incident) {
+        // Analizar condiciones para saber si se desplazará a la pos del incidente        
+        //  - batería es mayor al nivel bateria minima
+        let enough_battery = self.current_info.get_battery_lvl() >= self.dron_properties.get_min_operational_battery_lvl();
+        //  - inc.pos dentro del rango //area_de_operacion_asignada
+        let (inc_lat, inc_lon) = incident.pos();
+        let inc_in_range = self.is_within_range_from_self(inc_lat, inc_lon, self.dron_properties.get_range());
+        
+        if enough_battery && inc_in_range {
+            println!("Dio true, me desplazaré a la pos del inc.");
+            // aux: acá hay que hacer una función que use la destination_pos y la pos actual. Volver []
 
-        // aux: batería es mayor nivel_bateria_minima
+            self.current_info.set_state(DronState::RespondingToIncident);
 
+        }
+
+    }
+
+    /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro de su rango
+    fn is_within_range_from_self(&self, latitude: f64, longitude: f64, range: f64) -> bool {
+        let (center_lat, center_lon) = self.dron_properties.get_range_center_position();
+        let lat_dist = center_lat - latitude;
+        let long_dist = center_lon - longitude;
+        let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
+
+        let adjusted_range = range / 10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+                                                 // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
+
+        rad <= (adjusted_range)
     }
 
     
