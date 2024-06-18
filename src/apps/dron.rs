@@ -1,4 +1,6 @@
-use std::io::Error;
+use std::{io::Error, sync::{Arc, Mutex}};
+
+use crate::{apps::{dron_state::DronState, incident::Incident, incident_state::IncidentState}, messages::publish_message::PublishMessage, mqtt_client::MQTTClient};
 
 use super::{dron_current_info::DronCurrentInfo, sist_dron_properties::SistDronProperties};
 
@@ -25,10 +27,12 @@ impl Dron {
         let dron_properties = SistDronProperties::new(properties_file)?;
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
+        // Aux, #ToDo, hacer una función para que la posición rance_center sea distinta para cada dron
+        // aux: ej que tomen la get_range_center_position como base, y se ubiquen (ej en grilla) con + self id*factor (o algo por el estilo).
         let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
-        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, super::dron_state::DronState::ExpectingToRecvIncident);
+        let current_info = DronCurrentInfo::new(id, rng_center_lat, rng_center_lon, 100, DronState::ExpectingToRecvIncident);
 
-        Ok(Dron {
+        let dron = Dron {
             current_info,
             // Las siguientes son las constantes, que vienen del arch de config:
             dron_properties,
@@ -40,7 +44,123 @@ impl Dron {
             range_center_lon: range_center_lon_property,
             mantainance_lat: -34.30,
             mantainance_lon: -58.30,*/
-        })
+        };
+        
+        // 
+
+        
+        //
+        Ok(dron)
+    }
+
+
+    // Aux: puede estar en un common xq es copypaste de la de monitoreo
+    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) {
+        self.subscribe_to_topic(&mqtt_client, "Inc");
+        self.subscribe_to_topic(&mqtt_client, "Dron");
+        self.receive_messages_from_subscribed_topics(&mqtt_client);
+        self.finalize_mqtt_client(&mqtt_client);
+    }
+    // Aux: puede estar en un common xq es copypaste de la de monitoreo
+    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
+        if let Ok(mut mqtt_client) = mqtt_client.lock() {
+            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
+            match res_sub {
+                Ok(_) => println!("Cliente: Hecho un subscribe a topic {}", topic),
+                Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
+            }
+        }
+    }
+    // Aux: puede estar en un common xq es copypaste de la de monitoreo
+    fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+        if let Ok(mut mqtt_client) = mqtt_client.lock() {
+            mqtt_client.finalizar();
+        }
+    }
+    // Aux: puede estar en un common xq es copypaste de la de monitoreo
+    fn handle_message_receiving_error(&self, e: std::io::Error) -> bool {
+        match e.kind() {
+            std::io::ErrorKind::TimedOut => true,
+            std::io::ErrorKind::NotConnected => {
+                println!("Cliente: No hay más PublishMessage's por leer.");
+                false
+            }
+            _ => {
+                println!("Cliente: error al leer los publish messages recibidos.");
+                true
+            }
+        }
+    }
+
+    /// Recibe mensajes de los topics a los que se ha suscrito
+    fn receive_messages_from_subscribed_topics(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+        // Loop que lee msjs que le envía el mqtt_client
+        loop {
+            if let Ok(mqtt_client) = mqtt_client.lock() {
+                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
+                    //Publish message: inc o dron
+                    Ok(msg) => {
+                        // aux, ver []: no quiero devolverlo, si lo devuelvo corto el loop, y yo quiero seguir leyendo
+                        let _res = self.process_recvd_msg(msg);
+                    },
+                    Err(e) => {
+                        // Si es false, corta el loop porque no hay más mensajes por leer
+                        if !self.handle_message_receiving_error(e) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Recibe un mensaje de los topics a los que se suscribió, y lo procesa    
+    fn process_recvd_msg(&mut self, msg: PublishMessage) -> Result<(), Error> {
+        match msg.get_topic().as_str() {
+            "Inc" => self.process_valid_inc(msg.get_payload()),
+            "Dron" => self.process_valid_dron(msg.get_payload()),
+            _ => Err(Error::new(std::io::ErrorKind::InvalidData, "Topic no conocido")),
+        }
+    }
+    
+    /// Recibe un incidente, analiza si está o no resuelto y actúa acorde.
+    fn process_valid_inc(&mut self, payload: Vec<u8>) -> Result<(), Error> {
+        println!("{:?}", payload);
+        let inc = Incident::from_bytes(payload);
+        match *inc.get_state() {
+            IncidentState::ActiveIncident => self.manage_incident(inc),
+            IncidentState::ResolvedIncident => self.go_back_to_range_center_position(),
+        } 
+        Ok(())
+    }
+
+    /// Publica su estado, y analiza condiciones para desplazarse.
+    fn manage_incident(&self, _incident: Incident) {
+        // Analizar condiciones para saber si se desplazará a la pos del incidente
+        // aux: inc.pos dentro del area_de_operacion_asignada
+
+        // aux: batería es mayor nivel_bateria_minima
+
+    }
+
+    
+    
+    /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado
+    /// para continuar escuchando incidentes.
+    fn go_back_to_range_center_position(&mut self) {
+        // Volver al range center
+        let _destination_pos = self.dron_properties.get_range_center_position();
+        // aux: acá hay que hacer una función que use la destination_pos y la pos actual. Volver []
+        
+        // Una vez que llegué: Setear estado en el Expectingnoseque
+        self.current_info.set_state(DronState::ExpectingToRecvIncident);
+        todo!()
+    }
+
+    // Aux: #ToDo
+    fn process_valid_dron(&self, _payload: Vec<u8>) -> Result<(), Error> {
+        //todo!();
+        Ok(())
     }
 }
 

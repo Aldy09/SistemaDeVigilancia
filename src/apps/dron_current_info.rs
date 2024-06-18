@@ -109,6 +109,10 @@ impl DronCurrentInfo {
     pub fn get_state(&self) -> &DronState {
         &self.state
     }
+    
+    pub fn set_state(&mut self, new_state: DronState) {
+        self.state = new_state;
+    }
 }
 
 #[cfg(test)]
