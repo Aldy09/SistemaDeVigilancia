@@ -29,6 +29,7 @@ reqwest-middleware = "0.2.4"
 tokio = { version = "1.28", features = ["macros"] }
 http-cache-reqwest = "0.13.0"
 thiserror = "1"
+crossbeam-channel = "0.5.1"
 
 
 
@@ -41,12 +42,12 @@ name = "message_broker_server"
 path = "src/message_broker_server.rs"
 
 [[bin]]
-name = "sistema_monitoreo"
-path = "src/apps/sistema_monitoreo.rs"
+name = "sistema_monitoreo_main"
+path = "src/apps/sistema_monitoreo_main.rs"
 
 [[bin]]
-name = "sistema_camaras"
-path = "src/apps/sistema_camaras.rs"
+name = "sistema_camaras_main"
+path = "src/apps/sistema_camaras_main.rs"
 
 [[bin]]
 name = "generar_camaras"

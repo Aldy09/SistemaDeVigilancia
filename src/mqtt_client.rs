@@ -90,6 +90,7 @@ impl MQTTClient {
 
     fn mqtt_new(stream: Arc<Mutex<TcpStream>>) -> (Self, Sender<PublishMessage>) {
         let (tx, rx) = mpsc::channel::<PublishMessage>();
+
         let mqtt = MQTTClient {
             stream: stream.clone(),
             handle_child: None,
@@ -106,13 +107,13 @@ impl MQTTClient {
     /// Recibe el payload a enviar, y el topic al cual enviarlo.
     /// Devuelve Ok si el publish fue exitoso, es decir si se pudo enviar el mensaje Publish
     /// y se recibió un ack correcto. Devuelve error en caso contrario.
-    pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<(), Error> {
+    pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8]) -> Result<PublishMessage, Error> {
         println!("-----------------");
         let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, 1, 0)?;
         let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
-        let pub_msg = match result {
+        let publish_message = match result {
             Ok(msg) => {
                 println!("Mqtt publish: envío publish: \n   {:?}", msg);
                 msg
@@ -121,17 +122,20 @@ impl MQTTClient {
         };
 
         // Lo envío
-        let bytes_msg = pub_msg.to_bytes();
+        let bytes_msg = publish_message.to_bytes();
         write_message_to_stream(&bytes_msg, &self.stream)?;
         println!("Mqtt publish: envío bytes publish: \n   {:?}", bytes_msg);
 
-        Ok(())
+        Ok(publish_message)
     }
 
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
     /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
-    pub fn mqtt_subscribe(&mut self, topics_to_subscribe: Vec<String>) -> Result<(), Error> {
+    pub fn mqtt_subscribe(
+        &mut self,
+        topics_to_subscribe: Vec<String>,
+    ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
@@ -146,7 +150,7 @@ impl MQTTClient {
             subs_bytes
         );
 
-        Ok(())
+        Ok(subscribe_msg)
     }
 
     /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
