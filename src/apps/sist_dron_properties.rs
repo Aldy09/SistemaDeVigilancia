@@ -138,5 +138,4 @@ impl SistDronProperties {
     pub fn get_mantainance_position(&self) -> (f64, f64) {
         (self.mantainance_lat, self.mantainance_lon)
     }
-
 }

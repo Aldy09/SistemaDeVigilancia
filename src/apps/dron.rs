@@ -1,6 +1,8 @@
 use std::{
     io::Error,
-    sync::{Arc, Mutex}, thread::sleep, time::Duration,
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
 use crate::{
@@ -178,9 +180,9 @@ impl Dron {
             if inc_in_range {
                 println!("Dio true, me desplazaré a la pos del inc.");
                 self.current_info.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
-                
+
                 self.current_info.set_state(DronState::RespondingToIncident);
-                
+
                 // Volar hasta la posición del incidente
                 let destination = incident.pos();
                 self.fly_to(destination, mqtt_client)?;
@@ -192,7 +194,6 @@ impl Dron {
                 // if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 //     mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
                 // }
-
             }
         } else {
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
@@ -222,7 +223,11 @@ impl Dron {
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
     /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
     /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
-    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
+    fn go_back_if_my_inc_was_resolved(
+        &mut self,
+        inc: Incident,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         if let Some(my_inc_id) = self.current_info.get_inc_id_to_resolve() {
             if inc.get_id() == my_inc_id {
                 self.go_back_to_range_center_position(mqtt_client)?;
@@ -234,7 +239,10 @@ impl Dron {
 
     /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado
     /// para continuar escuchando incidentes.
-    fn go_back_to_range_center_position(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
+    fn go_back_to_range_center_position(
+        &mut self,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         // Volver, volar al range center
         let destination = self.dron_properties.get_range_center_position();
         self.fly_to(destination, mqtt_client)?;
@@ -242,7 +250,7 @@ impl Dron {
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
         self.current_info
             .set_state(DronState::ExpectingToRecvIncident);
-        
+
         Ok(())
     }
 
@@ -251,7 +259,7 @@ impl Dron {
         //todo!();
         Ok(())
     }
-    
+
     /// Calcula la dirección en la que debe volar desde una posición `origin` hasta `destination`.
     // Aux: esto estaría mejor en un struct posicion quizás? [] ver.
     fn calculate_direction(&self, origin: (f64, f64), destination: (f64, f64)) -> (f64, f64) {
@@ -261,7 +269,7 @@ impl Dron {
 
         // Cálculo de distancia
         let lat_dist = dest_lat - origin_lat;
-        let lon_dist =  dest_lon - origin_lon;
+        let lon_dist = dest_lon - origin_lon;
         let distance = f64::sqrt(lat_dist.powi(2) + lon_dist.powi(2));
 
         // Vector unitario: (destino - origen) / || distancia ||, para cada coordenada.
@@ -271,9 +279,13 @@ impl Dron {
 
         direction
     }
-    
+
     /// Vuela hasta la posición de destino
-    fn fly_to(&mut self, destination: (f64, f64), mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    fn fly_to(
+        &mut self,
+        destination: (f64, f64),
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+    ) -> Result<(), Error> {
         let origin = self.current_info.get_current_position();
         let dir = self.calculate_direction(origin, destination);
 
@@ -288,7 +300,7 @@ impl Dron {
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
-            };            
+            };
         }
 
         Ok(())
@@ -334,14 +346,14 @@ mod test {
         let origin = (0.0, 0.0);
         let destination = (4.0, -3.0);
         let hip = 5.0; // hipotenusa da 5;
-        
+
         let dir = dron.calculate_direction(origin, destination);
 
         // La dirección calculada es la esperada
-        let expected_dir = (4.0/hip, -3.0/hip);
+        let expected_dir = (4.0 / hip, -3.0 / hip);
         assert_eq!(dir, expected_dir);
         // En "hip" cantidad de pasos, se llega a la posición de destino
-        assert_eq!(origin.0 + dir.0*hip, destination.0);
-        assert_eq!(origin.1 + dir.1*hip, destination.1);
+        assert_eq!(origin.0 + dir.0 * hip, destination.0);
+        assert_eq!(origin.1 + dir.1 * hip, destination.1);
     }
 }

@@ -144,9 +144,9 @@ impl DronCurrentInfo {
     pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
         self.inc_id_to_resolve = Some(inc_id);
     }
-    
+
     /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual
-    pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64)  {
+    pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64) {
         self.latitude += dir.0;
         self.longitude += dir.1;
 
