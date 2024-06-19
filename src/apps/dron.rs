@@ -1,6 +1,6 @@
 use std::{
     io::Error,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, thread::sleep, time::Duration,
 };
 
 use crate::{
@@ -178,20 +178,28 @@ impl Dron {
             if inc_in_range {
                 println!("Dio true, me desplazaré a la pos del inc.");
                 self.current_info.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
-                                                                            // aux: acá hay que hacer una función que use la destination_pos=inc pos y la pos actual. Volver []
-
-                // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b
-                if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                    mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
-                }
-
+                
                 self.current_info.set_state(DronState::RespondingToIncident);
+
+                // Aux: En construcción []
+                let destination = incident.pos();
+                self.fly_to(destination, mqtt_client)?;
+                // // Volar hasta la posición del incidente
+                // let origin = self.current_info.get_current_position();
+                // let destination = incident.pos();
+                // let dir = self.calculate_direction(origin, destination);
+
+                // // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b
+                // if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+                //     mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
+                // }
+
             }
         } else {
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
             self.current_info.set_state(DronState::Mantainance);
-            // aux: acá hay que hacer una función que use la destination_pos=mantenimiento y la pos actual. Volver [] <--- para ir a mantenimiento
-            
+
+            // Volar a la posición de Mantenimiento
             // Función en construcción: []
             let origin = self.current_info.get_current_position();
             let destination = self.dron_properties.get_mantainance_position();
@@ -228,9 +236,10 @@ impl Dron {
     /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado
     /// para continuar escuchando incidentes.
     fn go_back_to_range_center_position(&mut self) {
-        // Volver al range center
-        let _destination_pos = self.dron_properties.get_range_center_position();
-        // aux: acá hay que hacer una función que use la destination_pos y la pos actual. Volver []
+        // Volver, volar al range center
+        let destination = self.dron_properties.get_range_center_position();
+        let origin = self.current_info.get_current_position();
+        let dir = self.calculate_direction(origin, destination);
 
         // Una vez que llegué: Setear estado en el Expectingnoseque
         self.current_info
@@ -262,6 +271,28 @@ impl Dron {
         let direction: (f64, f64) = (unit_lat, unit_lon);
 
         direction
+    }
+    
+    /// Vuela hasta la posición de destino
+    fn fly_to(&mut self, destination: (f64, f64), mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+        let origin = self.current_info.get_current_position();
+        let dir = self.calculate_direction(origin, destination);
+
+        let mut current_pos = origin;
+        while current_pos != destination {
+            current_pos = self.current_info.increment_current_position_in(dir);
+
+            // Simular el vuelo, el dron se desplaza
+            let aux = 1; // aux: acá entraría la velocidad []
+            sleep(Duration::from_secs(aux));
+
+            // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
+            if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+                mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
+            };            
+        }
+
+        Ok(())
     }
 }
 

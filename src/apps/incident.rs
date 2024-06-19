@@ -90,6 +90,7 @@ impl Incident {
     pub fn get_state(&self) -> &IncidentState {
         &self.state
     }
+    
 }
 // hacer test de los metodos from_bytes y to_bytes
 

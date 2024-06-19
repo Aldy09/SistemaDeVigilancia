@@ -130,19 +130,27 @@ impl DronCurrentInfo {
         &self.state
     }
 
-    // Setea el estado del dron
+    /// Setea el estado del dron
     pub fn set_state(&mut self, new_state: DronState) {
         self.state = new_state;
     }
 
-    // Devuelve el id del incidente que el dron se encuentra actualmente resolviendo
+    /// Devuelve el id del incidente que el dron se encuentra actualmente resolviendo
     pub fn get_inc_id_to_resolve(&self) -> Option<u8> {
         self.inc_id_to_resolve
     }
 
-    // Setea el id del incidente que el dron se encuentra actualmente resolviendo
+    /// Setea el id del incidente que el dron se encuentra actualmente resolviendo
     pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
         self.inc_id_to_resolve = Some(inc_id);
+    }
+    
+    /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual
+    pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64)  {
+        self.latitude += dir.0;
+        self.longitude += dir.1;
+
+        self.get_current_position()
     }
 }
 
