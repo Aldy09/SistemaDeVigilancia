@@ -129,7 +129,14 @@ impl SistDronProperties {
         self.min_operational_battery_lvl
     }
 
+    /// Devuelve el rango, utilizado para evaluar si atender o no incidentes
     pub fn get_range(&self) -> f64 {
         self.range as f64
     }
+
+    /// Devuelve latitud y longitud del lugar de Mantenimiento, al que irá para recargar su batería
+    pub fn get_mantainance_position(&self) -> (f64, f64) {
+        (self.mantainance_lat, self.mantainance_lon)
+    }
+
 }

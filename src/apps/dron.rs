@@ -191,6 +191,11 @@ impl Dron {
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
             self.current_info.set_state(DronState::Mantainance);
             // aux: acá hay que hacer una función que use la destination_pos=mantenimiento y la pos actual. Volver [] <--- para ir a mantenimiento
+            
+            // Función en construcción: []
+            let origin = self.current_info.get_current_position();
+            let destination = self.dron_properties.get_mantainance_position();
+            let dir = self.calculate_direction(origin, destination);
         }
 
         Ok(())
@@ -238,6 +243,26 @@ impl Dron {
         //todo!();
         Ok(())
     }
+    
+    /// Calcula la dirección en la que debe volar desde una posición `origin` hasta `destination`.
+    // Aux: esto estaría mejor en un struct posicion quizás? [] ver.
+    fn calculate_direction(&self, origin: (f64, f64), destination: (f64, f64)) -> (f64, f64) {
+        // calcular la distancia ('en diagonal') entre los dos puntos
+        let (origin_lat, origin_lon) = (origin.0, origin.1);
+        let (dest_lat, dest_lon) = (destination.0, destination.1);
+
+        // Cálculo de distancia
+        let lat_dist = dest_lat - origin_lat;
+        let lon_dist =  dest_lon - origin_lon;
+        let distance = f64::sqrt(lat_dist.powi(2) + lon_dist.powi(2));
+
+        // Vector unitario: (destino - origen) / || distancia ||, para cada coordenada.
+        let unit_lat = lat_dist / distance;
+        let unit_lon = lon_dist / distance;
+        let direction: (f64, f64) = (unit_lat, unit_lon);
+
+        direction
+    }
 }
 
 #[cfg(test)]
@@ -269,5 +294,24 @@ mod test {
             dron.current_info.get_current_position(),
             dron.dron_properties.get_range_center_position()
         );
+    }
+
+    #[test]
+    fn test_3_calculate_direction_da_la_direccion_esperada() {
+        let dron = Dron::new(1).unwrap();
+
+        // Dados destino y origen
+        let origin = (0.0, 0.0);
+        let destination = (4.0, -3.0);
+        let hip = 5.0; // hipotenusa da 5;
+        
+        let dir = dron.calculate_direction(origin, destination);
+
+        // La dirección calculada es la esperada
+        let expected_dir = (4.0/hip, -3.0/hip);
+        assert_eq!(dir, expected_dir);
+        // En "hip" cantidad de pasos, se llega a la posición de destino
+        assert_eq!(origin.0 + dir.0*hip, destination.0);
+        assert_eq!(origin.1 + dir.1*hip, destination.1);
     }
 }
