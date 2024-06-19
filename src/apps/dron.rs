@@ -153,7 +153,7 @@ impl Dron {
         match *inc.get_state() {
             IncidentState::ActiveIncident => self.manage_incident(inc, mqtt_client),
             IncidentState::ResolvedIncident => {
-                self.go_back_if_my_inc_was_resolved(inc);
+                self.go_back_if_my_inc_was_resolved(inc, mqtt_client)?;
                 Ok(())
             }
         }
@@ -180,11 +180,10 @@ impl Dron {
                 self.current_info.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
                 
                 self.current_info.set_state(DronState::RespondingToIncident);
-
-                // Aux: En construcción []
+                
+                // Volar hasta la posición del incidente
                 let destination = incident.pos();
                 self.fly_to(destination, mqtt_client)?;
-                // // Volar hasta la posición del incidente
                 // let origin = self.current_info.get_current_position();
                 // let destination = incident.pos();
                 // let dir = self.calculate_direction(origin, destination);
@@ -200,10 +199,8 @@ impl Dron {
             self.current_info.set_state(DronState::Mantainance);
 
             // Volar a la posición de Mantenimiento
-            // Función en construcción: []
-            let origin = self.current_info.get_current_position();
-            let destination = self.dron_properties.get_mantainance_position();
-            let dir = self.calculate_direction(origin, destination);
+            let destination = self.dron_properties.get_range_center_position();
+            self.fly_to(destination, mqtt_client)?;
         }
 
         Ok(())
@@ -225,26 +222,28 @@ impl Dron {
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
     /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
     /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
-    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident) {
+    fn go_back_if_my_inc_was_resolved(&mut self, inc: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
         if let Some(my_inc_id) = self.current_info.get_inc_id_to_resolve() {
             if inc.get_id() == my_inc_id {
-                self.go_back_to_range_center_position();
+                self.go_back_to_range_center_position(mqtt_client)?;
             }
         }
+
+        Ok(())
     }
 
     /// Vuelve al centro de su rango (su posición inicial), y una vez que llega actualiza su estado
     /// para continuar escuchando incidentes.
-    fn go_back_to_range_center_position(&mut self) {
+    fn go_back_to_range_center_position(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
         // Volver, volar al range center
         let destination = self.dron_properties.get_range_center_position();
-        let origin = self.current_info.get_current_position();
-        let dir = self.calculate_direction(origin, destination);
+        self.fly_to(destination, mqtt_client)?;
 
-        // Una vez que llegué: Setear estado en el Expectingnoseque
+        // Una vez que llegué: Setear estado a nuevamente recibir incidentes
         self.current_info
             .set_state(DronState::ExpectingToRecvIncident);
-        todo!()
+        
+        Ok(())
     }
 
     // Aux: #ToDo
