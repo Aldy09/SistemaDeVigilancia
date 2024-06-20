@@ -5,7 +5,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use crate::mqtt_client::MQTTClient;
+use crate::mqtt_client::mqtt_client::MQTTClient;
 
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<Error>> {

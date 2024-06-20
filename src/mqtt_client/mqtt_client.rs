@@ -3,7 +3,7 @@ use crate::messages::disconnect_message::DisconnectMessage;
 use crate::messages::publish_flags::PublishFlags;
 use crate::messages::publish_message::PublishMessage;
 use crate::messages::subscribe_message::SubscribeMessage;
-use crate::mqtt_client::io::ErrorKind;
+use std::io::ErrorKind;
 use crate::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
     write_message_to_stream,

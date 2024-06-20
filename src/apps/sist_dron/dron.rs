@@ -8,7 +8,7 @@ use std::{
 use crate::{
     apps::{incident::Incident, incident_state::IncidentState},
     messages::publish_message::PublishMessage,
-    mqtt_client::MQTTClient,
+    mqtt_client::mqtt_client::MQTTClient,
 };
 use crate::apps::sist_dron::dron_state::DronState;
 
