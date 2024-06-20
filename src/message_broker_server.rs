@@ -25,8 +25,6 @@ pub fn load_port() -> Result<(String, u16), Error> {
 }
 
 fn main() -> Result<(), Error> {
-    env_logger::init();
-
     let (ip, port) = load_port()?;
 
     let _mqtt_server = mqtt_server::MQTTServer::new(ip, port);

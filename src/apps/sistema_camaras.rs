@@ -458,7 +458,7 @@ fn get_id_of_cameras_that_will_change_state_to_active(
 
     // Recorremos cada una de las cámaras, para ver si el inc está en su rango
     for (cam_id, camera) in cams.iter_mut() {
-        if camera.will_register(inc.pos()) {
+        if camera.will_register(inc.get_position()) {
             println!(
                 "Está en rango de cam: {}, cambiando su estado a activo.",
                 cam_id

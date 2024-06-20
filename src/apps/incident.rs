@@ -23,7 +23,7 @@ impl Incident {
     }
 
     /// Devuelve coordenadas (x, y) correspondientes a la posición del incidente.
-    pub fn pos(&self) -> (f64, f64) {
+    pub fn get_position(&self) -> (f64, f64) {
         (self.latitude, self.longitude)
     }
 

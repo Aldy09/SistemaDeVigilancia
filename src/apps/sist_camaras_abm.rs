@@ -117,27 +117,27 @@ impl ABMCameras {
 
     /// Procesa una nueva cámara (la inserta en el hashmap de cameras, maneja las lindantes), y la envía por un
     /// channel para que desde el rx el sistema cámaras le pueda hacer publish. Además, logguea la operación.
-    fn process_and_send_camera(&mut self, camera_clone: Camera) {
+    fn process_and_send_camera(&mut self, new_camera: Camera) {
         match self.cameras.lock() {
             Ok(mut cams) => {
                 // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
                 for camera in cams.values_mut() {
-                    camera.mutually_add_if_bordering(&mut camera_clone.clone());
+                    camera.mutually_add_if_bordering(&mut new_camera.clone());
                 }
                 //Envia la camara al log.txt
                 self.logger_tx
                     .send(StructsToSaveInLogger::AppType(
                         "Sistema Camaras".to_string(),
-                        AppType::Camera(camera_clone.clone()),
+                        AppType::Camera(new_camera.clone()),
                         OperationType::Sent,
                     ))
                     .unwrap();
                 // Envía la nueva cámara por tx, para ser publicada por el otro hilo
-                if self.camera_tx.send(camera_clone.to_bytes()).is_err() {
+                if self.camera_tx.send(new_camera.to_bytes()).is_err() {
                     println!("Error al enviar cámara por tx desde hilo abm.");
                 }
                 // Guarda la nueva cámara
-                cams.insert(camera_clone.get_id(), camera_clone);
+                cams.insert(new_camera.get_id(), new_camera);
                 println!("Cámara agregada con éxito.\n");
             }
             Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
@@ -168,6 +168,11 @@ impl ABMCameras {
             .get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
             .parse()
             .expect("Id no válido");
+        self.delete_camera(id);
+    }
+
+    /// Elimina a la cámara del id recibido.
+    fn delete_camera(&self, id: u8) {
         match self.cameras.lock() {
             Ok(mut cams) => {
                 if let Some(mut camera_to_delete) = cams.remove(&id) {
@@ -205,7 +210,67 @@ impl ABMCameras {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        collections::HashMap,
+        sync::{mpsc, Arc, Mutex},
+    };
+
+    use crate::apps::camera::Camera;
+
+    use super::ABMCameras;
 
     #[test]
-    fn test_1_abm_alta_de_camara() {}
+    fn test_1_abm_alta_de_camara_la_agrega_a_cameras() {
+        // Tres tx irrelevantes, para pasar al new de abm
+        // (es necesario conservar las variables de rx en el test de todas formas, para que no se cierre el channel antes del assert)
+        let (logger_tx, _logger_rx) = mpsc::channel();
+        let (camera_tx, _camera_rx) = mpsc::channel();
+        let (exit_tx, _exit_rx) = mpsc::channel();
+
+        // Se crea el abm con su cameras
+        let cameras = Arc::new(Mutex::new(HashMap::new()));
+        let mut abm = ABMCameras::new(cameras.clone(), logger_tx, camera_tx, exit_tx);
+
+        // Se agrega la cámara
+        let new_camera_id = 1;
+        let camera = Camera::new(new_camera_id, -34.0, -58.0, 5);
+        abm.process_and_send_camera(camera);
+
+        // Se busca la cámara recién agregada
+        let mut is_new_cam_stored = false;
+        if let Ok(cams) = cameras.lock() {
+            is_new_cam_stored = cams.contains_key(&new_camera_id);
+        }
+        // La cámara nueva se ha agregado a cameras
+        assert!(is_new_cam_stored);
+    }
+
+    #[test]
+    fn test_2_abm_baja_de_camara_la_elimina_de_cameras() {
+        // Tres tx irrelevantes, para pasar al new de abm
+        // (es necesario conservar las variables de rx en el test de todas formas, para que no se cierre el channel antes del assert)
+        let (logger_tx, _logger_rx) = mpsc::channel();
+        let (camera_tx, _camera_rx) = mpsc::channel();
+        let (exit_tx, _exit_rx) = mpsc::channel();
+
+        // Se crea el abm con su cameras
+        let cameras = Arc::new(Mutex::new(HashMap::new()));
+        let mut abm = ABMCameras::new(cameras.clone(), logger_tx, camera_tx, exit_tx);
+
+        // Se agrega la cámara
+        let camera_to_remove_id = 1;
+        let camera = Camera::new(camera_to_remove_id, -34.0, -58.0, 5);
+        abm.process_and_send_camera(camera);
+
+        // Ahora se la elimina
+        abm.delete_camera(camera_to_remove_id);
+
+        // Se busca la cámara recién eliminada
+        let mut is_cam_to_remove_stored = false;
+        if let Ok(cams) = cameras.lock() {
+            is_cam_to_remove_stored = cams.contains_key(&camera_to_remove_id);
+        }
+        // La cámara nueva se ha agregado a cameras
+        assert!(!is_cam_to_remove_stored);
+    }
 }
