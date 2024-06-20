@@ -25,6 +25,8 @@ use crate::messages::suback_message::SubAckMessage;
 /// MQTTClient es instanciado por cada cliente que desee utilizar el protocolo.
 /// Posee el `stream` que usará para comunicarse con el `MQTTServer`.
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
+
+#[derive(Debug)]
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_child: Option<JoinHandle<()>>,
