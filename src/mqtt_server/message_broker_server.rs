@@ -1,4 +1,4 @@
-use rustx::mqtt_server;
+use rustx::mqtt_server::mqtt_server::MQTTServer;
 use std::env::args;
 use std::io::{Error, ErrorKind};
 
@@ -27,7 +27,7 @@ pub fn load_port() -> Result<(String, u16), Error> {
 fn main() -> Result<(), Error> {
     let (ip, port) = load_port()?;
 
-    let _mqtt_server = mqtt_server::MQTTServer::new(ip, port);
+    let _mqtt_server = MQTTServer::new(ip, port);
 
     Ok(())
 }

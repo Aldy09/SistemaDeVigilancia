@@ -38,7 +38,7 @@ path = "src/message_broker_client.rs"
 
 [[bin]]
 name = "message_broker_server"
-path = "src/message_broker_server.rs"
+path = "src/mqtt_server/message_broker_server.rs"
 
 [[bin]]
 name = "sistema_monitoreo_main"

@@ -1,6 +1,4 @@
 pub mod apps;
-pub mod connected_user;
-pub mod file_helper;
 pub mod fixed_header;
 pub mod messages;
 
