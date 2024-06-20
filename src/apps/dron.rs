@@ -85,7 +85,7 @@ impl Dron {
     // Aux: puede estar en un common xq es copypaste de la de monitoreo
     fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finalizar();
+            mqtt_client.finish();
         }
     }
     // Aux: puede estar en un common xq es copypaste de la de monitoreo
