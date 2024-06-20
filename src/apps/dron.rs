@@ -294,8 +294,8 @@ impl Dron {
             current_pos = self.current_info.increment_current_position_in(dir);
 
             // Simular el vuelo, el dron se desplaza
-            let aux = 1; // aux: acá entraría la velocidad []
-            sleep(Duration::from_secs(aux));
+            let a = 1; // aux
+            sleep(Duration::from_secs(a));
 
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
@@ -339,12 +339,31 @@ mod test {
     }
 
     #[test]
-    fn test_3_calculate_direction_da_la_direccion_esperada() {
+    fn test_3a_calculate_direction_da_la_direccion_esperada() {
         let dron = Dron::new(1).unwrap();
 
         // Dados destino y origen
-        let origin = (0.0, 0.0);
+        let origin = (0.0, 0.0); // desde el (0,0)
         let destination = (4.0, -3.0);
+        let hip = 5.0; // hipotenusa da 5;
+
+        let dir = dron.calculate_direction(origin, destination);
+
+        // La dirección calculada es la esperada
+        let expected_dir = (4.0 / hip, -3.0 / hip);
+        assert_eq!(dir, expected_dir);
+        // En "hip" cantidad de pasos, se llega a la posición de destino
+        assert_eq!(origin.0 + dir.0 * hip, destination.0);
+        assert_eq!(origin.1 + dir.1 * hip, destination.1);
+    }
+
+    #[test]
+    fn test_3b_calculate_direction_da_la_direccion_esperada() {
+        let dron = Dron::new(1).unwrap();
+
+        // Dados destino y origen
+        let origin = dron.current_info.get_current_position(); // desde algo que no es el (0,0)
+        let destination = (origin.0 + 4.0, origin.1 - 3.0);
         let hip = 5.0; // hipotenusa da 5;
 
         let dir = dron.calculate_direction(origin, destination);

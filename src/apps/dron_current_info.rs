@@ -1,6 +1,7 @@
 use std::io::{Error, ErrorKind};
 
 use super::dron_state::DronState;
+use super::dron_flying_info::DronFlyingInfo;
 
 /// Struct que contiene los campos que identifican al Dron (el id) y que pueden modificarse durante su funcionamiento.
 #[derive(Debug, PartialEq)]
@@ -12,6 +13,10 @@ pub struct DronCurrentInfo {
     battery_lvl: u8,
     state: DronState, // esto en realidad es un enum, volver [].
     inc_id_to_resolve: Option<u8>,
+    // // Dirección y velocidad, flying_info
+    // direction: (f64, f64), // vector unitario de dirección al volar, con componentes lat y lon
+    // speed: Option<f64>, // velocidad de desplazamiento al volar
+    flying_info: DronFlyingInfo,
 }
 
 #[allow(dead_code)]
@@ -28,6 +33,7 @@ impl DronCurrentInfo {
             battery_lvl,
             state,
             inc_id_to_resolve: None,
+            flying_info: DronFlyingInfo::new(),
         }
     }
 
@@ -47,6 +53,7 @@ impl DronCurrentInfo {
             inc_id_to_send = inc_id;
         }
         bytes.extend_from_slice(&inc_id_to_send.to_be_bytes());
+        bytes.extend_from_slice(&self.flying_info.to_bytes()); // dir y velocidad de vuelo
         bytes
     }
 
@@ -94,7 +101,10 @@ impl DronCurrentInfo {
         if read_inc_id != 0 {
             inc_id_to_resolve = Some(read_inc_id);
         }
-        //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
+        idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
+        
+        // dir y velocidad de vuelo
+        let flying_info = DronFlyingInfo::from_bytes(bytes[idx..].to_vec())?;
 
         match state_res {
             Ok(state) => Ok(DronCurrentInfo {
@@ -104,6 +114,7 @@ impl DronCurrentInfo {
                 battery_lvl,
                 state,
                 inc_id_to_resolve,
+                flying_info,
             }),
             Err(_) => Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -156,7 +167,7 @@ impl DronCurrentInfo {
 
 #[cfg(test)]
 mod test {
-    use crate::apps::{dron_current_info::DronCurrentInfo, dron_state::DronState};
+    use crate::apps::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, dron_state::DronState};
 
     #[test]
     fn test_1a_dron_to_y_from_bytes() {
@@ -167,6 +178,7 @@ mod test {
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
             inc_id_to_resolve: None,
+            flying_info: DronFlyingInfo::new(),
         };
 
         let bytes = dron.to_bytes();
@@ -184,6 +196,7 @@ mod test {
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
             inc_id_to_resolve: Some(18),
+            flying_info: DronFlyingInfo::new(),
         };
 
         let bytes = dron.to_bytes();
