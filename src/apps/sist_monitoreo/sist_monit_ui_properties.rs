@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use super::properties::Properties;
+use crate::apps::properties::Properties;
 
 #[derive(Debug)]
 pub struct SistMonitUIProperties {

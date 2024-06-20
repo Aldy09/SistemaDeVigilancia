@@ -34,7 +34,7 @@ impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
-        let properties_file = "src/apps/sistema_dron.properties";
+        let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let dron_properties = SistDronProperties::new(properties_file)?;
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
