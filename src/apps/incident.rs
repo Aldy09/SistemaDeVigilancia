@@ -2,13 +2,12 @@ use super::incident_state::IncidentState;
 
 #[derive(Debug, Clone)]
 /// Struct que representa un incidente, para ser utilizado por las aplicaciones del sistema de vigilancia (sist de monitoreo, sist central de cámaras, y app de drones).
-/// Posee un id, coordenadas x e y, un estado, y un campo `sent` que indica si el incidente se envió y continúa sin modificaciones desde entonces o si por el contrario ya se modificó desde la última vez que se envió.
+/// Posee un id, coordenadas x e y, un estado.
 pub struct Incident {
-    pub id: u8, // []
+    id: u8, // []
     latitude: f64,
     longitude: f64,
     state: IncidentState,
-    pub sent: bool,
 }
 
 impl Incident {
@@ -18,7 +17,6 @@ impl Incident {
             latitude,
             longitude,
             state: IncidentState::ActiveIncident,
-            sent: false,
         }
     }
 
@@ -35,7 +33,6 @@ impl Incident {
     /// Cambia el estado del incidente a resuelto.
     pub fn set_resolved(&mut self) {
         self.state = IncidentState::ResolvedIncident;
-        self.sent = false;
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -82,7 +79,6 @@ impl Incident {
             latitude,
             longitude,
             state,
-            sent: false,
         }
     }
 
@@ -104,7 +100,6 @@ mod tests {
             latitude: 2.0,
             longitude: 2.0,
             state: IncidentState::ActiveIncident,
-            sent: false,
         };
         let bytes = incident.to_bytes();
         let incident_bytes = Incident::from_bytes(bytes);

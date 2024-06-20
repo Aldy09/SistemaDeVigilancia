@@ -263,7 +263,7 @@ impl SistemaCamaras {
         incs_being_managed: &mut HashMap<u8, Vec<u8>>,
     ) {
         // Proceso los incidentes
-        if !incs_being_managed.contains_key(&incident.id) {
+        if !incs_being_managed.contains_key(&incident.get_id()) {
             procesar_incidente_por_primera_vez(cameras, incident, incs_being_managed);
         } else {
             procesar_incidente_conocido(cameras, incident, incs_being_managed);
@@ -390,10 +390,10 @@ fn procesar_incidente_conocido(
     if inc.is_resolved() {
         println!(
             "Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.",
-            inc.id
+            inc.get_id()
         );
         // Busco la/s cámara/s que atendían este incidente
-        if let Some(cams_managing_inc) = incs_being_managed.get(&inc.id) {
+        if let Some(cams_managing_inc) = incs_being_managed.get(&inc.get_id()) {
             // sé que existe, por el if de más arriba
 
             // Cambio el estado de las cámaras que lo manejaban, otra vez a ahorro de energía
@@ -403,7 +403,7 @@ fn procesar_incidente_conocido(
                     Ok(mut cams) => {
                         // Actualizo las cámaras en cuestión
                         if let Some(camera_to_update) = cams.get_mut(camera_id) {
-                            camera_to_update.remove_from_incs_being_managed(inc.id);
+                            camera_to_update.remove_from_incs_being_managed(inc.get_id());
                             println!(
                                 "  la cámara queda:\n   cam id y lista de incs: {:?}",
                                 camera_to_update.get_id_e_incs_for_debug_display()
@@ -417,7 +417,7 @@ fn procesar_incidente_conocido(
             }
         }
         // También elimino la entrada del hashmap que busca por incidente, ya no le doy seguimiento
-        incs_being_managed.remove(&inc.id);
+        incs_being_managed.remove(&inc.get_id());
     }
 }
 
@@ -431,7 +431,7 @@ fn procesar_incidente_por_primera_vez(
 ) {
     match cameras.lock() {
         Ok(mut cams) => {
-            println!("Proceso el incidente {} por primera vez", inc.id);
+            println!("Proceso el incidente {} por primera vez", inc.get_id());
             let cameras_that_follow_inc =
                 get_id_of_cameras_that_will_change_state_to_active(&mut cams, &inc);
 
@@ -439,11 +439,11 @@ fn procesar_incidente_por_primera_vez(
             for cam_id in &cameras_that_follow_inc {
                 if let Some(bordering_cam) = cams.get_mut(cam_id) {
                     // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
-                    bordering_cam.append_to_incs_being_managed(inc.id);
+                    bordering_cam.append_to_incs_being_managed(inc.get_id());
                 };
             }
             // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-            incs_being_managed.insert(inc.id, cameras_that_follow_inc);
+            incs_being_managed.insert(inc.get_id(), cameras_that_follow_inc);
         }
         Err(_) => todo!(),
     }
