@@ -3,13 +3,13 @@ use std::io::{Error, ErrorKind};
 use super::properties::Properties;
 
 #[derive(Debug)]
-pub struct SistCamsUIProperties {
+pub struct SistMonitUIProperties {
     pub ui_name: String,
     pub ui_cam_img_file: String,
     pub ui_dron_img_file: String,
 }
 
-impl SistCamsUIProperties {
+impl SistMonitUIProperties {
     pub fn new(global_properties: Properties) -> Result<Self, Error> {
 
         let ui_name: String;

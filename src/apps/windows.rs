@@ -1,6 +1,6 @@
 use super::plugins::ImagesPluginData;
 
-use super::ui_sistema_monitoreo::Provider;
+use crate::apps::sist_monitoreo::ui_sistema_monitoreo::Provider;
 use super::vendor::sources::Attribution;
 use super::vendor::MapMemory;
 use egui::{Align2, RichText, Ui, Window};

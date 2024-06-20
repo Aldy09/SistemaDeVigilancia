@@ -42,7 +42,7 @@ path = "src/message_broker_server.rs"
 
 [[bin]]
 name = "sistema_monitoreo_main"
-path = "src/apps/sistema_monitoreo_main.rs"
+path = "src/apps/sist_monitoreo/sistema_monitoreo_main.rs"
 
 [[bin]]
 name = "sistema_camaras_main"

@@ -17,12 +17,12 @@ use crate::{
     structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
 };
 
-use super::{
+use crate::apps::{
     app_type::AppType,
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
     incident::Incident,
-    ui_sistema_monitoreo::UISistemaMonitoreo,
 };
+use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {

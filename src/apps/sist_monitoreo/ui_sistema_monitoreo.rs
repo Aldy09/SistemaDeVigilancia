@@ -3,16 +3,14 @@ use std::collections::HashMap;
 use crate::apps::incident::Incident;
 use crate::messages::publish_message::PublishMessage;
 
-use super::sist_camaras::camera::Camera;
-use super::places;
-use super::plugins::ImagesPluginData;
-use super::vendor::{
+use crate::apps::sist_camaras::camera::Camera;
+use crate::apps::{places, plugins::ImagesPluginData};
+use crate::apps::vendor::{
     HttpOptions, Map, MapMemory, Place, Places, Position, Style, Tiles, TilesManager,
 };
 use crossbeam::channel::Receiver;
 use egui::menu;
 use egui::Context;
-//use tokio::net::unix::pipe::Receiver;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,7 +40,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
     providers.insert(
         Provider::OpenStreetMap,
         Box::new(Tiles::with_options(
-            super::vendor::sources::OpenStreetMap,
+            super::super::vendor::sources::OpenStreetMap,
             http_options(),
             egui_ctx.to_owned(),
         )),
@@ -51,7 +49,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
     providers.insert(
         Provider::Geoportal,
         Box::new(Tiles::with_options(
-            super::vendor::sources::Geoportal,
+            super::super::vendor::sources::Geoportal,
             http_options(),
             egui_ctx.to_owned(),
         )),
@@ -59,7 +57,7 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
 
     providers.insert(
         Provider::LocalTiles,
-        Box::new(super::local_tiles::LocalTiles::new(egui_ctx.to_owned())),
+        Box::new(super::super::local_tiles::LocalTiles::new(egui_ctx.to_owned())),
     );
 
     // Pass in a mapbox access token at compile time. May or may not be what you want to do,
@@ -71,8 +69,8 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
         providers.insert(
             Provider::MapboxStreets,
             Box::new(Tiles::with_options(
-                super::vendor::sources::Mapbox {
-                    style: super::vendor::sources::MapboxStyle::Streets,
+                super::super::vendor::sources::Mapbox {
+                    style: super::super::vendor::sources::MapboxStyle::Streets,
                     access_token: token.to_string(),
                     high_resolution: false,
                 },
@@ -83,8 +81,8 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
         providers.insert(
             Provider::MapboxSatellite,
             Box::new(Tiles::with_options(
-                super::vendor::sources::Mapbox {
-                    style: super::vendor::sources::MapboxStyle::Satellite,
+                super::super::vendor::sources::Mapbox {
+                    style: super::super::vendor::sources::MapboxStyle::Satellite,
                     access_token: token.to_string(),
                     high_resolution: true,
                 },
@@ -102,7 +100,7 @@ pub struct UISistemaMonitoreo {
     selected_provider: Provider,
     map_memory: MapMemory,
     images_plugin_data: ImagesPluginData,
-    click_watcher: super::plugins::ClickWatcher,
+    click_watcher: super::super::plugins::ClickWatcher,
     incident_dialog_open: bool,
     latitude: String,
     longitude: String,
@@ -135,7 +133,7 @@ impl UISistemaMonitoreo {
             longitude: String::new(),
             publish_incident_tx: tx,
             publish_message_rx,
-            places: super::vendor::Places::new(),
+            places: super::super::vendor::Places::new(),
             last_incident_id: 0,
             exit_tx,
         }
@@ -204,14 +202,14 @@ impl eframe::App for UISistemaMonitoreo {
 
                 let map = Map::new(Some(tiles), &mut self.map_memory, my_position)
                     .with_plugin(self.places.clone())
-                    .with_plugin(super::plugins::images(&mut self.images_plugin_data))
-                    .with_plugin(super::plugins::CustomShapes {})
+                    .with_plugin(super::super::plugins::images(&mut self.images_plugin_data))
+                    .with_plugin(super::super::plugins::CustomShapes {})
                     .with_plugin(&mut self.click_watcher);
 
                 ui.add(map);
 
                 {
-                    use super::windows::*;
+                    use super::super::windows::*;
                     zoom(ui, &mut self.map_memory);
                     go_to_my_position(ui, &mut self.map_memory);
                     self.click_watcher.show_position(ui);
