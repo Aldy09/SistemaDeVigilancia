@@ -1,3 +1,4 @@
+pub mod sist_camaras_abm;
 pub mod app_type;
 pub mod camara_errors;
 pub mod camera;
