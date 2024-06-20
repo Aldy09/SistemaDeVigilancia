@@ -4,20 +4,13 @@ use std::io::Error;
 #[derive(Debug, PartialEq)]
 pub struct DronFlyingInfo {
     direction: (f64, f64), // vector unitario de dirección al volar, con componentes lat y lon
-    speed: Option<f64>, // velocidad de desplazamiento al volar
-}
-
-// Aux: Clippy
-impl Default for DronFlyingInfo {
-    fn default() -> Self {
-        Self::new()
-    }
+    speed: f64, // velocidad de desplazamiento al volar
 }
 
 impl DronFlyingInfo {
 
-    pub fn new() -> Self {
-        DronFlyingInfo { direction: (0.0, 0.0), speed: None }
+    pub fn new(direction: (f64, f64), speed: f64) -> Self {
+        DronFlyingInfo { direction, speed }
     }
 
     /// Pasa un struct `DronFlyingInfo` a bytes.
@@ -28,11 +21,8 @@ impl DronFlyingInfo {
         bytes.extend_from_slice(&self.direction.1.to_be_bytes());
         
         // speed
-        let mut speed_to_send = 0.0;
-        if let Some(s) = self.speed {
-            speed_to_send = s;
-        }
-        bytes.extend_from_slice(&speed_to_send.to_be_bytes());
+        bytes.extend_from_slice(&self.speed.to_be_bytes());
+
         bytes
     }
 
@@ -66,9 +56,8 @@ impl DronFlyingInfo {
         idx += 8 * b_size;
         let direction = (latitude, longitude);
 
-        // Leo el inc id to resolve
-        let mut speed = None;
-        let read_speed = f64::from_be_bytes([
+        // Leo la velocidad
+        let speed = f64::from_be_bytes([
             bytes[idx],
             bytes[idx + b_size],
             bytes[idx + 2 * b_size],
@@ -79,10 +68,6 @@ impl DronFlyingInfo {
             bytes[idx + 7 * b_size],
         ]);
         // idx += 8 * b_size; //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
-
-        if read_speed != 0.0{
-            speed = Some(read_speed);
-        }
                 
         Ok(DronFlyingInfo {
             direction,

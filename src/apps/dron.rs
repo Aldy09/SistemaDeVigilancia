@@ -11,7 +11,7 @@ use crate::{
     mqtt_client::MQTTClient,
 };
 
-use super::{dron_current_info::DronCurrentInfo, sist_dron_properties::SistDronProperties};
+use super::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, sist_dron_properties::SistDronProperties};
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -27,7 +27,7 @@ pub struct Dron {
 
 #[allow(dead_code)]
 impl Dron {
-    /// Dron se inicia con batería al 100%
+    /// Dron se inicia con batería al 100%.
     /// Inicia desde la pos del range_center, con estado activo. <-- Aux: hacemos esto, por simplicidad con los estados por ahora.
     /// (Aux: otra posibilidad era que inicie desde la posición de mantenimiento, y vuele hacia el range_center; pero ahí ya ver en qué estado iniciaría)
     pub fn new(id: u8) -> Result<Self, Error> {
@@ -61,9 +61,6 @@ impl Dron {
             mantainance_lon: -58.30,*/
         };
 
-        //
-
-        //
         Ok(dron)
     }
 
@@ -105,7 +102,7 @@ impl Dron {
         }
     }
 
-    /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron
+    /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron.
     /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
     fn receive_messages_from_subscribed_topics(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         // Loop que lee msjs que le envía el mqtt_client
@@ -128,7 +125,7 @@ impl Dron {
         }
     }
 
-    /// Recibe un mensaje de los topics a los que se suscribió, y lo procesa    
+    /// Recibe un mensaje de los topics a los que se suscribió, y lo procesa.
     fn process_recvd_msg(
         &mut self,
         msg: PublishMessage,
@@ -186,14 +183,6 @@ impl Dron {
                 // Volar hasta la posición del incidente
                 let destination = incident.pos();
                 self.fly_to(destination, mqtt_client)?;
-                // let origin = self.current_info.get_current_position();
-                // let destination = incident.pos();
-                // let dir = self.calculate_direction(origin, destination);
-
-                // // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b
-                // if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                //     mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
-                // }
             }
         } else {
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
@@ -207,7 +196,7 @@ impl Dron {
         Ok(())
     }
 
-    /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro de su rango
+    /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro de su rango.
     fn is_within_range_from_self(&self, latitude: f64, longitude: f64, range: f64) -> bool {
         let (center_lat, center_lon) = self.dron_properties.get_range_center_position();
         let lat_dist = center_lat - latitude;
@@ -280,7 +269,7 @@ impl Dron {
         direction
     }
 
-    /// Vuela hasta la posición de destino
+    /// Vuela hasta la posición de destino.
     fn fly_to(
         &mut self,
         destination: (f64, f64),
@@ -288,6 +277,7 @@ impl Dron {
     ) -> Result<(), Error> {
         let origin = self.current_info.get_current_position();
         let dir = self.calculate_direction(origin, destination);
+        self.set_flying_info_values(dir);
 
         let mut current_pos = origin;
         while current_pos != destination {
@@ -304,6 +294,13 @@ impl Dron {
         }
 
         Ok(())
+    }
+    
+    /// Establece como `flying_info` a la dirección recibida, y a la velocidad leída del archivo de configuración.
+    fn set_flying_info_values(&mut self, dir: (f64, f64)) {
+        let speed = self.dron_properties.get_speed();
+        let info = DronFlyingInfo::new(dir, speed);
+        self.current_info.set_flying_info(info);
     }
 }
 

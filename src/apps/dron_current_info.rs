@@ -11,12 +11,10 @@ pub struct DronCurrentInfo {
     latitude: f64,
     longitude: f64,
     battery_lvl: u8,
-    state: DronState, // esto en realidad es un enum, volver [].
+    state: DronState,
     inc_id_to_resolve: Option<u8>,
-    // // Dirección y velocidad, flying_info
-    // direction: (f64, f64), // vector unitario de dirección al volar, con componentes lat y lon
-    // speed: Option<f64>, // velocidad de desplazamiento al volar
-    flying_info: DronFlyingInfo,
+    // Dirección y velocidad de vuelo
+    flying_info: Option<DronFlyingInfo>,
 }
 
 #[allow(dead_code)]
@@ -33,7 +31,7 @@ impl DronCurrentInfo {
             battery_lvl,
             state,
             inc_id_to_resolve: None,
-            flying_info: DronFlyingInfo::new(),
+            flying_info: None,
         }
     }
 
@@ -53,7 +51,14 @@ impl DronCurrentInfo {
             inc_id_to_send = inc_id;
         }
         bytes.extend_from_slice(&inc_id_to_send.to_be_bytes());
-        bytes.extend_from_slice(&self.flying_info.to_bytes()); // dir y velocidad de vuelo
+
+        // La flying_info
+        if let Some(f) = &self.flying_info {
+            bytes.extend_from_slice(&1_u8.to_be_bytes()); // avisa que se enviará algo más
+            bytes.extend_from_slice(&f.to_bytes()); // dir y velocidad de vuelo
+        } else {
+            bytes.extend_from_slice(&0_u8.to_be_bytes()); // avisa que No se enviará más bytes
+        }
         bytes
     }
 
@@ -103,8 +108,14 @@ impl DronCurrentInfo {
         }
         idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
         
-        // dir y velocidad de vuelo
-        let flying_info = DronFlyingInfo::from_bytes(bytes[idx..].to_vec())?;
+        // Leo dir y velocidad de vuelo
+        let mut flying_info = None;
+        let is_there_flying_info = u8::from_be_bytes([bytes[idx]]);
+        idx += b_size;
+
+        if is_there_flying_info == 1 {
+            flying_info = Some(DronFlyingInfo::from_bytes(bytes[idx..].to_vec())?);
+        }
 
         match state_res {
             Ok(state) => Ok(DronCurrentInfo {
@@ -124,50 +135,56 @@ impl DronCurrentInfo {
     }
 
     // Getters
-    /// Devuelve el id
+    /// Devuelve el id.
     pub fn get_id(&self) -> u8 {
         self.id
     }
-    /// Devuelve latitud y longitud en las que dron se encuentra actualmente
+    /// Devuelve latitud y longitud en las que dron se encuentra actualmente.
     pub fn get_current_position(&self) -> (f64, f64) {
         (self.latitude, self.longitude)
     }
-    /// Devuelve el nivel de batería actual
+    /// Devuelve el nivel de batería actual.
     pub fn get_battery_lvl(&self) -> u8 {
         self.id
     }
-    /// Devuelve el estado en que dron se encuentra actualmente
+    /// Devuelve el estado en que dron se encuentra actualmente.
     pub fn get_state(&self) -> &DronState {
         &self.state
     }
 
-    /// Setea el estado del dron
+    /// Setea el estado del dron.
     pub fn set_state(&mut self, new_state: DronState) {
         self.state = new_state;
     }
 
-    /// Devuelve el id del incidente que el dron se encuentra actualmente resolviendo
+    /// Devuelve el id del incidente que el dron se encuentra actualmente resolviendo.
     pub fn get_inc_id_to_resolve(&self) -> Option<u8> {
         self.inc_id_to_resolve
     }
 
-    /// Setea el id del incidente que el dron se encuentra actualmente resolviendo
+    /// Setea el id del incidente que el dron se encuentra actualmente resolviendo.
     pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
         self.inc_id_to_resolve = Some(inc_id);
     }
 
-    /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual
+    /// Setea la flying_info recibida.
+    pub fn set_flying_info(&mut self, info: DronFlyingInfo) {
+        self.flying_info = Some(info);
+    }
+
+    /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual.
     pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64) {
         self.latitude += dir.0;
         self.longitude += dir.1;
 
         self.get_current_position()
     }
+    
 }
 
 #[cfg(test)]
 mod test {
-    use crate::apps::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, dron_state::DronState};
+    use crate::apps::{dron_current_info::DronCurrentInfo, dron_state::DronState};
 
     #[test]
     fn test_1a_dron_to_y_from_bytes() {
@@ -178,7 +195,7 @@ mod test {
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
             inc_id_to_resolve: None,
-            flying_info: DronFlyingInfo::new(),
+            flying_info: None,
         };
 
         let bytes = dron.to_bytes();
@@ -196,7 +213,7 @@ mod test {
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
             inc_id_to_resolve: Some(18),
-            flying_info: DronFlyingInfo::new(),
+            flying_info: None,
         };
 
         let bytes = dron.to_bytes();

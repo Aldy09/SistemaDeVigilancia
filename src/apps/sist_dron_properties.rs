@@ -14,6 +14,8 @@ pub struct SistDronProperties {
     // Posicion de la central, para volver a cargarse la batería cuando se alcanza el min_operational_battery_lvl
     mantainance_lat: f64,
     mantainance_lon: f64,
+    // Velocidad de vuelo, en km/h
+    speed: f64,
 }
 
 impl SistDronProperties {
@@ -105,6 +107,16 @@ impl SistDronProperties {
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
         }
 
+        let speed: f64;
+        if let Some(prop) = global_properties.get("speed") {
+            speed = prop
+                .parse()
+                .map_err(|_| Error::new(ErrorKind::InvalidInput, "speed"))?;
+        } else {
+            println!("No se encontró la propiedad 'speed");
+            return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
+        }
+
         Ok(Self {
             max_battery_lvl,
             min_operational_battery_lvl,
@@ -116,6 +128,8 @@ impl SistDronProperties {
 
             mantainance_lat,
             mantainance_lon,
+
+            speed,
         })
     }
 
@@ -137,5 +151,10 @@ impl SistDronProperties {
     /// Devuelve latitud y longitud del lugar de Mantenimiento, al que irá para recargar su batería
     pub fn get_mantainance_position(&self) -> (f64, f64) {
         (self.mantainance_lat, self.mantainance_lon)
+    }
+    
+    /// Devuelve la velocidad de vuelo del dron
+    pub fn get_speed(&self) -> f64 {
+        self.speed
     }
 }
