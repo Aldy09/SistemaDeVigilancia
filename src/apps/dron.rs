@@ -170,7 +170,7 @@ impl Dron {
         let enough_battery = self.current_info.get_battery_lvl()
             >= self.dron_properties.get_min_operational_battery_lvl();
         //  - inc.pos dentro del rango
-        let (inc_lat, inc_lon) = incident.pos();
+        let (inc_lat, inc_lon) = incident.get_position();
         let inc_in_range =
             self.is_within_range_from_self(inc_lat, inc_lon, self.dron_properties.get_range());
 
@@ -182,7 +182,7 @@ impl Dron {
                 self.current_info.set_state(DronState::RespondingToIncident);
 
                 // Volar hasta la posición del incidente
-                let destination = incident.pos();
+                let destination = incident.get_position();
                 self.fly_to(destination, mqtt_client)?;
             }
         } else {

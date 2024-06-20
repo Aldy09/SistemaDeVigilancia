@@ -207,7 +207,7 @@ impl MQTTServer {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
-                println!("While: leí bien.");
+                // println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
                 empty = &fixed_header_info.0 == ceros;
@@ -446,7 +446,7 @@ impl MQTTServer {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&stream.clone()) {
-                println!("While: leí bien.");
+                // println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
                 break;

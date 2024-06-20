@@ -189,7 +189,7 @@ impl MQTTClient {
         // Lo envío
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &self.stream)?;
-        println!("Mqtt disconnect: bytes {:?}", bytes_msg);
+        println!("Mqtt disconnect: bytes {:?}", msg);
 
         // Cerramos la conexión con el servidor
         if let Ok(s) = self.stream.lock() {
@@ -247,7 +247,7 @@ impl MQTTClient {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         loop {
             if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&self.stream.clone()) {
-                println!("While: leí bien.");
+                // println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
                 empty = &fixed_header_info.0 == ceros;
@@ -271,7 +271,7 @@ impl MQTTClient {
                 if let Ok((fixed_h_buf, fixed_h)) =
                     get_fixed_header_from_stream(&self.stream.clone())
                 {
-                    println!("While: leí bien.");
+                    // println!("While: leí bien.");
                     // Guardo lo leído y comparo para siguiente vuelta del while
                     fixed_header_info = (fixed_h_buf, fixed_h);
                     empty = &fixed_header_info.0 == ceros;

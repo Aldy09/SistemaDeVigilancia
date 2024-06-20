@@ -1,5 +1,6 @@
 use crate::messages::disconnect_fixed_header::FixedHeader;
 
+#[derive(Debug)]
 pub struct DisconnectMessage {
     fixed_header: FixedHeader,
 }
