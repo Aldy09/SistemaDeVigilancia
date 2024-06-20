@@ -152,7 +152,7 @@ impl SistDronProperties {
     pub fn get_mantainance_position(&self) -> (f64, f64) {
         (self.mantainance_lat, self.mantainance_lon)
     }
-    
+
     /// Devuelve la velocidad de vuelo del dron
     pub fn get_speed(&self) -> f64 {
         self.speed

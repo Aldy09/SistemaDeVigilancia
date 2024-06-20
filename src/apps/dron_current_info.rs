@@ -1,7 +1,7 @@
 use std::io::{Error, ErrorKind};
 
-use super::dron_state::DronState;
 use super::dron_flying_info::DronFlyingInfo;
+use super::dron_state::DronState;
 
 /// Struct que contiene los campos que identifican al Dron (el id) y que pueden modificarse durante su funcionamiento.
 #[derive(Debug, PartialEq)]
@@ -19,10 +19,8 @@ pub struct DronCurrentInfo {
 
 #[allow(dead_code)]
 impl DronCurrentInfo {
-    /// Dron se inicia con batería al 100%
-    /// Aux: desde la posición de mantenimiento, y vuela hacia el range_center (por ejemplo).
-    /// Aux: Otra posibilidad sería que inicie desde la pos del range_center. <-- hacemos esto, por simplicidad con los estados por ahora.
-    /// Se inicia con estado []. Ver (el activo si ya está en el range_center, o ver si inicia en mantenimiento).
+    /// Inicia con los parámetros recibidos; con ningún incidente en resolución y sin flying_info
+    /// (es decir, inicia con estos dos últimos atributos en None).
     pub fn new(id: u8, latitude: f64, longitude: f64, battery_lvl: u8, state: DronState) -> Self {
         DronCurrentInfo {
             id,
@@ -52,10 +50,10 @@ impl DronCurrentInfo {
         }
         bytes.extend_from_slice(&inc_id_to_send.to_be_bytes());
 
-        // La flying_info
+        // La flying_info: dir y velocidad de vuelo
         if let Some(f) = &self.flying_info {
             bytes.extend_from_slice(&1_u8.to_be_bytes()); // avisa que se enviará algo más
-            bytes.extend_from_slice(&f.to_bytes()); // dir y velocidad de vuelo
+            bytes.extend_from_slice(&f.to_bytes());
         } else {
             bytes.extend_from_slice(&0_u8.to_be_bytes()); // avisa que No se enviará más bytes
         }
@@ -106,8 +104,8 @@ impl DronCurrentInfo {
         if read_inc_id != 0 {
             inc_id_to_resolve = Some(read_inc_id);
         }
-        idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
-        
+        idx += b_size;
+
         // Leo dir y velocidad de vuelo
         let mut flying_info = None;
         let is_there_flying_info = u8::from_be_bytes([bytes[idx]]);
@@ -116,6 +114,8 @@ impl DronCurrentInfo {
         if is_there_flying_info == 1 {
             flying_info = Some(DronFlyingInfo::from_bytes(bytes[idx..].to_vec())?);
         }
+
+        //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
 
         match state_res {
             Ok(state) => Ok(DronCurrentInfo {
@@ -179,7 +179,6 @@ impl DronCurrentInfo {
 
         self.get_current_position()
     }
-    
 }
 
 #[cfg(test)]

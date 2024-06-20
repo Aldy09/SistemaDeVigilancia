@@ -4,11 +4,10 @@ use std::io::Error;
 #[derive(Debug, PartialEq)]
 pub struct DronFlyingInfo {
     direction: (f64, f64), // vector unitario de dirección al volar, con componentes lat y lon
-    speed: f64, // velocidad de desplazamiento al volar
+    speed: f64,            // velocidad de desplazamiento al volar
 }
 
 impl DronFlyingInfo {
-
     pub fn new(direction: (f64, f64), speed: f64) -> Self {
         DronFlyingInfo { direction, speed }
     }
@@ -19,7 +18,7 @@ impl DronFlyingInfo {
         // direction
         bytes.extend_from_slice(&self.direction.0.to_be_bytes());
         bytes.extend_from_slice(&self.direction.1.to_be_bytes());
-        
+
         // speed
         bytes.extend_from_slice(&self.speed.to_be_bytes());
 
@@ -68,10 +67,7 @@ impl DronFlyingInfo {
             bytes[idx + 7 * b_size],
         ]);
         // idx += 8 * b_size; //idx += b_size; // comentado porque warning is never read. quizás en el futuro agregamos más campos.
-                
-        Ok(DronFlyingInfo {
-            direction,
-            speed,
-        })        
+
+        Ok(DronFlyingInfo { direction, speed })
     }
 }

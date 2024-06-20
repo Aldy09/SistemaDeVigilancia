@@ -11,7 +11,10 @@ use crate::{
     mqtt_client::MQTTClient,
 };
 
-use super::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, sist_dron_properties::SistDronProperties};
+use super::{
+    dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
+    sist_dron_properties::SistDronProperties,
+};
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -27,9 +30,7 @@ pub struct Dron {
 
 #[allow(dead_code)]
 impl Dron {
-    /// Dron se inicia con batería al 100%.
-    /// Inicia desde la pos del range_center, con estado activo. <-- Aux: hacemos esto, por simplicidad con los estados por ahora.
-    /// (Aux: otra posibilidad era que inicie desde la posición de mantenimiento, y vuele hacia el range_center; pero ahí ya ver en qué estado iniciaría)
+    /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sistema_dron.properties";
@@ -295,7 +296,7 @@ impl Dron {
 
         Ok(())
     }
-    
+
     /// Establece como `flying_info` a la dirección recibida, y a la velocidad leída del archivo de configuración.
     fn set_flying_info_values(&mut self, dir: (f64, f64)) {
         let speed = self.dron_properties.get_speed();
