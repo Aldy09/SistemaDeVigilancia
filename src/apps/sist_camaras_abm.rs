@@ -1,7 +1,16 @@
+use std::{
+    collections::HashMap,
+    io::{stdin, stdout, Write},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
+};
 
-use std::{collections::HashMap, io::{stdin, stdout, Write}, sync::{mpsc::{self, Sender}, Arc, Mutex}};
-
-use crate::{apps::app_type::AppType, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}};
+use crate::{
+    apps::app_type::AppType,
+    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+};
 
 use super::camera::Camera;
 
@@ -20,9 +29,14 @@ impl ABMCameras {
         camera_tx: Sender<Vec<u8>>,
         exit_tx: Sender<bool>,
     ) -> Self {
-        ABMCameras{ cameras, logger_tx, camera_tx, exit_tx }
+        ABMCameras {
+            cameras,
+            logger_tx,
+            camera_tx,
+            exit_tx,
+        }
     }
-    
+
     /// Pone en funcionamiento el menú del abm para cámaras.
     /// Como cameras es un arc, quien haya llamado a esta función podrá ver reflejados los cambios.
     pub fn run(&mut self) {
@@ -58,29 +72,33 @@ impl ABMCameras {
         Ingrese una opción:"
         );
     }
-    
+
     /// Opción Crear cámara, del abm. Crea una cámara con el input proporcionado.
     /// Procesa la cámara y la envía entre hilos para que sistema cámaras pueda publicarla.
     fn create_camera_abm(&mut self) {
         let camera = self.create_camera();
         self.process_and_send_camera(camera);
     }
-    
+
     /// Crea una cámara con el input proporcionado, y la devuelve.
     fn create_camera(&self) -> Camera {
-        let id: u8 = self.get_input_abm(Some("Ingrese el ID de la cámara: "))
+        let id: u8 = self
+            .get_input_abm(Some("Ingrese el ID de la cámara: "))
             .parse()
             .expect("ID no válido");
-        let latitude: f64 = self.get_input_abm(Some("Ingrese Latitud: "))
+        let latitude: f64 = self
+            .get_input_abm(Some("Ingrese Latitud: "))
             .parse()
             .expect("Latitud no válida");
-        let longitude: f64 = self.get_input_abm(Some("Ingrese Longitud: "))
+        let longitude: f64 = self
+            .get_input_abm(Some("Ingrese Longitud: "))
             .parse()
             .expect("Longitud no válida");
-        let range: u8 = self.get_input_abm(Some("Ingrese el rango: "))
+        let range: u8 = self
+            .get_input_abm(Some("Ingrese el rango: "))
             .parse()
             .expect("Rango no válido");
-    
+
         Camera::new(id, latitude, longitude, range)
     }
 
@@ -99,11 +117,8 @@ impl ABMCameras {
 
     /// Procesa una nueva cámara (la inserta en el hashmap de cameras, maneja las lindantes), y la envía por un
     /// channel para que desde el rx el sistema cámaras le pueda hacer publish. Además, logguea la operación.
-    fn process_and_send_camera(
-        &mut self,
-        camera_clone: Camera,
-    ) {
-        match self.cameras.lock(){
+    fn process_and_send_camera(&mut self, camera_clone: Camera) {
+        match self.cameras.lock() {
             Ok(mut cams) => {
                 // Recorre las cámaras ya existentes, agregando la nueva cámara como lindante de la que corresponda y viceversa, terminando la creación
                 for camera in cams.values_mut() {
@@ -124,10 +139,9 @@ impl ABMCameras {
                 // Guarda la nueva cámara
                 cams.insert(camera_clone.get_id(), camera_clone);
                 println!("Cámara agregada con éxito.\n");
-            },
+            }
             Err(e) => println!("Error tomando lock en agregar cámara abm, {:?}.\n", e),
         }
-        
     }
 
     /// Opción Mostrar cámaras del abm. Lista todas las cámaras existentes.
@@ -146,11 +160,12 @@ impl ABMCameras {
             Err(_) => println!("Error al tomar lock de cámaras."),
         }
     }
-    
+
     /// Opción Eliminar cámara, del abm.
     /// Elimina la cámara indicada, manejando sus lindantes, y la envía por tx para que rx haga publish.
     fn delete_camera_abm(&self) {
-        let id: u8 = self.get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
+        let id: u8 = self
+            .get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
             .parse()
             .expect("Id no válido");
         match self.cameras.lock() {
@@ -158,12 +173,12 @@ impl ABMCameras {
                 if let Some(mut camera_to_delete) = cams.remove(&id) {
                     if camera_to_delete.is_not_deleted() {
                         camera_to_delete.delete_camera();
-    
+
                         // Recorre las cámaras ya existentes, eliminando la cámara a eliminar como lindante de la que corresponda, terminando la eliminación
                         for camera in cams.values_mut() {
                             camera.remove_from_list_if_bordering(&mut camera_to_delete);
                         }
-    
+
                         // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
                         // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
                         // de las demás ya que eso solo es relevante para sistema camaras)
@@ -186,4 +201,11 @@ impl ABMCameras {
             Err(e) => println!("Error al intentar salir: {:?}", e),
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_1_abm_alta_de_camara() {}
 }

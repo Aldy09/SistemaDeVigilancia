@@ -1,4 +1,3 @@
-pub mod sist_camaras_abm;
 pub mod app_type;
 pub mod camara_errors;
 pub mod camera;
@@ -18,6 +17,7 @@ pub mod monitoreo_errors;
 pub mod places;
 pub mod plugins;
 pub mod properties;
+pub mod sist_camaras_abm;
 pub mod sist_dron_properties;
 pub mod sistema_camaras;
 pub mod sistema_monitoreo;

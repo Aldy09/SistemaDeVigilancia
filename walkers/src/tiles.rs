@@ -216,8 +216,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_single_tile() {
-        let _ = env_logger::try_init();
+    async fn download_single_tile() {        
 
         let (server, source) = hypermocker_mock().await;
         let mut anticipated = server.anticipate("/3/1/2.png").await;
@@ -242,7 +241,7 @@ mod tests {
 
     #[tokio::test]
     async fn custom_user_agent_header() {
-        let _ = env_logger::try_init();
+        
 
         let (server, source) = hypermocker_mock().await;
         let mut anticipated = server.anticipate("/3/1/2.png").await;
@@ -268,7 +267,7 @@ mod tests {
 
     #[tokio::test]
     async fn there_can_be_6_simultaneous_downloads_at_most() {
-        let _ = env_logger::try_init();
+        
 
         let (server, source) = hypermocker_mock().await;
         let mut tiles = Tiles::new(source, Context::default());
@@ -322,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn tile_is_empty_forever_if_http_returns_error() {
-        let _ = env_logger::try_init();
+        
 
         let (server, source) = hypermocker_mock().await;
         let mut tiles = Tiles::new(source, Context::default());
@@ -337,7 +336,7 @@ mod tests {
 
     #[tokio::test]
     async fn tile_is_empty_forever_if_http_returns_no_body() {
-        let _ = env_logger::try_init();
+        
 
         let (server, source) = hypermocker_mock().await;
         let mut tiles = Tiles::new(source, Context::default());
@@ -352,7 +351,7 @@ mod tests {
 
     #[tokio::test]
     async fn tile_is_empty_forever_if_http_returns_garbage() {
-        let _ = env_logger::try_init();
+        
 
         let (server, source) = hypermocker_mock().await;
         let mut tiles = Tiles::new(source, Context::default());
@@ -385,7 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn tile_is_empty_forever_if_http_can_not_even_connect() {
-        let _ = env_logger::try_init();
+        
         let mut tiles = Tiles::new(GarbageSource, Context::default());
         assert_tile_is_empty_forever(&mut tiles).await;
     }

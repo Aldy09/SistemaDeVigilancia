@@ -111,9 +111,7 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
-        children.push(self.spawn_subscribe_to_topics_thread(
-            mqtt_client_sh.clone(),
-        ));
+        children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone()));
 
         children.push(spawn_receive_messages_thread(logger));
 
@@ -131,10 +129,7 @@ impl SistemaCamaras {
     }
 
     /// Recorre las cámaras y envía cada una por el channel, para que quien lea del rx haga el publish.
-    fn send_cameras_from_file_to_publish(
-        &self,
-        camera_tx: &Sender<Vec<u8>>,
-    ) {
+    fn send_cameras_from_file_to_publish(&self, camera_tx: &Sender<Vec<u8>>) {
         match self.cameras.lock() {
             Ok(cams) => {
                 for camera in (*cams).values() {
@@ -175,9 +170,9 @@ impl SistemaCamaras {
         let logger_tx_cloned = self.logger_tx.clone();
         thread::spawn(move || {
             // Ejecuta el menú del abm
-            let mut abm_cameras = ABMCameras::new(cameras_cloned, logger_tx_cloned, cameras_tx, exit_tx);
+            let mut abm_cameras =
+                ABMCameras::new(cameras_cloned, logger_tx_cloned, cameras_tx, exit_tx);
             abm_cameras.run();
-
         })
     }
 
@@ -243,7 +238,12 @@ impl SistemaCamaras {
         })
     }
 
-    fn handle_received_message(&mut self, msg: PublishMessage, cameras: &mut ShCamerasType, incs_being_managed: &mut HashMap<u8, Vec<u8>>) {
+    fn handle_received_message(
+        &mut self,
+        msg: PublishMessage,
+        cameras: &mut ShCamerasType,
+        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+    ) {
         let incident = Incident::from_bytes(msg.get_payload());
         self.logger_tx
             .send(StructsToSaveInLogger::AppType(
@@ -256,7 +256,12 @@ impl SistemaCamaras {
     }
 
     /// Procesa un Incidente recibido.
-    fn manage_incidents(&mut self, incident: Incident, cameras: &mut ShCamerasType, incs_being_managed: &mut HashMap<u8, Vec<u8>>) {
+    fn manage_incidents(
+        &mut self,
+        incident: Incident,
+        cameras: &mut ShCamerasType,
+        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+    ) {
         // Proceso los incidentes
         if !incs_being_managed.contains_key(&incident.id) {
             procesar_incidente_por_primera_vez(cameras, incident, incs_being_managed);
