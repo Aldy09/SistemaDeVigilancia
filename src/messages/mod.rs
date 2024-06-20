@@ -10,6 +10,7 @@ pub mod connect_return_code;
 pub mod connect_variable_header;
 pub mod disconnect_fixed_header;
 pub mod disconnect_message;
+pub mod message_type;
 pub mod puback_message;
 pub mod publish_fixed_header;
 pub mod publish_flags;

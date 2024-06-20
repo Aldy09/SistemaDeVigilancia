@@ -1,4 +1,4 @@
-pub mod api_sistema_monitoreo;
+pub mod app_type;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
@@ -18,6 +18,8 @@ pub mod places;
 pub mod plugins;
 pub mod properties;
 pub mod sist_dron_properties;
+pub mod sistema_camaras;
+pub mod sistema_monitoreo;
 pub mod ui_sistema_monitoreo;
 pub mod vendor;
 pub mod windows;

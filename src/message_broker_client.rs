@@ -55,7 +55,7 @@ fn main() {
                 }
 
                 // Cliente termina de utilizar mqtt
-                mqtt_client.finalizar();
+                mqtt_client.finish();
             });
 
             if h.join().is_err() {
