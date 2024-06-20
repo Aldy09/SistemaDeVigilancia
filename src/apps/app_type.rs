@@ -1,4 +1,4 @@
-use crate::apps::camera::Camera;
+use crate::apps::sist_camaras::camera::Camera;
 use crate::apps::incident::Incident;
 
 #[derive(Debug)]

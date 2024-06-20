@@ -215,7 +215,7 @@ mod test {
         sync::{mpsc, Arc, Mutex},
     };
 
-    use crate::apps::camera::Camera;
+    use crate::apps::sist_camaras::camera::Camera;
 
     use super::ABMCameras;
 

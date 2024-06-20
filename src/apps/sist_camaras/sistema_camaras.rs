@@ -29,13 +29,13 @@ use crate::structs_to_save_in_logger::StructsToSaveInLogger;
 use crate::{logger::Logger, mqtt_client::MQTTClient};
 
 use crate::apps::{
-    camera::Camera,
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
     incident::Incident,
-    manage_stored_cameras::read_cameras_from_file,
 };
+use crate::apps::sist_camaras::manage_stored_cameras::read_cameras_from_file;
+use crate::apps::sist_camaras::camera::Camera;
 
-use super::app_type::AppType;
+use crate::apps::app_type::AppType;
 use super::sist_camaras_abm::ABMCameras;
 
 #[derive(Debug)]

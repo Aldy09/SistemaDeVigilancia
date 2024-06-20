@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::apps::incident::Incident;
 use crate::messages::publish_message::PublishMessage;
 
-use super::camera::Camera;
+use super::sist_camaras::camera::Camera;
 use super::places;
 use super::plugins::ImagesPluginData;
 use super::vendor::{
