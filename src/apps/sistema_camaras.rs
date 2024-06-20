@@ -487,11 +487,3 @@ impl Default for SistemaCamaras {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_1_abm_alta_de_camara() {
-
-    }
-}

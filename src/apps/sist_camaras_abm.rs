@@ -32,13 +32,12 @@ impl ABMCameras {
 
             match &*input {
                 "1" => {
-                    let camera = self.create_camera_abm();
-                    self.send_camera_abm(camera);
+                    self.create_camera_abm();
                 }
                 "2" => self.show_cameras_abm(),
-                "3" => self.delete_camera_abm(&self.camera_tx),
+                "3" => self.delete_camera_abm(),
                 "4" => {
-                    self.exit_program_abm(&self.exit_tx);
+                    self.exit_program_abm();
                     break;
                 }
                 _ => {
@@ -48,7 +47,7 @@ impl ABMCameras {
         }
     }
 
-
+    /// Muestra por pantalla el menú.
     fn print_menu_abm(&self) {
         println!(
             "      MENÚ
@@ -60,8 +59,15 @@ impl ABMCameras {
         );
     }
     
-    /// Opción crear cámara del abm. Crea una cámara con el input proporcionado.
-    fn create_camera_abm(&self) -> Camera {
+    /// Opción Crear cámara, del abm. Crea una cámara con el input proporcionado.
+    /// Procesa la cámara y la envía entre hilos para que sistema cámaras pueda publicarla.
+    fn create_camera_abm(&mut self) {
+        let camera = self.create_camera();
+        self.process_and_send_camera(camera);
+    }
+    
+    /// Crea una cámara con el input proporcionado, y la devuelve.
+    fn create_camera(&self) -> Camera {
         let id: u8 = self.get_input_abm(Some("Ingrese el ID de la cámara: "))
             .parse()
             .expect("ID no válido");
@@ -77,7 +83,7 @@ impl ABMCameras {
     
         Camera::new(id, latitude, longitude, range)
     }
-    
+
     /// Obtiene el input por teclado.
     fn get_input_abm(&self, prompt: Option<&str>) -> String {
         if let Some(p) = prompt {
@@ -91,19 +97,9 @@ impl ABMCameras {
         input.trim().to_string()
     }
 
-    // Aux: podría llamarse desde adentro de la opción 1 del abm [].
-    /// Envía una cámara por un channel, para que desde el otro lado el sistema cámaras haga el publish. []
-    fn send_camera_abm(
-        &mut self,
-        new_camera: Camera,
-    ) {
-        let camera_clone = new_camera.clone();
-        self.process_camera(camera_clone);
-    }
-
-
-
-    fn process_camera(
+    /// Procesa una nueva cámara (la inserta en el hashmap de cameras, maneja las lindantes), y la envía por un
+    /// channel para que desde el rx el sistema cámaras le pueda hacer publish. Además, logguea la operación.
+    fn process_and_send_camera(
         &mut self,
         camera_clone: Camera,
     ) {
@@ -134,6 +130,7 @@ impl ABMCameras {
         
     }
 
+    /// Opción Mostrar cámaras del abm. Lista todas las cámaras existentes.
     fn show_cameras_abm(&self) {
         // Mostramos todas las cámaras
         println!("Cámaras registradas:\n");
@@ -150,7 +147,9 @@ impl ABMCameras {
         }
     }
     
-    fn delete_camera_abm(&self, camera_tx: &Sender<Vec<u8>>) {
+    /// Opción Eliminar cámara, del abm.
+    /// Elimina la cámara indicada, manejando sus lindantes, y la envía por tx para que rx haga publish.
+    fn delete_camera_abm(&self) {
         let id: u8 = self.get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
             .parse()
             .expect("Id no válido");
@@ -168,7 +167,7 @@ impl ABMCameras {
                         // Envía por el tx la cámara a eliminar para que se publique desde el otro hilo
                         // (con eso es suficiente. Si bien se les eliminó una lindante, no es necesario publicar el cambio
                         // de las demás ya que eso solo es relevante para sistema camaras)
-                        if camera_tx.send(camera_to_delete.to_bytes()).is_err() {
+                        if self.camera_tx.send(camera_to_delete.to_bytes()).is_err() {
                             println!("Error al enviar cámara por tx desde hilo abm.");
                         } else {
                             println!("Cámara eliminada con éxito.\n");
@@ -181,8 +180,8 @@ impl ABMCameras {
     }
 
     /// Opción Salir, del abm.
-    fn exit_program_abm(&self, exit_tx: &Sender<bool>) {
-        match exit_tx.send(true) {
+    fn exit_program_abm(&self) {
+        match self.exit_tx.send(true) {
             Ok(_) => println!("Saliendo del programa."),
             Err(e) => println!("Error al intentar salir: {:?}", e),
         }
