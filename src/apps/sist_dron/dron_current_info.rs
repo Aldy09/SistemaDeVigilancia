@@ -183,7 +183,7 @@ impl DronCurrentInfo {
 
 #[cfg(test)]
 mod test {
-    use crate::apps::{dron_current_info::DronCurrentInfo, dron_state::DronState};
+    use crate::apps::sist_dron::{dron_current_info::DronCurrentInfo, dron_state::DronState};
 
     #[test]
     fn test_1a_dron_to_y_from_bytes() {

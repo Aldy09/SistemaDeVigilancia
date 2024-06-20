@@ -54,4 +54,4 @@ path = "src/apps/generar_camaras.rs"
 
 [[bin]]
 name = "dron_main"
-path = "src/apps/dron_main.rs"
+path = "src/apps/sist_dron/dron_main.rs"

@@ -6,10 +6,11 @@ use std::{
 };
 
 use crate::{
-    apps::{dron_state::DronState, incident::Incident, incident_state::IncidentState},
+    apps::{incident::Incident, incident_state::IncidentState},
     messages::publish_message::PublishMessage,
     mqtt_client::MQTTClient,
 };
+use crate::apps::sist_dron::dron_state::DronState;
 
 use super::{
     dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
@@ -308,7 +309,7 @@ impl Dron {
 #[cfg(test)]
 
 mod test {
-    use crate::apps::dron_state::DronState;
+    use crate::apps::sist_dron::dron_state::DronState;
 
     use super::Dron;
 

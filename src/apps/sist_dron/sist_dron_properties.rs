@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use super::properties::Properties;
+use super::super::properties::Properties;
 
 #[derive(Debug, PartialEq)]
 pub struct SistDronProperties {
