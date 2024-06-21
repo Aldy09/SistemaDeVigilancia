@@ -1,12 +1,12 @@
 use crate::mqtt_server::connected_user::User;
 use crate::mqtt_server::file_helper::read_lines;
-use crate::fixed_header::FixedHeader;
+use crate::mqtt_utils::fixed_header::FixedHeader;
 use crate::messages::connack_message::ConnackMessage;
 use crate::messages::connack_session_present::SessionPresent;
 use crate::messages::connect_message::ConnectMessage;
 use crate::messages::connect_return_code::ConnectReturnCode;
 use crate::messages::disconnect_message::DisconnectMessage;
-use crate::mqtt_server_client_utils::{
+use crate::mqtt_utils::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream,
 };
 

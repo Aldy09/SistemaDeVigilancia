@@ -1,6 +1,6 @@
 use std::{io::Write, sync::mpsc::Receiver};
 
-use crate::structs_to_save_in_logger::{OperationType, StructsToSaveInLogger};
+use crate::logging::structs_to_save_in_logger::{OperationType, StructsToSaveInLogger};
 
 #[derive(Debug)]
 pub struct Logger {

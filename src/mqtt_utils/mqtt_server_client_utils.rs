@@ -5,10 +5,8 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    fixed_header::FixedHeader,
-    messages::{puback_message::PubAckMessage, publish_message::PublishMessage},
-};
+use crate::messages::{puback_message::PubAckMessage, publish_message::PublishMessage};
+use crate::mqtt_utils::fixed_header::FixedHeader;
 
 // Este archivo contiene funciones que utilizan para hacer read y write desde el stream
 // tanto el message_broker_server como el mqtt_client.

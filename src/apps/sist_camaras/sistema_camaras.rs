@@ -1,16 +1,12 @@
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use crate::messages::publish_message::PublishMessage;
-use crate::structs_to_save_in_logger::OperationType;
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc};
-use std::sync::{Mutex, MutexGuard};
-use std::thread;
-use std::thread::{sleep, JoinHandle};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
+use std::thread::{self, sleep, JoinHandle};
 use std::time::Duration;
-//use std::sync::mpsc::Sender as MpscSender;
 type Channels = (
     mpsc::Sender<Vec<u8>>,
     mpsc::Receiver<Vec<u8>>,
@@ -19,14 +15,13 @@ type Channels = (
 );
 //use rustx::apps::properties::Properties;
 
-//use std::env::args;
 use std::io::Error;
 use std::net::SocketAddr;
 
 use crate::messages::message_type::MessageType;
 
-use crate::structs_to_save_in_logger::StructsToSaveInLogger;
-use crate::{logger::Logger, mqtt_client::mqtt_client::MQTTClient};
+use crate::logging::{logger::Logger, structs_to_save_in_logger::{StructsToSaveInLogger, OperationType}};
+use crate::mqtt_client::mqtt_client::MQTTClient;
 
 use crate::apps::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},

@@ -11,11 +11,10 @@ use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::Sender as MpscSender;
 
 use crate::{
-    logger::Logger,
     messages::{message_type::MessageType, publish_message::PublishMessage},
     mqtt_client::mqtt_client::MQTTClient,
-    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
 };
+use crate::logging::{logger::Logger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}};
 
 use crate::apps::{
     app_type::AppType,

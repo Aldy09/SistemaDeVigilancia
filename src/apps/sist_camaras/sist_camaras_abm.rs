@@ -7,10 +7,8 @@ use std::{
     },
 };
 
-use crate::{
-    apps::app_type::AppType,
-    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-};
+use crate::apps::app_type::AppType;
+use crate::logging::structs_to_save_in_logger::{OperationType, StructsToSaveInLogger};
 
 use super::camera::Camera;
 
