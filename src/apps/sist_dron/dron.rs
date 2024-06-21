@@ -56,6 +56,8 @@ impl Dron {
             100,
             DronState::ExpectingToRecvIncident,
         );
+        
+        println!("Dron {} se crea en posición (lat, lon): {}, {}.", id, rng_center_lat, rng_center_lon);
 
         let dron = Dron {
             current_info,

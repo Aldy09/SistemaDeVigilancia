@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
-use crate::apps::sist_dron::dron::Dron;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
-use crate::apps::sist_dron::dron_state::DronState;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
@@ -176,23 +174,33 @@ impl UISistemaMonitoreo {
             // aux: xq acá el dron actúa por su cuenta (si desaparece no enviará nada #meParece).
             // aux: Debería mandar cada tanto y solamente mostrarse? #pensar, xq esto lo agrega al places x siempre.
             let (lat, lon) = dron.get_current_position();
-            let state = dron.get_state();
+            let dron_pos = Position::from_lon_lat(lon, lat);
             // if *state == DronState::RespondingToIncident {
-            // }
+                // Aux: le agregamos un sub-estado más que sea flying? o nop xq 'es lo mismo'?. #ver [].
+                // }
+            //let state = dron.get_state(); // Aux: #ToDo ver si les cambiamos el color o qué cosa, según el state, ídem cameras. [].
+
+            // Se crea el label a mostrar por pantalla, según si está o no volando.
+            let dron_label;
             if let Some((dir, speed)) = dron.get_flying_info() {
+                // El dron está volando.
+                dron_label = format!("Dron {}\n   dir: ({:?})\n   vel: {} km/h", dron.get_id(), dir, speed);
                 
+            } else {
+                dron_label = format!("Dron {}", dron.get_id());
             }
 
-
-
+            // Se crea el place y se lo agrega al mapa.
             let new_place = Place {
-                position: Position::from_lon_lat(longitude, latitude),
-                label: format!("Camera {}", camera_id),
-                symbol: '📷',
+                position: dron_pos,
+                label: dron_label,
+                symbol: '✈',
                 style: Style::default(),
-                id: camera_id,
-                place_type: "Camera".to_string(),
+                id: dron.get_id(),
+                place_type: "Dron".to_string(), // Para luego buscarlo en el places.
             };
+
+            self.places.add_place(new_place);
         }
     }
 
