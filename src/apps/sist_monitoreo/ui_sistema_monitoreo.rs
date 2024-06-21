@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
+use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
+use crate::apps::sist_dron::dron::Dron;
+use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
+use crate::apps::sist_dron::dron_state::DronState;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
@@ -164,8 +168,32 @@ impl UISistemaMonitoreo {
         }
     }
 
-    fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
+    fn handle_drone_message(&mut self, msg: PublishMessage) {
         //cosas del drone
+        if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()){
+            // Aux: #ToDo pensar cómo se entera la ui de que un dron no existe más
+            // aux: pista: no es como en cámaras que sist cámaras avisa cuál se borró
+            // aux: xq acá el dron actúa por su cuenta (si desaparece no enviará nada #meParece).
+            // aux: Debería mandar cada tanto y solamente mostrarse? #pensar, xq esto lo agrega al places x siempre.
+            let (lat, lon) = dron.get_current_position();
+            let state = dron.get_state();
+            // if *state == DronState::RespondingToIncident {
+            // }
+            if let Some((dir, speed)) = dron.get_flying_info() {
+                
+            }
+
+
+
+            let new_place = Place {
+                position: Position::from_lon_lat(longitude, latitude),
+                label: format!("Camera {}", camera_id),
+                symbol: '📷',
+                style: Style::default(),
+                id: camera_id,
+                place_type: "Camera".to_string(),
+            };
+        }
     }
 
     pub fn get_next_incident_id(&mut self) -> u8 {
@@ -183,9 +211,9 @@ impl eframe::App for UISistemaMonitoreo {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
-                if publish_message.get_topic_name() == "Cam" {
+                if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
-                } else if publish_message.get_topic_name() == "Drone" {
+                } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
                     self.handle_drone_message(publish_message);
                 }
             }

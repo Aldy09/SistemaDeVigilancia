@@ -32,6 +32,7 @@ pub fn get_id_and_broker_address() -> Result<(u8, SocketAddr), Error> {
     Ok((id, broker_addr))
 }
 
+// Función no usada al menos por ahora
 // pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
 //     for child in children {
 //         if let Err(e) = child.join() {

@@ -76,9 +76,16 @@ impl Dron {
 
     /// Ejecuta la aplicación de dron, para ponerlo en funcionamiento.
     pub fn run(&mut self, broker_addr: &SocketAddr) -> Result<(), Error>{
+        // Connect a server mqtt
         let mqtt = self.establish_mqtt_broker_connection(broker_addr)?;
         let mqtt_client = Arc::new(Mutex::new(mqtt));
+        
+        // Publica su estado inicial
+        if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+            mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
+        };
 
+        // Se suscribe y permanece escuchando por Messages recibidos
         self.subscribe_to_topics(mqtt_client)?;
 
         Ok(())
@@ -330,7 +337,7 @@ impl Dron {
 
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                mqtt_client_l.mqtt_publish("Dron", &self.current_info.to_bytes())?;
+                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
             };
         }
 

@@ -179,6 +179,16 @@ impl DronCurrentInfo {
 
         self.get_current_position()
     }
+    
+    /// Devuelve dirección (lat, lon) y velocidad de vuelo actuales, o None si el dron
+    /// actualmente no está volando.
+    pub fn get_flying_info(&self) -> Option<((f64, f64), f64)> {
+        if let Some(f) = &self.flying_info {
+            return Some(f.get_flying_info());
+        } else {
+            return None;
+        }
+    }
 }
 
 #[cfg(test)]
