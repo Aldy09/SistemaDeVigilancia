@@ -1,8 +1,5 @@
 use std::{
-    io::Error,
-    sync::{Arc, Mutex},
-    thread::sleep,
-    time::Duration,
+    io::Error, net::SocketAddr, sync::{Arc, Mutex}, thread::sleep, time::Duration
 };
 
 use crate::apps::sist_dron::dron_state::DronState;
@@ -31,8 +28,9 @@ pub struct Dron {
 
 #[allow(dead_code)]
 impl Dron {
+    
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
-    pub fn new(id: u8) -> Result<Self, Error> {
+    pub fn new(id: u8, broker_addr: &SocketAddr) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let dron_properties = SistDronProperties::new(properties_file)?;
@@ -49,7 +47,7 @@ impl Dron {
             DronState::ExpectingToRecvIncident,
         );
 
-        let dron = Dron {
+        let mut dron = Dron {
             current_info,
             // Las siguientes son las constantes, que vienen del arch de config:
             dron_properties,
@@ -63,7 +61,32 @@ impl Dron {
             mantainance_lon: -58.30,*/
         };
 
+        dron.run(broker_addr)?;
+
         Ok(dron)
+    }
+
+    /// Ejecuta la aplicación de dron, para ponerlo en funcionamiento.
+    pub fn run(&mut self, broker_addr: &SocketAddr) -> Result<(), Error>{
+        let mqtt = self.establish_mqtt_broker_connection(broker_addr)?;
+        let mqtt_client = Arc::new(Mutex::new(mqtt));
+
+        self.subscribe_to_topics(mqtt_client);
+
+        Ok(())
+    }
+
+    /// Crea el client_id a partir de sus datos. Obtiene la broker_addr del server a la que conectarse, a partir de
+    /// los argumentos ingresados al llamar al main. Y llama al connect de mqtt.
+    pub fn establish_mqtt_broker_connection(
+        &self,
+        broker_addr: &SocketAddr
+    ) -> Result<MQTTClient, Error> {
+        let client_id = format!("dron-{}", self.current_info.get_id());
+        let mqtt_client = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
+        println!("Cliente: Conectado al broker MQTT.");
+        
+        Ok(mqtt_client)       
     }
 
     // Aux: puede estar en un common xq es copypaste de la de monitoreo
