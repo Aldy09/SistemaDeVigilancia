@@ -112,7 +112,7 @@ impl SubAckMessage {
 
 #[cfg(test)]
 mod test {
-    use crate::messages::{
+    use crate::mqtt::messages::{
         suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode,
     };
 

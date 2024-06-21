@@ -21,7 +21,7 @@ use std::net::SocketAddr;
 use crate::mqtt::messages::message_type::MessageType;
 
 use crate::logging::{logger::Logger, structs_to_save_in_logger::{StructsToSaveInLogger, OperationType}};
-use crate::mqtt::mqtt_client::mqtt_client::MQTTClient;
+use crate::mqtt::client::mqtt_client::MQTTClient;
 
 use crate::apps::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},

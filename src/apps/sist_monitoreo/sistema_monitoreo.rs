@@ -12,7 +12,7 @@ use std::sync::mpsc::Sender as MpscSender;
 
 use crate::mqtt::{
     messages::{message_type::MessageType, publish_message::PublishMessage},
-    mqtt_client::mqtt_client::MQTTClient,
+    client::mqtt_client::MQTTClient,
 };
 use crate::logging::{logger::Logger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}};
 

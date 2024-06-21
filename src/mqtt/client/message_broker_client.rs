@@ -1,7 +1,7 @@
 use std::thread;
 
 use config::{Config, File, FileFormat};
-use rustx::mqtt::mqtt_client::mqtt_client::MQTTClient;
+use rustx::mqtt::client::mqtt_client::MQTTClient;
 
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 fn main() {
