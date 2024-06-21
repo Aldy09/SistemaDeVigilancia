@@ -145,7 +145,7 @@ impl DronCurrentInfo {
     }
     /// Devuelve el nivel de batería actual.
     pub fn get_battery_lvl(&self) -> u8 {
-        self.id
+        self.battery_lvl
     }
     /// Devuelve el estado en que dron se encuentra actualmente.
     pub fn get_state(&self) -> &DronState {
@@ -184,7 +184,7 @@ impl DronCurrentInfo {
     /// actualmente no está volando.
     pub fn get_flying_info(&self) -> Option<((f64, f64), f64)> {
         if let Some(f) = &self.flying_info {
-            return Some(f.get_flying_info());
+            return Some(f.get_flying_info_values());
         } else {
             return None;
         }

@@ -197,8 +197,10 @@ impl Dron {
         payload: Vec<u8>,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        println!("{:?}", payload);
+
         let inc = Incident::from_bytes(payload);
+        let event = format!("Recibo Inc: {:?}", inc);
+        println!("{:?}", event);
         match *inc.get_state() {
             IncidentState::ActiveIncident => self.manage_incident(inc, mqtt_client),
             IncidentState::ResolvedIncident => {
@@ -214,6 +216,9 @@ impl Dron {
         incident: Incident,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
+        let event = format!("Recibido inc activo de id: {}", incident.get_id());
+        println!("{:?}", event);
+
         // Analizar condiciones para saber si se desplazará a la pos del incidente
         //  - batería es mayor al nivel bateria minima
         let enough_battery = self.current_info.get_battery_lvl()
@@ -233,8 +238,11 @@ impl Dron {
                 // Volar hasta la posición del incidente
                 let destination = incident.get_position();
                 self.fly_to(destination, mqtt_client)?;
+            } else {
+                println!("print aux: el inc No está en mi rango.")
             }
         } else {
+            println!("Sin suficiente batería para resolver el inc, vuelo a mantenimiento.");
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
             self.current_info.set_state(DronState::Mantainance);
 
@@ -253,8 +261,9 @@ impl Dron {
         let long_dist = center_lon - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        let adjusted_range = range / 10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
-                                                 // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
+        // Ajuste para aprox dos manzanas en diagonal
+        let adjusted_range = range / 10000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        println!("Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}", rad, adjusted_range, range); // debug []
 
         rad <= (adjusted_range)
     }
@@ -267,6 +276,10 @@ impl Dron {
         inc: Incident,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
+
+        let event = format!("Recibido inc resuelto de id: {}", inc.get_id());
+        println!("{:?}", event);
+
         if let Some(my_inc_id) = self.current_info.get_inc_id_to_resolve() {
             if inc.get_id() == my_inc_id {
                 self.go_back_to_range_center_position(mqtt_client)?;
@@ -294,7 +307,10 @@ impl Dron {
     }
 
     // Aux: #ToDo
-    fn process_valid_dron(&self, _payload: Vec<u8>) -> Result<(), Error> {
+    fn process_valid_dron(&self, payload: Vec<u8>) -> Result<(), Error> {
+        let dron = DronCurrentInfo::from_bytes(payload);
+        let event = format!("Recibo Dron: {:?}", dron);
+        println!("{:?}", event);
         //todo!();
         Ok(())
     }
@@ -339,8 +355,10 @@ impl Dron {
             let a = 1; // aux
             sleep(Duration::from_secs(a));
 
+            println!("Dron: incrementé mi posición, y ahora intentaré hacer publish");
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+                println!("Dron: pude tomar lock"); // pero no pude []
                 mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
             };
         }
