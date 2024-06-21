@@ -1,8 +1,8 @@
 use super::plugins::ImagesPluginData;
 
-use super::ui_sistema_monitoreo::Provider;
 use super::vendor::sources::Attribution;
 use super::vendor::MapMemory;
+use crate::apps::sist_monitoreo::ui_sistema_monitoreo::Provider;
 use egui::{Align2, RichText, Ui, Window};
 
 pub fn acknowledge(ui: &Ui, attribution: Attribution) {

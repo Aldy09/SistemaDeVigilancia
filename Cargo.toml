@@ -34,24 +34,24 @@ crossbeam-channel = "0.5.1"
 
 [[bin]]
 name = "message_broker_client"
-path = "src/message_broker_client.rs"
+path = "src/mqtt/client/message_broker_client.rs"
 
 [[bin]]
 name = "message_broker_server"
-path = "src/message_broker_server.rs"
+path = "src/mqtt/server/message_broker_server.rs"
 
 [[bin]]
 name = "sistema_monitoreo_main"
-path = "src/apps/sistema_monitoreo_main.rs"
+path = "src/apps/sist_monitoreo/sistema_monitoreo_main.rs"
 
 [[bin]]
 name = "sistema_camaras_main"
-path = "src/apps/sistema_camaras_main.rs"
+path = "src/apps/sist_camaras/sistema_camaras_main.rs"
 
 [[bin]]
 name = "generar_camaras"
-path = "src/apps/generar_camaras.rs"
+path = "src/apps/sist_camaras/generar_camaras.rs"
 
 [[bin]]
 name = "dron_main"
-path = "src/apps/dron_main.rs"
+path = "src/apps/sist_dron/dron_main.rs"
