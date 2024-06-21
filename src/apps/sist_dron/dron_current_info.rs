@@ -189,6 +189,11 @@ impl DronCurrentInfo {
             return None;
         }
     }
+    
+    /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
+    pub fn unset_flying_info(&mut self) {
+        self.flying_info = None;
+    }
 }
 
 #[cfg(test)]

@@ -320,6 +320,8 @@ impl Dron {
     }
 
     /// Vuela hasta la posición de destino.
+    /// Desde que inicia el desplazamiento y hasta que llega posee flying_info
+    /// (dirección y velocidad de desplazamiento). Al llegar a destino ya no posee esos valores.
     fn fly_to(
         &mut self,
         destination: (f64, f64),
@@ -343,6 +345,9 @@ impl Dron {
             };
         }
 
+        // Al llegar, el dron ya no se encuentra en desplazamiento.
+        self.unset_flying_info_values();
+
         Ok(())
     }
 
@@ -351,6 +356,11 @@ impl Dron {
         let speed = self.dron_properties.get_speed();
         let info = DronFlyingInfo::new(dir, speed);
         self.current_info.set_flying_info(info);
+    }
+
+    /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
+    fn unset_flying_info_values(&mut self){
+        self.current_info.unset_flying_info();
     }
 }
 
