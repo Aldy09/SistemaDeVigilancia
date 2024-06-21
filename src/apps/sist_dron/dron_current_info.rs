@@ -39,6 +39,7 @@ impl DronCurrentInfo {
         bytes.extend_from_slice(&self.id.to_be_bytes());
         bytes.extend_from_slice(&self.latitude.to_be_bytes());
         bytes.extend_from_slice(&self.longitude.to_be_bytes());
+        //println!("BYTES ID LAT Y LONG, ENCODEANDO: {:?}", bytes); //aux [] debug
         bytes.extend_from_slice(&self.battery_lvl.to_be_bytes());
         //bytes.push(self.state.to_byte()[0]); // <-- así sería si fuera un enum en vez de un u8.
         bytes.extend_from_slice(&self.state.to_byte());
@@ -174,8 +175,10 @@ impl DronCurrentInfo {
 
     /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual.
     pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64) {
-        self.latitude += dir.0;
-        self.longitude += dir.1;
+        // La dirección es un vector unitario, pero para poder sumarlo a la lat y long y que tenga sentido
+        // hay que escalarla.
+        self.latitude += dir.0 / 10000.0;
+        self.longitude += dir.1 / 10000.0;
 
         self.get_current_position()
     }

@@ -156,19 +156,26 @@ impl Dron {
     /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
     fn receive_messages_from_subscribed_topics(&mut self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         // Loop que lee msjs que le envía el mqtt_client
+        let mut msg_res;
         loop {
+            // Tomo lock y lo suelto enseguida
             if let Ok(mqtt_client_l) = mqtt_client.lock() {
-                match mqtt_client_l.mqtt_receive_msg_from_subs_topic() {
-                    //Publish message: inc o dron
-                    Ok(msg) => {
-                        // aux, ver []: no quiero devolverlo, si lo devuelvo corto el loop, y yo quiero seguir leyendo
-                        let _res = self.process_recvd_msg(msg, mqtt_client);
-                    }
-                    Err(e) => {
-                        // Si es false, corta el loop porque no hay más mensajes por leer
-                        if !self.handle_message_receiving_error(e) {
-                            break;
-                        }
+                msg_res =  mqtt_client_l.mqtt_receive_msg_from_subs_topic();
+            } else {
+                // Lock envenenado (no debería darse)
+                break;
+            }
+            // Si obtuve un mensaje, lo proceso
+            match msg_res {
+                //Publish message: inc o dron
+                Ok(msg) => {
+                    // aux, ver []: no quiero devolverlo, si lo devuelvo corto el loop, y yo quiero seguir leyendo
+                    let _res = self.process_recvd_msg(msg, mqtt_client);
+                }
+                Err(e) => {
+                    // Si es false, corta el loop porque no hay más mensajes por leer
+                    if !self.handle_message_receiving_error(e) {
+                        break;
                     }
                 }
             }
@@ -345,26 +352,33 @@ impl Dron {
     ) -> Result<(), Error> {
         let origin = self.current_info.get_current_position();
         let dir = self.calculate_direction(origin, destination);
+        println!("Fly_to: dir: {:?}, vel: {}", dir, self.dron_properties.get_speed());
         self.set_flying_info_values(dir);
 
         let mut current_pos = origin;
-        while current_pos != destination {
+        while (current_pos.0 < destination.0) && (current_pos.1 < destination.1) {
             current_pos = self.current_info.increment_current_position_in(dir);
 
             // Simular el vuelo, el dron se desplaza
-            let a = 1; // aux
-            sleep(Duration::from_secs(a));
+            let a = 300; // aux
+            sleep(Duration::from_micros(a));
 
-            println!("Dron: incrementé mi posición, y ahora intentaré hacer publish");
+            println!("Dron: incrementé mi posición, pos actual: {:?}", self.current_info.get_current_position());
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                println!("Dron: pude tomar lock"); // pero no pude []
                 mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
             };
         }
 
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values();
+        println!("Dron: llegué a destino [todavía aprox], pos actual: {:?}", self.current_info.get_current_position());
+        // Hace publish de su estado (de su current info)
+        if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+            mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
+        };
+
+        println!("Fin vuelo hasta incidente.");
 
         Ok(())
     }

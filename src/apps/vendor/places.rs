@@ -117,6 +117,8 @@ impl Places {
         self.places.to_vec()
     }
 
+    /// Elimina el elemento de `id` y `place_type` indicados, del vector de places que se muestra en el mapa.
+    /// Si el elemento no existía, no se hace nada.
     pub fn remove_place(&mut self, id: u8, place_type: String) {
         if let Some(index) = self
             .places
@@ -125,7 +127,7 @@ impl Places {
         {
             self.places.remove(index);
         } else {
-            println!("No se encontró un lugar con el id {}", id);
+            //println!("No se encontró un lugar con el id {}", id);
         }
     }
 }
