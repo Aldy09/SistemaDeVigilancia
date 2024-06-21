@@ -28,9 +28,19 @@ pub struct Dron {
 
 #[allow(dead_code)]
 impl Dron {
+    /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
+    pub fn new(id: u8, broker_addr: SocketAddr) -> Result<Self, Error> {
+                
+        let mut dron = Self::new_internal(id)?;
+        
+        dron.run(&broker_addr)?;
+        
+        Ok(dron)
+    }
     
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
-    pub fn new(id: u8, broker_addr: &SocketAddr) -> Result<Self, Error> {
+    /// Función utilizada para testear, no necesita broker address.
+    fn new_internal(id: u8) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let dron_properties = SistDronProperties::new(properties_file)?;
@@ -47,7 +57,7 @@ impl Dron {
             DronState::ExpectingToRecvIncident,
         );
 
-        let mut dron = Dron {
+        let dron = Dron {
             current_info,
             // Las siguientes son las constantes, que vienen del arch de config:
             dron_properties,
@@ -60,8 +70,6 @@ impl Dron {
             mantainance_lat: -34.30,
             mantainance_lon: -58.30,*/
         };
-
-        dron.run(broker_addr)?;
 
         Ok(dron)
     }
@@ -338,7 +346,7 @@ mod test {
 
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
-        let dron = Dron::new(1).unwrap();
+        let dron = Dron::new_internal(1).unwrap();
 
         assert_eq!(dron.current_info.get_id(), 1);
         assert_eq!(
@@ -349,7 +357,7 @@ mod test {
 
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
-        let dron = Dron::new(1).unwrap();
+        let dron = Dron::new_internal(1).unwrap();
 
         // El dron inicia desde esta posición.
         // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
@@ -362,7 +370,7 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        let dron = Dron::new(1).unwrap();
+        let dron = Dron::new_internal(1).unwrap();
 
         // Dados destino y origen
         let origin = (0.0, 0.0); // desde el (0,0)
@@ -381,7 +389,7 @@ mod test {
 
     #[test]
     fn test_3b_calculate_direction_da_la_direccion_esperada() {
-        let dron = Dron::new(1).unwrap();
+        let dron = Dron::new_internal(1).unwrap();
 
         // Dados destino y origen
         let origin = dron.current_info.get_current_position(); // desde algo que no es el (0,0)

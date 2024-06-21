@@ -8,7 +8,7 @@ use std::{io::{Error, ErrorKind}, net::SocketAddr};
 /// el id del dron, y la IP y el puerto del servidor al que el cliente se va a conectar.
 fn load_id_ip_and_port() -> Result<(u8, String, u16), Error> {
     let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 3 {
+    if argv.len() != 4 {
         return Err(Error::new(ErrorKind::InvalidInput,
             "Cantidad de argumentos inválida. Debe ingresar la dirección IP y 
         el puerto del servidor.",
