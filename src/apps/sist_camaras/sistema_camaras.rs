@@ -20,18 +20,21 @@ use std::net::SocketAddr;
 
 use crate::mqtt::messages::message_type::MessageType;
 
-use crate::logging::{logger::Logger, structs_to_save_in_logger::{StructsToSaveInLogger, OperationType}};
+use crate::logging::{
+    logger::Logger,
+    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+};
 use crate::mqtt::client::mqtt_client::MQTTClient;
 
+use crate::apps::sist_camaras::camera::Camera;
+use crate::apps::sist_camaras::manage_stored_cameras::read_cameras_from_file;
 use crate::apps::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
     incident::Incident,
 };
-use crate::apps::sist_camaras::manage_stored_cameras::read_cameras_from_file;
-use crate::apps::sist_camaras::camera::Camera;
 
-use crate::apps::app_type::AppType;
 use super::sist_camaras_abm::ABMCameras;
+use crate::apps::app_type::AppType;
 
 #[derive(Debug)]
 pub struct SistemaCamaras {

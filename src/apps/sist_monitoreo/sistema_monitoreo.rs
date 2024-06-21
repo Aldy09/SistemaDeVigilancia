@@ -10,18 +10,21 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::Sender as MpscSender;
 
-use crate::mqtt::{
-    messages::{message_type::MessageType, publish_message::PublishMessage},
-    client::mqtt_client::MQTTClient,
+use crate::logging::{
+    logger::Logger,
+    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
 };
-use crate::logging::{logger::Logger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}};
+use crate::mqtt::{
+    client::mqtt_client::MQTTClient,
+    messages::{message_type::MessageType, publish_message::PublishMessage},
+};
 
+use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 use crate::apps::{
     app_type::AppType,
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
     incident::Incident,
 };
-use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {

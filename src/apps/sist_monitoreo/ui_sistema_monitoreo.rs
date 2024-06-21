@@ -4,10 +4,10 @@ use crate::apps::incident::Incident;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
-use crate::apps::{places, plugins::ImagesPluginData};
 use crate::apps::vendor::{
     HttpOptions, Map, MapMemory, Place, Places, Position, Style, Tiles, TilesManager,
 };
+use crate::apps::{places, plugins::ImagesPluginData};
 use crossbeam::channel::Receiver;
 use egui::menu;
 use egui::Context;
@@ -57,7 +57,9 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
 
     providers.insert(
         Provider::LocalTiles,
-        Box::new(super::super::local_tiles::LocalTiles::new(egui_ctx.to_owned())),
+        Box::new(super::super::local_tiles::LocalTiles::new(
+            egui_ctx.to_owned(),
+        )),
     );
 
     // Pass in a mapbox access token at compile time. May or may not be what you want to do,

@@ -1,10 +1,14 @@
-use crate::mqtt::messages::{connect_message::ConnectMessage, disconnect_message::DisconnectMessage, publish_flags::PublishFlags, publish_message::PublishMessage, subscribe_message::SubscribeMessage};
-use std::io::ErrorKind;
+use crate::mqtt::messages::{
+    connect_message::ConnectMessage, disconnect_message::DisconnectMessage,
+    publish_flags::PublishFlags, publish_message::PublishMessage,
+    subscribe_message::SubscribeMessage,
+};
 use crate::mqtt::mqtt_utils::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
     write_message_to_stream,
 };
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::io::{self, Error};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
@@ -12,8 +16,10 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
+use crate::mqtt::messages::{
+    connack_message::ConnackMessage, puback_message::PubAckMessage, suback_message::SubAckMessage,
+};
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::messages::{connack_message::ConnackMessage, puback_message::PubAckMessage, suback_message::SubAckMessage};
 
 #[allow(dead_code)]
 /// MQTTClient es instanciado por cada cliente que desee utilizar el protocolo.

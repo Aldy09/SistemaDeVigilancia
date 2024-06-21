@@ -1,7 +1,6 @@
 pub mod app_type;
 pub mod common_client_errors;
 pub mod common_clients;
-pub mod sist_dron;
 pub mod incident;
 pub mod incident_state;
 pub mod local_tiles;
@@ -9,6 +8,7 @@ pub mod places;
 pub mod plugins;
 pub mod properties;
 pub mod sist_camaras;
+pub mod sist_dron;
 pub mod sist_monitoreo;
 pub mod vendor;
 pub mod windows;
