@@ -1,8 +1,8 @@
 use std::{
-    io::Error, net::SocketAddr, sync::{Arc, Mutex}, thread::sleep, time::Duration
+    io::{Error, ErrorKind}, net::SocketAddr, sync::{Arc, Mutex}, thread::sleep, time::Duration
 };
 
-use crate::apps::sist_dron::dron_state::DronState;
+use crate::apps::{apps_mqtt_topics::AppsMqttTopics, sist_dron::dron_state::DronState};
 use crate::{
     apps::{incident::Incident, incident_state::IncidentState},
     mqtt::client::mqtt_client::MQTTClient,
@@ -79,7 +79,7 @@ impl Dron {
         let mqtt = self.establish_mqtt_broker_connection(broker_addr)?;
         let mqtt_client = Arc::new(Mutex::new(mqtt));
 
-        self.subscribe_to_topics(mqtt_client);
+        self.subscribe_to_topics(mqtt_client)?;
 
         Ok(())
     }
@@ -97,29 +97,37 @@ impl Dron {
         Ok(mqtt_client)       
     }
 
-    // Aux: puede estar en un common xq es copypaste de la de monitoreo
-    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) {
-        self.subscribe_to_topic(&mqtt_client, "Inc");
-        self.subscribe_to_topic(&mqtt_client, "Dron");
+    /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
+    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {        
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
         self.receive_messages_from_subscribed_topics(&mqtt_client);
-        self.finalize_mqtt_client(&mqtt_client);
+        self.finalize_mqtt_client(&mqtt_client)?;
+        Ok(())
     }
-    // Aux: puede estar en un common xq es copypaste de la de monitoreo
-    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
-            match res_sub {
-                Ok(_) => println!("Cliente: Hecho un subscribe a topic {}", topic),
-                Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
-            }
+    
+    /// Se suscribe al topic recibido.
+    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) -> Result<(), Error>{
+        if let Ok(mut mqtt_client) = mqtt_client.lock()
+            .map_err(|_| Error::new(ErrorKind::Other, "Error al intentar tomar lock para suscribirse.")) {
+            
+            mqtt_client.mqtt_subscribe(vec![(String::from(topic))])
+                .map_err(|_| Error::new(ErrorKind::Other, "Error al hacer un subscribe a topic"))?; // aux: le habría pasado la "e" si hubiera sido un struct []
+            
+            println!("Cliente: Hecho un subscribe a topic {}", topic);            
         }
+        Ok(())
     }
-    // Aux: puede estar en un common xq es copypaste de la de monitoreo
-    fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
+
+    /// Finaliza la conexión con server.
+    fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
+        if let Ok(mut mqtt_client) = mqtt_client.lock()
+            .map_err(|_| Error::new(ErrorKind::Other, "Error al intentar tomar lock para suscribirse.")) {
             mqtt_client.finish();
         }
+        Ok(())
     }
+
     // Aux: puede estar en un common xq es copypaste de la de monitoreo
     fn handle_message_receiving_error(&self, e: std::io::Error) -> bool {
         match e.kind() {
