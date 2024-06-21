@@ -169,11 +169,10 @@ impl UISistemaMonitoreo {
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
     fn handle_drone_message(&mut self, msg: PublishMessage) {
-        if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()){
+        if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
-            self.places
-                .remove_place(dron_id, "Dron".to_string());
+            self.places.remove_place(dron_id, "Dron".to_string());
             // Aux: #ToDo pensar cómo se entera la ui de que un dron no existe más.
             // aux: No es como en cámaras que sist cámaras avisa cuál se borró
             // aux: xq acá el dron actúa por su cuenta (si desaparece no enviará nada #meParece).
@@ -186,8 +185,10 @@ impl UISistemaMonitoreo {
             let dron_label;
             if let Some((dir, speed)) = dron.get_flying_info() {
                 // El dron está volando.
-                dron_label = format!("Dron {}\n   dir: ({:?})\n   vel: {} km/h", dron_id, dir, speed);
-                
+                dron_label = format!(
+                    "Dron {}\n   dir: ({:?})\n   vel: {} km/h",
+                    dron_id, dir, speed
+                );
             } else {
                 dron_label = format!("Dron {}", dron_id);
             }

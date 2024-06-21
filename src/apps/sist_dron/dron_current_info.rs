@@ -182,17 +182,20 @@ impl DronCurrentInfo {
 
         self.get_current_position()
     }
-    
+
     /// Devuelve dirección (lat, lon) y velocidad de vuelo actuales, o None si el dron
     /// actualmente no está volando.
     pub fn get_flying_info(&self) -> Option<((f64, f64), f64)> {
-        if let Some(f) = &self.flying_info {
-            return Some(f.get_flying_info_values());
-        } else {
-            return None;
-        }
+        self.flying_info
+            .as_ref()
+            .map(|f| f.get_flying_info_values()) // <-- clippy
+                                                 /*if let Some(f) = &self.flying_info {
+                                                     Some(f.get_flying_info_values())
+                                                 } else {
+                                                     None
+                                                 }*/
     }
-    
+
     /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
     pub fn unset_flying_info(&mut self) {
         self.flying_info = None;

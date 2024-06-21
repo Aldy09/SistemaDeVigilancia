@@ -1,5 +1,9 @@
 use std::{
-    io::{Error, ErrorKind}, net::SocketAddr, sync::{Arc, Mutex}, thread::sleep, time::Duration
+    io::{Error, ErrorKind},
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
 use crate::apps::{apps_mqtt_topics::AppsMqttTopics, sist_dron::dron_state::DronState};
@@ -30,14 +34,13 @@ pub struct Dron {
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8, broker_addr: SocketAddr) -> Result<Self, Error> {
-                
         let mut dron = Self::new_internal(id)?;
-        
+
         dron.run(&broker_addr)?;
-        
+
         Ok(dron)
     }
-    
+
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     /// Función utilizada para testear, no necesita broker address.
     fn new_internal(id: u8) -> Result<Self, Error> {
@@ -56,8 +59,11 @@ impl Dron {
             100,
             DronState::ExpectingToRecvIncident,
         );
-        
-        println!("Dron {} se crea en posición (lat, lon): {}, {}.", id, rng_center_lat, rng_center_lon);
+
+        println!(
+            "Dron {} se crea en posición (lat, lon): {}, {}.",
+            id, rng_center_lat, rng_center_lon
+        );
 
         let dron = Dron {
             current_info,
@@ -77,14 +83,17 @@ impl Dron {
     }
 
     /// Ejecuta la aplicación de dron, para ponerlo en funcionamiento.
-    pub fn run(&mut self, broker_addr: &SocketAddr) -> Result<(), Error>{
+    pub fn run(&mut self, broker_addr: &SocketAddr) -> Result<(), Error> {
         // Connect a server mqtt
         let mqtt = self.establish_mqtt_broker_connection(broker_addr)?;
         let mqtt_client = Arc::new(Mutex::new(mqtt));
-        
+
         // Publica su estado inicial
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
+            mqtt_client_l.mqtt_publish(
+                AppsMqttTopics::DronTopic.to_str(),
+                &self.current_info.to_bytes(),
+            )?;
         };
 
         // Se suscribe y permanece escuchando por Messages recibidos
@@ -97,41 +106,53 @@ impl Dron {
     /// los argumentos ingresados al llamar al main. Y llama al connect de mqtt.
     pub fn establish_mqtt_broker_connection(
         &self,
-        broker_addr: &SocketAddr
+        broker_addr: &SocketAddr,
     ) -> Result<MQTTClient, Error> {
         let client_id = format!("dron-{}", self.current_info.get_id());
         let mqtt_client = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
         println!("Cliente: Conectado al broker MQTT.");
-        
-        Ok(mqtt_client)       
+
+        Ok(mqtt_client)
     }
 
     /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
-    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {        
+    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
         self.receive_messages_from_subscribed_topics(&mqtt_client);
         self.finalize_mqtt_client(&mqtt_client)?;
         Ok(())
     }
-    
+
     /// Se suscribe al topic recibido.
-    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) -> Result<(), Error>{
-        if let Ok(mut mqtt_client) = mqtt_client.lock()
-            .map_err(|_| Error::new(ErrorKind::Other, "Error al intentar tomar lock para suscribirse.")) {
-            
-            mqtt_client.mqtt_subscribe(vec![(String::from(topic))])
+    pub fn subscribe_to_topic(
+        &self,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+        topic: &str,
+    ) -> Result<(), Error> {
+        if let Ok(mut mqtt_client) = mqtt_client.lock().map_err(|_| {
+            Error::new(
+                ErrorKind::Other,
+                "Error al intentar tomar lock para suscribirse.",
+            )
+        }) {
+            mqtt_client
+                .mqtt_subscribe(vec![(String::from(topic))])
                 .map_err(|_| Error::new(ErrorKind::Other, "Error al hacer un subscribe a topic"))?; // aux: le habría pasado la "e" si hubiera sido un struct []
-            
-            println!("Cliente: Hecho un subscribe a topic {}", topic);            
+
+            println!("Cliente: Hecho un subscribe a topic {}", topic);
         }
         Ok(())
     }
 
     /// Finaliza la conexión con server.
-    fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error>{
-        if let Ok(mut mqtt_client) = mqtt_client.lock()
-            .map_err(|_| Error::new(ErrorKind::Other, "Error al intentar tomar lock para suscribirse.")) {
+    fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+        if let Ok(mut mqtt_client) = mqtt_client.lock().map_err(|_| {
+            Error::new(
+                ErrorKind::Other,
+                "Error al intentar tomar lock para suscribirse.",
+            )
+        }) {
             mqtt_client.finish();
         }
         Ok(())
@@ -160,7 +181,7 @@ impl Dron {
         loop {
             // Tomo lock y lo suelto enseguida
             if let Ok(mqtt_client_l) = mqtt_client.lock() {
-                msg_res =  mqtt_client_l.mqtt_receive_msg_from_subs_topic();
+                msg_res = mqtt_client_l.mqtt_receive_msg_from_subs_topic();
             } else {
                 // Lock envenenado (no debería darse)
                 break;
@@ -204,7 +225,6 @@ impl Dron {
         payload: Vec<u8>,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-
         let inc = Incident::from_bytes(payload);
         let event = format!("Recibo Inc: {:?}", inc);
         println!("{:?}", event);
@@ -270,7 +290,10 @@ impl Dron {
 
         // Ajuste para aprox dos manzanas en diagonal
         let adjusted_range = range / 10000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
-        println!("Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}", rad, adjusted_range, range); // debug []
+        println!(
+            "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
+            rad, adjusted_range, range
+        ); // debug []
 
         rad <= (adjusted_range)
     }
@@ -283,7 +306,6 @@ impl Dron {
         inc: Incident,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-
         let event = format!("Recibido inc resuelto de id: {}", inc.get_id());
         println!("{:?}", event);
 
@@ -352,7 +374,11 @@ impl Dron {
     ) -> Result<(), Error> {
         let origin = self.current_info.get_current_position();
         let dir = self.calculate_direction(origin, destination);
-        println!("Fly_to: dir: {:?}, vel: {}", dir, self.dron_properties.get_speed());
+        println!(
+            "Fly_to: dir: {:?}, vel: {}",
+            dir,
+            self.dron_properties.get_speed()
+        );
         self.set_flying_info_values(dir);
 
         let mut current_pos = origin;
@@ -363,19 +389,31 @@ impl Dron {
             let a = 300; // aux
             sleep(Duration::from_micros(a));
 
-            println!("Dron: incrementé mi posición, pos actual: {:?}", self.current_info.get_current_position());
+            println!(
+                "Dron: incrementé mi posición, pos actual: {:?}",
+                self.current_info.get_current_position()
+            );
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
+                mqtt_client_l.mqtt_publish(
+                    AppsMqttTopics::DronTopic.to_str(),
+                    &self.current_info.to_bytes(),
+                )?;
             };
         }
 
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values();
-        println!("Dron: llegué a destino [todavía aprox], pos actual: {:?}", self.current_info.get_current_position());
+        println!(
+            "Dron: llegué a destino [todavía aprox], pos actual: {:?}",
+            self.current_info.get_current_position()
+        );
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &self.current_info.to_bytes())?;
+            mqtt_client_l.mqtt_publish(
+                AppsMqttTopics::DronTopic.to_str(),
+                &self.current_info.to_bytes(),
+            )?;
         };
 
         println!("Fin vuelo hasta incidente.");
@@ -391,7 +429,7 @@ impl Dron {
     }
 
     /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
-    fn unset_flying_info_values(&mut self){
+    fn unset_flying_info_values(&mut self) {
         self.current_info.unset_flying_info();
     }
 }

@@ -70,7 +70,7 @@ impl DronFlyingInfo {
 
         Ok(DronFlyingInfo { direction, speed })
     }
-    
+
     /// Devuelve dirección (lat, lon) y velocidad de vuelo actuales.
     pub fn get_flying_info_values(&self) -> ((f64, f64), f64) {
         (self.direction, self.speed)
