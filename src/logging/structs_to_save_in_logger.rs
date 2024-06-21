@@ -1,4 +1,4 @@
-use crate::{apps::app_type::AppType, messages::message_type::MessageType};
+use crate::{apps::app_type::AppType, mqtt::messages::message_type::MessageType};
 
 #[derive(Debug)]
 pub enum OperationType {

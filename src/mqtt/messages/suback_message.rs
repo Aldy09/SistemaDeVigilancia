@@ -3,7 +3,7 @@ use std::{
     mem::size_of,
 };
 
-use crate::messages::subscribe_return_code::SubscribeReturnCode;
+use crate::mqtt::messages::subscribe_return_code::SubscribeReturnCode;
 
 #[derive(Debug, PartialEq)]
 pub struct SubAckMessage {

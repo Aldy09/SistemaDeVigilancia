@@ -1,4 +1,4 @@
-use crate::messages::disconnect_fixed_header::FixedHeader;
+use crate::mqtt::messages::disconnect_fixed_header::FixedHeader;
 
 #[derive(Debug)]
 pub struct DisconnectMessage {

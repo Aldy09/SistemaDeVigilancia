@@ -10,7 +10,7 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::Sender as MpscSender;
 
-use crate::{
+use crate::mqtt::{
     messages::{message_type::MessageType, publish_message::PublishMessage},
     mqtt_client::mqtt_client::MQTTClient,
 };

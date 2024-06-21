@@ -1,4 +1,4 @@
-use crate::messages::connect_flags::ConnectFlags;
+use crate::mqtt::messages::connect_flags::ConnectFlags;
 
 #[derive(Debug, PartialEq)]
 pub struct VariableHeader {

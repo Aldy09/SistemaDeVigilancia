@@ -1,4 +1,4 @@
-use crate::messages::publish_flags::PublishFlags;
+use crate::mqtt::messages::publish_flags::PublishFlags;
 
 #[derive(Debug, Clone)]
 pub struct FixedHeader {

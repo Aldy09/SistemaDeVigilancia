@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::apps::incident::Incident;
-use crate::messages::publish_message::PublishMessage;
+use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
 use crate::apps::{places, plugins::ImagesPluginData};

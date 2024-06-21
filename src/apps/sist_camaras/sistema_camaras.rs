@@ -1,6 +1,6 @@
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
-use crate::messages::publish_message::PublishMessage;
+use crate::mqtt::messages::publish_message::PublishMessage;
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver as MpscReceiver;
 use std::sync::mpsc::{Receiver, Sender};
@@ -18,10 +18,10 @@ type Channels = (
 use std::io::Error;
 use std::net::SocketAddr;
 
-use crate::messages::message_type::MessageType;
+use crate::mqtt::messages::message_type::MessageType;
 
 use crate::logging::{logger::Logger, structs_to_save_in_logger::{StructsToSaveInLogger, OperationType}};
-use crate::mqtt_client::mqtt_client::MQTTClient;
+use crate::mqtt::mqtt_client::mqtt_client::MQTTClient;
 
 use crate::apps::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
