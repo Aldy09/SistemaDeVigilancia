@@ -1,4 +1,7 @@
-use std::{
+// Puede ser que este archivo haya sobrevivido sin querer?
+// Creo que es el que se renombró a sistema_monitoreo.rs en el refactor de tincho.
+// Éste ya no se usa más, comenté todo el archivo y todo sigue funcionando.
+/*use std::{
     net::SocketAddr,
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -280,3 +283,4 @@ impl Default for SistemaMonitoreo {
         Self::new()
     }
 }
+*/

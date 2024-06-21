@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
+use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
@@ -144,6 +146,7 @@ impl UISistemaMonitoreo {
         println!("Enviando incidente: {:?}", incident);
         let _ = self.publish_incident_tx.send(incident);
     }
+    /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
         if camera.is_not_deleted() {
@@ -164,8 +167,44 @@ impl UISistemaMonitoreo {
         }
     }
 
-    fn handle_drone_message(&mut self, _publish_message: PublishMessage) {
-        //cosas del drone
+    /// Se encarga de procesar y agregar un dron recibido al mapa.
+    fn handle_drone_message(&mut self, msg: PublishMessage) {
+        if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
+            // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
+            let dron_id = dron.get_id();
+            self.places.remove_place(dron_id, "Dron".to_string());
+            // Aux: #ToDo pensar cómo se entera la ui de que un dron no existe más.
+            // aux: No es como en cámaras que sist cámaras avisa cuál se borró
+            // aux: xq acá el dron actúa por su cuenta (si desaparece no enviará nada #meParece).
+            // aux: Debería mandar cada tanto y solamente mostrarse? #pensar, xq esto lo agrega al places x siempre.
+            let (lat, lon) = dron.get_current_position();
+            let dron_pos = Position::from_lon_lat(lon, lat);
+            //let state = dron.get_state(); // Aux: #ToDo ver si les cambiamos el color o qué cosa, según el state, ídem cameras. [].
+
+            // Se crea el label a mostrar por pantalla, según si está o no volando.
+            let dron_label;
+            if let Some((dir, speed)) = dron.get_flying_info() {
+                // El dron está volando.
+                dron_label = format!(
+                    "Dron {}\n   dir: ({:?})\n   vel: {} km/h",
+                    dron_id, dir, speed
+                );
+            } else {
+                dron_label = format!("Dron {}", dron_id);
+            }
+
+            // Se crea el place y se lo agrega al mapa.
+            let new_place = Place {
+                position: dron_pos,
+                label: dron_label,
+                symbol: '✈',
+                style: Style::default(),
+                id: dron.get_id(),
+                place_type: "Dron".to_string(), // Para luego buscarlo en el places.
+            };
+
+            self.places.add_place(new_place);
+        }
     }
 
     pub fn get_next_incident_id(&mut self) -> u8 {
@@ -183,9 +222,9 @@ impl eframe::App for UISistemaMonitoreo {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
-                if publish_message.get_topic_name() == "Cam" {
+                if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
-                } else if publish_message.get_topic_name() == "Drone" {
+                } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
                     self.handle_drone_message(publish_message);
                 }
             }

@@ -13,11 +13,12 @@ En mac:
 - $ brew install libxkbcommon
 
 ## Cómo usar
-En tres terminales diferentes, en este orden:
+En terminales diferentes:
 (utilizamos puerto_servidor = 9090)
 - cargo run --bin message_broker_server puerto_servidor 
-- cargo run --bin sistema_monitoreo_main ip_client puerto_servidor
-- cargo run --bin sistema_camaras_main ip_client puerto_servidor
+- cargo run --bin sistema_monitoreo_main ip_servidor puerto_servidor
+- cargo run --bin sistema_camaras_main ip_servidor puerto_servidor
+- cargo run --bin dron_main id_dron ip_servidor puerto_servidor
 
 ## Cómo testear
 - cargo test

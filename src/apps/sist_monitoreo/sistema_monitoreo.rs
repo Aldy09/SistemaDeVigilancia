@@ -7,8 +7,7 @@ use std::{
 use crossbeam_channel::Sender;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 
-use std::sync::mpsc::Receiver as MpscReceiver;
-use std::sync::mpsc::Sender as MpscSender;
+use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::logging::{
     logger::Logger,

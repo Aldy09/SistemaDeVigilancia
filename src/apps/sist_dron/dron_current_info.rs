@@ -39,6 +39,7 @@ impl DronCurrentInfo {
         bytes.extend_from_slice(&self.id.to_be_bytes());
         bytes.extend_from_slice(&self.latitude.to_be_bytes());
         bytes.extend_from_slice(&self.longitude.to_be_bytes());
+        //println!("BYTES ID LAT Y LONG, ENCODEANDO: {:?}", bytes); //aux [] debug
         bytes.extend_from_slice(&self.battery_lvl.to_be_bytes());
         //bytes.push(self.state.to_byte()[0]); // <-- así sería si fuera un enum en vez de un u8.
         bytes.extend_from_slice(&self.state.to_byte());
@@ -145,7 +146,7 @@ impl DronCurrentInfo {
     }
     /// Devuelve el nivel de batería actual.
     pub fn get_battery_lvl(&self) -> u8 {
-        self.id
+        self.battery_lvl
     }
     /// Devuelve el estado en que dron se encuentra actualmente.
     pub fn get_state(&self) -> &DronState {
@@ -174,10 +175,30 @@ impl DronCurrentInfo {
 
     /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual.
     pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64) {
-        self.latitude += dir.0;
-        self.longitude += dir.1;
+        // La dirección es un vector unitario, pero para poder sumarlo a la lat y long y que tenga sentido
+        // hay que escalarla.
+        self.latitude += dir.0 / 10000.0;
+        self.longitude += dir.1 / 10000.0;
 
         self.get_current_position()
+    }
+
+    /// Devuelve dirección (lat, lon) y velocidad de vuelo actuales, o None si el dron
+    /// actualmente no está volando.
+    pub fn get_flying_info(&self) -> Option<((f64, f64), f64)> {
+        self.flying_info
+            .as_ref()
+            .map(|f| f.get_flying_info_values()) // <-- clippy
+                                                 /*if let Some(f) = &self.flying_info {
+                                                     Some(f.get_flying_info_values())
+                                                 } else {
+                                                     None
+                                                 }*/
+    }
+
+    /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
+    pub fn unset_flying_info(&mut self) {
+        self.flying_info = None;
     }
 }
 

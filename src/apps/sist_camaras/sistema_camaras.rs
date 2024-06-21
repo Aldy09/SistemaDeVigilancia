@@ -2,11 +2,14 @@ type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use crate::mqtt::messages::publish_message::PublishMessage;
 use std::collections::HashMap;
-use std::sync::mpsc::Receiver as MpscReceiver;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc, Mutex, MutexGuard};
-use std::thread::{self, sleep, JoinHandle};
-use std::time::Duration;
+use std::sync::{
+    mpsc::{self, Receiver, Sender},
+    Arc, Mutex, MutexGuard,
+};
+use std::{
+    thread::{self, sleep, JoinHandle},
+    time::Duration,
+};
 type Channels = (
     mpsc::Sender<Vec<u8>>,
     mpsc::Receiver<Vec<u8>>,
@@ -26,8 +29,7 @@ use crate::logging::{
 };
 use crate::mqtt::client::mqtt_client::MQTTClient;
 
-use crate::apps::sist_camaras::camera::Camera;
-use crate::apps::sist_camaras::manage_stored_cameras::read_cameras_from_file;
+use crate::apps::sist_camaras::{camera::Camera, manage_stored_cameras::read_cameras_from_file};
 use crate::apps::{
     common_clients::{exit_when_asked, get_broker_address, join_all_threads},
     incident::Incident,
@@ -86,9 +88,9 @@ impl SistemaCamaras {
         &mut self,
         mqtt_client: MQTTClient,
         cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
-        cameras_rx: MpscReceiver<Vec<u8>>,
-        logger_rx: MpscReceiver<StructsToSaveInLogger>,
-        exit_rx: MpscReceiver<bool>,
+        cameras_rx: Receiver<Vec<u8>>,
+        logger_rx: Receiver<StructsToSaveInLogger>,
+        exit_rx: Receiver<bool>,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
