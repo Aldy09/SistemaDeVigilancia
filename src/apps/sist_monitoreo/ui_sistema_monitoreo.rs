@@ -152,15 +152,12 @@ impl UISistemaMonitoreo {
         if camera.is_not_deleted() {
             let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
             let camera_id = camera.get_id();
-            let custom_style = Style {
-                symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
-                ..Default::default()
-            };
+
             let new_place = Place {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
                 symbol: '📷',
-                style: custom_style, //ESTE ES DEL LABEL, NO DEL ICONO
+                style: Style::default(), //ESTE ES DEL LABEL, NO DEL ICONO
                 id: camera_id,
                 place_type: "Camera".to_string(),
             };
