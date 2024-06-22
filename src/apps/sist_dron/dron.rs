@@ -583,4 +583,27 @@ mod test {
         assert_eq!(position1.1, position4.1);
         assert_eq!(position4.1, position7.1);
     }
+
+    #[test]
+    fn test_drones_8_9_10_same_longitude_distance() {
+        let rng_center_lat = 10.0;
+        let rng_center_lon = 20.0;
+
+        // Calcula las posiciones para los drones 8, 9 y 10
+        let position8 = calculate_initial_position(rng_center_lat, rng_center_lon, 7);
+        let position9 = calculate_initial_position(rng_center_lat, rng_center_lon, 8);
+        let position10 = calculate_initial_position(rng_center_lat, rng_center_lon, 9);
+
+        // Extrae las longitudes
+        let lon8 = position8.1;
+        let lon9 = position9.1;
+        let lon10 = position10.1;
+
+        // Calcula las diferencias de longitud
+        let diff_8_9 = (lon9 - lon8).abs();
+        let diff_9_10 = (lon10 - lon9).abs();
+
+        // Verifica que las diferencias de longitud sean iguales
+        assert_eq!(diff_8_9, diff_9_10);
+    }
 }
