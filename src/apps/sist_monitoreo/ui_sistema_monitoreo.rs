@@ -11,8 +11,8 @@ use crate::apps::vendor::{
 };
 use crate::apps::{places, plugins::ImagesPluginData};
 use crossbeam::channel::Receiver;
-use egui::menu;
 use egui::Context;
+use egui::{menu, Color32};
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -152,11 +152,12 @@ impl UISistemaMonitoreo {
         if camera.is_not_deleted() {
             let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
             let camera_id = camera.get_id();
+
             let new_place = Place {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
                 symbol: '📷',
-                style: Style::default(),
+                style: Style::default(), //ESTE ES DEL LABEL, NO DEL ICONO
                 id: camera_id,
                 place_type: "Camera".to_string(),
             };
@@ -300,13 +301,17 @@ impl eframe::App for UISistemaMonitoreo {
                                                 latitude,
                                                 longitude,
                                             );
+                                            let custom_style = Style {
+                                                symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+                                                ..Default::default()
+                                            };
                                             let new_place_incident = Place {
                                                 position: Position::from_lon_lat(
                                                     longitude, latitude,
                                                 ),
                                                 label: format!("Incident {}", incident.get_id()),
                                                 symbol: '⚠',
-                                                style: Style::default(),
+                                                style: custom_style,
                                                 id: incident.get_id(),
                                                 place_type: "Incident".to_string(),
                                             };

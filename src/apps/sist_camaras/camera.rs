@@ -160,6 +160,10 @@ impl Camera {
         self.id
     }
 
+    pub fn get_state(&self) -> CameraState {
+        self.state
+    }
+
     // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
