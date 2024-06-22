@@ -152,8 +152,10 @@ impl UISistemaMonitoreo {
         if camera.is_not_deleted() {
             let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
             let camera_id = camera.get_id();
-            let mut custom_style = Style::default();
-            custom_style.symbol_color = Color32::from_rgb(255, 0, 0); // Color rojo
+            let custom_style = Style {
+                symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+                ..Default::default()
+            };
             let new_place = Place {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
@@ -302,9 +304,10 @@ impl eframe::App for UISistemaMonitoreo {
                                                 latitude,
                                                 longitude,
                                             );
-                                            let mut custom_style = Style::default();
-                                            custom_style.symbol_color =
-                                                Color32::from_rgb(255, 0, 0); // Color rojo
+                                            let custom_style = Style {
+                                                symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+                                                ..Default::default()
+                                            };
                                             let new_place_incident = Place {
                                                 position: Position::from_lon_lat(
                                                     longitude, latitude,
