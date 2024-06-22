@@ -52,10 +52,17 @@ impl Dron {
         // Aux, #ToDo, hacer una función para que la posición rance_center sea distinta para cada dron
         // aux: ej que tomen la get_range_center_position como base, y se ubiquen (ej en grilla) con + self id*factor (o algo por el estilo).
         let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
+        //Posicion inicial del dron
+        let (lat_inicial, lon_inicial) =
+            calculate_initial_position(rng_center_lat, rng_center_lon, id);
         let current_info = DronCurrentInfo::new(
             id,
+            /*
             rng_center_lat,
             rng_center_lon,
+            */
+            lat_inicial,
+            lon_inicial,
             100,
             DronState::ExpectingToRecvIncident,
         );
@@ -434,12 +441,32 @@ impl Dron {
     }
 }
 
+/// Calcula la posición inicial del dron, basada en el id del dron.
+/// Funciona para cualquier número de drones.
+/// Una distancia de aproximadamente 4 cuadras entre cada dron.
+pub fn calculate_initial_position(rng_center_lat: f64, rng_center_lon: f64, id: u8) -> (f64, f64) {
+    // Asume que cada fila puede tener hasta 3 drones
+    let drones_por_fila = 3;
+
+    // Calcula la fila y la columna basándose en el id, asumiendo que id comienza en 1
+    let row = (id - 1) / drones_por_fila;
+    let col = (id - 1) % drones_por_fila;
+
+    // Calcula la nueva latitud y longitud basada en la fila y columna
+    let lat = rng_center_lat + row as f64 * 0.00618; // Ajusta estos valores según la distancia deseada
+    let lon = rng_center_lon + col as f64 * 0.00618;
+
+    (lat, lon)
+}
+
 #[cfg(test)]
 
 mod test {
     use crate::apps::sist_dron::dron_state::DronState;
 
     use super::Dron;
+
+    use super::calculate_initial_position;
 
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
@@ -501,5 +528,59 @@ mod test {
         // En "hip" cantidad de pasos, se llega a la posición de destino
         assert_eq!(origin.0 + dir.0 * hip, destination.0);
         assert_eq!(origin.1 + dir.1 * hip, destination.1);
+    }
+
+    #[test]
+    fn test_4_calcula_correctamente_posiciones_inciales() {
+        let rng_center_lat = 10.0;
+        let rng_center_lon = 20.0;
+
+        // Test para el primer dron
+        let id1 = 1;
+        let expected_position1 = (10.0, 20.0); // Asume que el primer dron inicia en el centro de rango
+        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, id1);
+        assert_eq!(position1, expected_position1);
+
+        // Test para un dron en la segunda columna de la primera fila
+        let id3 = 2;
+        let expected_position3 = (10.0, 20.00618); // Asume ajuste de columna sin cambio en fila
+        let position3 = calculate_initial_position(rng_center_lat, rng_center_lon, id3);
+        assert_eq!(position3, expected_position3);
+
+        // Test para un dron en la segunda fila
+        let id2 = 4;
+        let expected_position2 = (10.00618, 20.0); // Asume ajuste de fila sin cambio en columna
+        let position2 = calculate_initial_position(rng_center_lat, rng_center_lon, id2);
+        assert_eq!(position2, expected_position2);
+    }
+
+    #[test]
+    fn test_4a_drones_1_2_3_same_latitude() {
+        let rng_center_lat = 10.0;
+        let rng_center_lon = 20.0;
+
+        // Calcula las posiciones para los drones 1, 2 y 3
+        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, 1);
+        let position2 = calculate_initial_position(rng_center_lat, rng_center_lon, 2);
+        let position3 = calculate_initial_position(rng_center_lat, rng_center_lon, 3);
+
+        // Verifica que los drones 1, 2 y 3 estén en la misma latitud
+        assert_eq!(position1.0, position2.0);
+        assert_eq!(position2.0, position3.0);
+    }
+
+    #[test]
+    fn test_4b_drones_1_4_7_same_longitude() {
+        let rng_center_lat = 10.0;
+        let rng_center_lon = 20.0;
+
+        // Calcula las posiciones para los drones 1, 4 y 7
+        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, 1);
+        let position4 = calculate_initial_position(rng_center_lat, rng_center_lon, 4);
+        let position7 = calculate_initial_position(rng_center_lat, rng_center_lon, 7);
+
+        // Verifica que los drones 1, 4 y 7 estén en la misma longitud
+        assert_eq!(position1.1, position4.1);
+        assert_eq!(position4.1, position7.1);
     }
 }
