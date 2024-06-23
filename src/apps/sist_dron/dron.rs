@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{Error, ErrorKind},
     net::SocketAddr,
     sync::{mpsc, Arc, Mutex},
@@ -6,11 +7,7 @@ use std::{
     time::Duration,
 };
 
-use std::sync::mpsc::Receiver as MpscReceiver;
-
-use crossbeam_channel::{unbounded, Receiver};
-
-use crossbeam_channel::Sender;
+use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
     apps::{
@@ -21,7 +18,7 @@ use crate::{
         logger::Logger,
         structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
     },
-    mqtt::messages::{message_type::MessageType, publish_message},
+    mqtt::messages::message_type::MessageType,
 };
 use crate::{
     apps::{incident::Incident, incident_state::IncidentState},
@@ -33,8 +30,6 @@ use super::{
     dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
     sist_dron_properties::SistDronProperties,
 };
-
-use crossbeam_channel::Receiver as CrossbeamReceiver;
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -48,40 +43,32 @@ pub struct Dron {
     dron_properties: SistDronProperties,
 
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
+
+    drone_distances_by_incident: Arc<Mutex<HashMap<u8, (u8, f64)>>>, // (inc_id, (dron_id, distance_to_incident))
 }
 
 #[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8, broker_addr: SocketAddr) -> Result<Self, Error> {
-        let mut dron = Self::new_internal(id)?;
-
-        let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
         let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+        let mut dron = Self::new_internal(id, logger_tx)?;
 
-        dron.logger_tx = logger_tx;
         // Connect a server mqtt
         match dron.establish_mqtt_broker_connection(&broker_addr) {
             Ok(mut mqtt_client) => {
                 // Publica su estado inicial
-
                 if let Ok(ci) = &dron.current_info.lock() {
                     mqtt_client.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
                 }
 
-                let child_threads = dron.spawn_threads(
-                    mqtt_client,
-                    logger_rx,
-                    publish_message_rx,
-                    publish_message_tx,
-                );
+                 dron.spawn_threads(mqtt_client, logger_rx)?;
 
-                join_all_threads(child_threads);
             }
-            Err(e) => println!(
-                "Error al establecer la conexión con el broker MQTT: {:?}",
-                e
-            ),
+            Err(_) => return Err(Error::new(
+                std::io::ErrorKind::Other,
+                "Error al establecer la conexion",
+            ))
         }
 
         Ok(dron)
@@ -91,24 +78,20 @@ impl Dron {
         &mut self,
         mqtt_client: MQTTClient,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
-        publish_message_rx: CrossbeamReceiver<PublishMessage>,
-        publish_message_tx: Sender<PublishMessage>,
-    ) -> Vec<JoinHandle<()>> {
-
+    ) -> Result<(), Error> {
         let logger = Logger::new(logger_rx);
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-        
+
         children.push(spawn_dron_stuff_to_logger_thread(logger));
 
-        self.subscribe_to_topics(
-            Arc::clone(&mqtt_client_sh),
-            publish_message_rx,
-            publish_message_tx,
-        );
+        self.subscribe_to_topics(Arc::clone(&mqtt_client_sh))?;
 
+       
+        join_all_threads(children);
 
-        children
+        Ok(())
+
     }
 
     pub fn clone_ref(&self) -> Self {
@@ -116,16 +99,12 @@ impl Dron {
             current_info: Arc::clone(&self.current_info),
             dron_properties: self.dron_properties.clone(),
             logger_tx: self.logger_tx.clone(),
+            drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
         }
     }
 
     /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
-    fn subscribe_to_topics(
-        &mut self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-        publish_message_rx: CrossbeamReceiver<PublishMessage>,
-        publish_message_tx: Sender<PublishMessage>,
-    ) -> Result<(), Error> {
+    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
         self.receive_messages_from_subscribed_topics(&mqtt_client);
@@ -195,7 +174,7 @@ impl Dron {
         let mut self_clone = self.clone_ref();
         let mqtt_client_clone = Arc::clone(mqtt_client);
         thread::spawn(move || {
-            self_clone.process_recvd_msg(msg, &mqtt_client_clone);
+            let _ = self_clone.process_recvd_msg(msg, &mqtt_client_clone);
         })
     }
 
@@ -309,29 +288,10 @@ impl Dron {
 
     fn decide_if_should_move_to_incident(
         &self,
-        incident: &Incident,
+        _incident: &Incident,
         _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
         let mut candidate_drones: Vec<(u8, f64)> = Vec::new(); // candidate_dron = (dron_id, distance_to_incident)
-
-        //loop {
-        //Aux: ver threads para que se haga en paralelo
-        let received_dron =
-            DronCurrentInfo::new(2, -34.64, -54.65, 20, DronState::ExpectingToRecvIncident);
-
-        let received_dron_distance = received_dron.get_distance_to(incident.get_position());
-
-        let self_distance = self.get_distance_to(incident.get_position())?;
-
-        //Agrego al vector la menor distancia entre los dos drones al incidente
-        if self_distance < received_dron_distance {
-            candidate_drones.push((self.get_id()?, self_distance));
-        } else {
-            candidate_drones.push((received_dron.get_id(), received_dron_distance));
-        }
-
-        //    break; //dsp lo cambiamos
-        //}
 
         // Ordenar por el valor f64 de la tupla, de menor a mayor
         candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -385,6 +345,26 @@ impl Dron {
         let dron = DronCurrentInfo::from_bytes(payload);
         let event = format!("Recibo Dron: {:?}", dron);
         println!("{:?}", event);
+
+        //loop {
+        //Aux: ver threads para que se haga en paralelo
+        // let received_dron =
+        //     DronCurrentInfo::new(2, -34.64, -54.65, 20, DronState::ExpectingToRecvIncident);
+
+        // let received_dron_distance = received_dron.get_distance_to(incident.get_position());
+
+        // let self_distance = self.get_distance_to(incident.get_position())?;
+
+        // //Agrego al vector la menor distancia entre los dos drones al incidente
+        // if self_distance < received_dron_distance {
+        //     candidate_drones.push((self.get_id()?, self_distance));
+        // } else {
+        //     candidate_drones.push((received_dron.get_id(), received_dron_distance));
+        // }
+
+        // //    break; //dsp lo cambiamos
+        // //}
+
         //todo!();
         Ok(())
     }
@@ -595,10 +575,11 @@ impl Dron {
 
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     /// Función utilizada para testear, no necesita broker address.
-    fn new_internal(id: u8) -> Result<Self, Error> {
+    fn new_internal(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let dron_properties = SistDronProperties::new(properties_file)?;
+        let drone_distances_by_incident = Arc::new(Mutex::new(HashMap::new()));
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
         // Aux, #ToDo, hacer una función para que la posición rance_center sea distinta para cada dron
@@ -629,6 +610,7 @@ impl Dron {
             // Las siguientes son las constantes, que vienen del arch de config:
             dron_properties,
             logger_tx,
+            drone_distances_by_incident,
             /*max_battery_lvl: 100,
             min_operational_battery_lvl: 20,
             range: 40,
@@ -699,7 +681,6 @@ fn spawn_dron_stuff_to_logger_thread(logger: Logger) -> JoinHandle<()> {
     })
 }
 
-
 /// Calcula la posición inicial del dron, basada en el id del dron.
 /// Funciona para cualquier número de drones.
 /// Una distancia de aproximadamente 4 cuadras entre cada dron.
@@ -721,7 +702,10 @@ pub fn calculate_initial_position(rng_center_lat: f64, rng_center_lon: f64, id: 
 #[cfg(test)]
 
 mod test {
+    use std::sync::mpsc;
+
     use crate::apps::sist_dron::dron_state::DronState;
+    use crate::logging::structs_to_save_in_logger::StructsToSaveInLogger;
 
     use super::Dron;
 
@@ -729,7 +713,9 @@ mod test {
 
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
-        let dron = Dron::new_internal(1).unwrap();
+        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+
+        let dron = Dron::new_internal(1, logger_tx).unwrap();
 
         assert_eq!(dron.get_id().unwrap(), 1);
         assert_eq!(
@@ -740,7 +726,9 @@ mod test {
 
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
-        let dron = Dron::new_internal(1).unwrap();
+        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+
+        let dron = Dron::new_internal(1, logger_tx).unwrap();
 
         // El dron inicia desde esta posición.
         // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
@@ -753,7 +741,9 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        let dron = Dron::new_internal(1).unwrap();
+        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+
+        let dron = Dron::new_internal(1, logger_tx).unwrap();
 
         // Dados destino y origen
         let origin = (0.0, 0.0); // desde el (0,0)
@@ -772,7 +762,9 @@ mod test {
 
     #[test]
     fn test_3b_calculate_direction_da_la_direccion_esperada() {
-        let dron = Dron::new_internal(1).unwrap();
+        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+
+        let dron = Dron::new_internal(1, logger_tx).unwrap();
 
         // Dados destino y origen
         let origin = dron.get_current_position().unwrap(); // desde algo que no es el (0,0)
