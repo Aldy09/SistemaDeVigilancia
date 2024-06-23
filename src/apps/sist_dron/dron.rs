@@ -274,9 +274,9 @@ impl Dron {
         if enough_battery {
             if inc_in_range {
                 println!("Dio true, me desplazaré a la pos del inc.");
-                self.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
+                self.set_inc_id_to_resolve(incident.get_id())?; // Aux: ver si va acá o con la "condición b". [].
 
-                self.set_state(DronState::RespondingToIncident);
+                self.set_state(DronState::RespondingToIncident)?;
 
                 // Volar hasta la posición del incidente
                 let destination = incident.get_position();
@@ -287,7 +287,7 @@ impl Dron {
         } else {
             println!("Sin suficiente batería para resolver el inc, vuelo a mantenimiento.");
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
-            self.set_state(DronState::Mantainance);
+            self.set_state(DronState::Mantainance)?;
 
             // Volar a la posición de Mantenimiento
             let destination = self.dron_properties.get_range_center_position();
@@ -345,7 +345,7 @@ impl Dron {
         self.fly_to(destination, mqtt_client)?;
 
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
-        self.set_state(DronState::ExpectingToRecvIncident);
+        self.set_state(DronState::ExpectingToRecvIncident)?;
 
         Ok(())
     }
@@ -394,7 +394,7 @@ impl Dron {
             dir,
             self.dron_properties.get_speed()
         );
-        self.set_flying_info_values(dir);
+        self.set_flying_info_values(dir)?;
 
         let mut current_pos = origin;
         while (current_pos.0 < destination.0) && (current_pos.1 < destination.1) {
@@ -421,7 +421,7 @@ impl Dron {
         }
 
         // Al llegar, el dron ya no se encuentra en desplazamiento.
-        self.unset_flying_info_values();
+        self.unset_flying_info_values()?;
         println!(
             "Dron: llegué a destino [todavía aprox], pos actual: {:?}",
             self.get_current_position()
@@ -443,10 +443,11 @@ impl Dron {
     }
 
     /// Establece como `flying_info` a la dirección recibida, y a la velocidad leída del archivo de configuración.
-    fn set_flying_info_values(&mut self, dir: (f64, f64)) {
+    fn set_flying_info_values(&mut self, dir: (f64, f64)) -> Result<(), Error>{
         let speed = self.dron_properties.get_speed();
         let info = DronFlyingInfo::new(dir, speed);
-        self.set_flying_info(info);
+        self.set_flying_info(info)?;
+        Ok(())
     }
 
     /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
@@ -473,7 +474,7 @@ impl Dron {
     /// Toma lock y establece el inc id a resolver.
     fn set_inc_id_to_resolve(&self, inc_id: u8) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
-            &ci.set_inc_id_to_resolve(inc_id);
+            ci.set_inc_id_to_resolve(inc_id);
             return Ok(());
         }
         Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
@@ -515,6 +516,20 @@ impl Dron {
            }
         Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
     }
+
+    fn get_id(&self) -> Result<u8, Error> {
+        if let Ok(ci) = self.current_info.lock() {
+            return Ok(ci.get_id());
+           }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+
+    fn get_state(&self) -> Result<DronState, Error> {
+        if let Ok(ci) = self.current_info.lock() {
+            return Ok(ci.get_state());
+           }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
 }
 
 /// Calcula la posición inicial del dron, basada en el id del dron.
@@ -548,10 +563,10 @@ mod test {
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
         let dron = Dron::new_internal(1).unwrap();
 
-        assert_eq!(dron.current_info.get_id(), 1);
+        assert_eq!(dron.get_id().unwrap(), 1);
         assert_eq!(
-            dron.current_info.get_state(),
-            &DronState::ExpectingToRecvIncident
+            dron.get_state().unwrap(),
+            DronState::ExpectingToRecvIncident
         ); // estado activo
     }
 
@@ -563,7 +578,7 @@ mod test {
         // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
         //  aux: quizás sería necesario involucrar al id en la cuenta, ej una lat base + id*algún_factor, para espaciarlos en el mapa al iniciar. Ver [].
         assert_eq!(
-            dron.current_info.get_current_position(),
+            dron.get_current_position().unwrap(),
             dron.dron_properties.get_range_center_position()
         );
     }
@@ -592,7 +607,7 @@ mod test {
         let dron = Dron::new_internal(1).unwrap();
 
         // Dados destino y origen
-        let origin = dron.current_info.get_current_position(); // desde algo que no es el (0,0)
+        let origin = dron.get_current_position().unwrap(); // desde algo que no es el (0,0)
         let destination = (origin.0 + 4.0, origin.1 - 3.0);
         let hip = 5.0; // hipotenusa da 5;
 

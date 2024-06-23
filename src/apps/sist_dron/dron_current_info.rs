@@ -149,8 +149,8 @@ impl DronCurrentInfo {
         self.battery_lvl
     }
     /// Devuelve el estado en que dron se encuentra actualmente.
-    pub fn get_state(&self) -> &DronState {
-        &self.state
+    pub fn get_state(&self) -> DronState {
+        self.state 
     }
 
     /// Setea el estado del dron.
