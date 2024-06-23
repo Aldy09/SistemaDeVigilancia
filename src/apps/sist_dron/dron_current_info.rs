@@ -200,6 +200,13 @@ impl DronCurrentInfo {
     pub fn unset_flying_info(&mut self) {
         self.flying_info = None;
     }
+
+    pub fn get_distance_to(&self, destination: (f64, f64)) -> f64 {
+        let origin = self.get_current_position();
+        let lat_dist = destination.0 - origin.0;
+        let lon_dist = destination.1 - origin.1;
+        f64::sqrt(lat_dist.powi(2) + lon_dist.powi(2))
+    }
 }
 
 #[cfg(test)]
