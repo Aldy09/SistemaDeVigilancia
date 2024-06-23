@@ -187,9 +187,14 @@ impl Dron {
             "Inc" => self.process_valid_inc(msg.get_payload(), mqtt_client),
             "Dron" => {
 
-                let dron_current_info = DronCurrentInfo::from_bytes(msg.get_payload())?;
-                if self.get_id()? != dron_current_info.get_id(){
-                    self.process_valid_dron(dron_current_info)?;
+                let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
+                let not_myself = self.get_id()? != received_ci.get_id();
+                let recvd_dron_is_not_flying = received_ci.get_state() != DronState::Flying;
+
+                // Si la current_info recibida es de mi propio publish, no me interesa compararme conmigo mismo.
+                // Si el current_info recibida es de un dron que está volando, tampoco me interesa, esos publish serán para sistema de moniteo.
+                if not_myself && recvd_dron_is_not_flying {
+                    self.process_valid_dron(received_ci)?;
                 }
                 Ok(())
             },
@@ -435,6 +440,7 @@ impl Dron {
             dir,
             self.dron_properties.get_speed()
         );
+        self.set_state(DronState::Flying)?;
         self.set_flying_info_values(dir)?;
 
         let mut current_pos = origin;
@@ -472,6 +478,7 @@ impl Dron {
         };
 
         println!("Fin vuelo hasta incidente.");
+        self.set_state(DronState::RespondingToIncident)?;
 
         Ok(())
     }

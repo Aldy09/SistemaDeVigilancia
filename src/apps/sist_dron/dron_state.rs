@@ -4,6 +4,7 @@ use std::io::{Error, ErrorKind};
 pub enum DronState {
     ExpectingToRecvIncident,
     RespondingToIncident,
+    Flying,
     Mantainance,
 }
 
@@ -12,7 +13,8 @@ impl DronState {
         match self {
             DronState::ExpectingToRecvIncident => 1_u8.to_be_bytes(),
             DronState::RespondingToIncident => 2_u8.to_be_bytes(),
-            DronState::Mantainance => 3_u8.to_be_bytes(),
+            DronState::Flying => 3_u8.to_be_bytes(),
+            DronState::Mantainance => 4_u8.to_be_bytes(),
         }
     }
 
@@ -20,7 +22,8 @@ impl DronState {
         match u8::from_be_bytes(bytes) {
             1 => Ok(DronState::ExpectingToRecvIncident),
             2 => Ok(DronState::RespondingToIncident),
-            3 => Ok(DronState::Mantainance),
+            3 => Ok(DronState::Flying),
+            4 => Ok(DronState::Mantainance),
             _ => Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Estado de dron no válido",
