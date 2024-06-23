@@ -223,6 +223,7 @@ impl Dron {
         //Obtengo el ID del incidente que el dron recibido está atendiendo
         if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
             if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+                println!("HOLA TOPIC DRON, entrando, el hashmap: {:?}", distances);
                 //Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interes.
                 if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
 
@@ -230,12 +231,15 @@ impl Dron {
                 
                     let self_distance = self.get_distance_to(*incident_position)?;
             
+                    println!("HOLA TOPIC DRON, antes de pushear self_distance: {:?}, self_distance: {:?}", self_distance, received_dron_distance);
                     //Agrego al vector la menor distancia entre los dos drones al incidente
                     if self_distance <= received_dron_distance {
                         candidate_drones.push((self.get_id()?, self_distance));
                     } else {
                         candidate_drones.push((received_dron.get_id(), received_dron_distance));
                     }
+
+                    println!("HOLA TOPIC DRON, he pusheado el de menor dist, el hashmap: {:?}", distances);
                 }
             }
         }
@@ -250,8 +254,11 @@ impl Dron {
     ) -> Result<bool, Error> {
         
         let mut should_move = false;
-        thread::sleep(Duration::from_millis(500));
+        println!("HOLA Esperando para recibir notificaciones de otros drones...");
+        //thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(3500)); // Aux Probando
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+            println!("HOLA adentro del decide, estoy por consultarlo, el hashmap: {:?}", distances);
             if let Some((_incident_position, candidate_drones)) = distances.get_mut(&incident.get_id()) {
                 // Ordenar por el valor f64 de la tupla, de menor a mayor
                 candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -262,6 +269,16 @@ impl Dron {
         
                 // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
                 should_move = closest_two_drones.contains(&self.get_id()?);
+
+                println!("HOLA después del contains, el bool da: {}", should_move);
+
+                // Si está vacío, no se recibió aviso de un dron más cercano, entonces voy yo
+                if closest_two_drones.is_empty() {
+                    should_move = true;
+                }
+                println!("HOLA después del is_empty, el bool da: {}", should_move);
+            } else {
+                println!("HOLA ESTO NUNCA DEBERÍA PASAR: {}", should_move);
             }
         }
 
@@ -289,7 +306,7 @@ impl Dron {
 
         if enough_battery {
             if inc_in_range {
-                println!("Dio true, me desplazaré a la pos del inc.");
+                println!("Dio true, evaluaré si tengo una de las dos menores distancias al inc.");
                 self.set_inc_id_to_resolve(inc_id.get_id())?; // Aux: ver si va acá o con la "condición b". [].
                 self.add_incident_to_hashmap(&inc_id)?;
 
@@ -335,7 +352,7 @@ impl Dron {
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
         // Ajuste para aprox dos manzanas en diagonal
-        let adjusted_range = range / 10000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        let adjusted_range = range / 1000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
         println!(
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
@@ -688,7 +705,9 @@ impl Dron {
     
     fn add_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+            println!("HOLA antes del add to hashmap, el hashmap: {:?}", distances);
             distances.insert(inc_id.get_id(), (inc_id.get_position(), Vec::new()));
+            println!("HOLA dsp del add to hashmap, el hashmap: {:?}", distances);
             return Ok(());
         }
         Err(Error::new(
