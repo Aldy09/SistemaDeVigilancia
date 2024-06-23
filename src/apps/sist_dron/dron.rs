@@ -188,7 +188,10 @@ impl Dron {
             "Dron" => {
 
                 let dron_current_info = DronCurrentInfo::from_bytes(msg.get_payload())?;
-                self.process_valid_dron(dron_current_info)
+                if self.get_id()? != dron_current_info.get_id(){
+                    self.process_valid_dron(dron_current_info)?;
+                }
+                Ok(())
             },
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -213,6 +216,57 @@ impl Dron {
                 Ok(())
             }
         }
+    }
+
+    /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
+    fn process_valid_dron(&self, received_dron: DronCurrentInfo) -> Result<(), Error> {
+        //Obtengo el ID del incidente que el dron recibido está atendiendo
+        if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
+            if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+                //Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interes.
+                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
+
+                    let received_dron_distance = received_dron.get_distance_to(*incident_position);
+                
+                    let self_distance = self.get_distance_to(*incident_position)?;
+            
+                    //Agrego al vector la menor distancia entre los dos drones al incidente
+                    if self_distance <= received_dron_distance {
+                        candidate_drones.push((self.get_id()?, self_distance));
+                    } else {
+                        candidate_drones.push((received_dron.get_id(), received_dron_distance));
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn decide_if_should_move_to_incident(
+        &self,
+        incident: &Incident,
+        _mqtt_client: Arc<Mutex<MQTTClient>>,
+    ) -> Result<bool, Error> {
+        
+        let mut should_move = false;
+        thread::sleep(Duration::from_millis(500));
+        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+            if let Some((_incident_position, candidate_drones)) = distances.get_mut(&incident.get_id()) {
+                // Ordenar por el valor f64 de la tupla, de menor a mayor
+                candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
+        
+                // Seleccionar los primeros dos elementos después de ordenar
+                let closest_two_drones: Vec<u8> =
+                    candidate_drones.iter().take(2).map(|&(id, _)| id).collect();
+        
+                // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
+                should_move = closest_two_drones.contains(&self.get_id()?);
+            }
+        }
+
+        Ok(should_move)
+
     }
 
     /// Publica su estado, y analiza condiciones para desplazarse.
@@ -290,31 +344,7 @@ impl Dron {
         rad <= (adjusted_range)
     }
 
-    fn decide_if_should_move_to_incident(
-        &self,
-        incident: &Incident,
-        _mqtt_client: Arc<Mutex<MQTTClient>>,
-    ) -> Result<bool, Error> {
-        
-        let mut should_move = false;
-        thread::sleep(Duration::from_millis(500));
-        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            if let Some((_incident_position, candidate_drones)) = distances.get_mut(&incident.get_id()) {
-                // Ordenar por el valor f64 de la tupla, de menor a mayor
-                candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
-        
-                // Seleccionar los primeros dos elementos después de ordenar
-                let closest_two_drones: Vec<u8> =
-                    candidate_drones.iter().take(2).map(|&(id, _)| id).collect();
-        
-                // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
-                should_move = closest_two_drones.contains(&self.get_id()?);
-            }
-        }
-
-        Ok(should_move)
-
-    }
+    
 
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
     /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
@@ -351,31 +381,7 @@ impl Dron {
 
         Ok(())
     }
-    /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
-    fn process_valid_dron(&self, received_dron: DronCurrentInfo) -> Result<(), Error> {
-        
-        //Obtengo el ID del incidente que el dron recibido está atendiendo
-        if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
-            if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-                //Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interes.
-                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
-
-                    let received_dron_distance = received_dron.get_distance_to(*incident_position);
-                
-                    let self_distance = self.get_distance_to(*incident_position)?;
-            
-                    //Agrego al vector la menor distancia entre los dos drones al incidente
-                    if self_distance < received_dron_distance {
-                        candidate_drones.push((self.get_id()?, self_distance));
-                    } else {
-                        candidate_drones.push((received_dron.get_id(), received_dron_distance));
-                    }
-                }
-            }
-        }
-        
-        Ok(())
-    }
+    
 
     /// Calcula la dirección en la que debe volar desde una posición `origin` hasta `destination`.
     // Aux: esto estaría mejor en un struct posicion quizás? [] ver.
