@@ -291,7 +291,6 @@ impl Dron {
                     let destination = incident.get_position();
                     self.fly_to(destination, mqtt_client)?;
                 }
-                
             } else {
                 println!("print aux: el inc No está en mi rango.")
             }
@@ -325,30 +324,28 @@ impl Dron {
         rad <= (adjusted_range)
     }
 
-    
-
     fn decide_if_should_move_to_incident(
         &self,
         incident: &Incident,
         _mqtt_client: Arc<Mutex<MQTTClient>>,
-    ) -> Result<bool, Error>{
+    ) -> Result<bool, Error> {
         let mut candidate_drones: Vec<(u8, f64)> = Vec::new(); // candidate_dron = (dron_id, distance_to_incident)
 
         //loop {
-            //Aux: ver threads para que se haga en paralelo
-            let received_dron= DronCurrentInfo::new(2, -34.64, -54.65, 20, DronState::ExpectingToRecvIncident);
+        //Aux: ver threads para que se haga en paralelo
+        let received_dron =
+            DronCurrentInfo::new(2, -34.64, -54.65, 20, DronState::ExpectingToRecvIncident);
 
-            let received_dron_distance = received_dron.get_distance_to(incident.get_position());
+        let received_dron_distance = received_dron.get_distance_to(incident.get_position());
 
-            let self_distance = self.get_distance_to(incident.get_position())?;
+        let self_distance = self.get_distance_to(incident.get_position())?;
 
-            //Agrego al vector la menor distancia entre los dos drones al incidente
-            if self_distance < received_dron_distance {
-                candidate_drones.push((self.get_id()?, self_distance));
-            } else {
-                candidate_drones
-                    .push((received_dron.get_id(), received_dron_distance));
-            }
+        //Agrego al vector la menor distancia entre los dos drones al incidente
+        if self_distance < received_dron_distance {
+            candidate_drones.push((self.get_id()?, self_distance));
+        } else {
+            candidate_drones.push((received_dron.get_id(), received_dron_distance));
+        }
 
         //    break; //dsp lo cambiamos
         //}

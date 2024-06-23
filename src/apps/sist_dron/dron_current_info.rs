@@ -150,7 +150,7 @@ impl DronCurrentInfo {
     }
     /// Devuelve el estado en que dron se encuentra actualmente.
     pub fn get_state(&self) -> DronState {
-        self.state 
+        self.state
     }
 
     /// Setea el estado del dron.
