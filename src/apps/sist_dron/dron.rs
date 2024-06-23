@@ -24,7 +24,7 @@ use super::{
 #[derive(Debug)]
 pub struct Dron {
     // El id y su posición y estado actuales se encuentran en el siguiente struct
-    current_info: DronCurrentInfo,
+    current_info: Arc<Mutex<DronCurrentInfo>>,
 
     // Constantes cargadas desde un arch de configuración
     dron_properties: SistDronProperties,
@@ -73,7 +73,7 @@ impl Dron {
         );
 
         let dron = Dron {
-            current_info,
+            current_info: Arc::new(Mutex::new(current_info)),
             // Las siguientes son las constantes, que vienen del arch de config:
             dron_properties,
             /*max_battery_lvl: 100,
@@ -97,10 +97,13 @@ impl Dron {
 
         // Publica su estado inicial
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            mqtt_client_l.mqtt_publish(
-                AppsMqttTopics::DronTopic.to_str(),
-                &self.current_info.to_bytes(),
-            )?;
+            if let Ok(ci) = &self.current_info.lock(){
+                mqtt_client_l.mqtt_publish(
+                    AppsMqttTopics::DronTopic.to_str(),
+                    &ci.to_bytes(),
+                )?;
+
+            }
         };
 
         // Se suscribe y permanece escuchando por Messages recibidos
@@ -115,11 +118,16 @@ impl Dron {
         &self,
         broker_addr: &SocketAddr,
     ) -> Result<MQTTClient, Error> {
-        let client_id = format!("dron-{}", self.current_info.get_id());
-        let mqtt_client = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
-        println!("Cliente: Conectado al broker MQTT.");
+        if let Ok(ci) = self.current_info.lock(){
+            let client_id = format!("dron-{}", ci.get_id());
+            let mqtt_client = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
+            println!("Cliente: Conectado al broker MQTT.");
 
-        Ok(mqtt_client)
+            return Ok(mqtt_client);
+        };
+
+        Err(Error::new(ErrorKind::ConnectionRefused, "Error al conectarse a mqtt server"))
+
     }
 
     /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
@@ -255,7 +263,8 @@ impl Dron {
 
         // Analizar condiciones para saber si se desplazará a la pos del incidente
         //  - batería es mayor al nivel bateria minima
-        let enough_battery = self.current_info.get_battery_lvl()
+        let batery_lvl = self.get_battery_lvl()?;
+        let enough_battery = batery_lvl
             >= self.dron_properties.get_min_operational_battery_lvl();
         //  - inc.pos dentro del rango
         let (inc_lat, inc_lon) = incident.get_position();
@@ -265,9 +274,9 @@ impl Dron {
         if enough_battery {
             if inc_in_range {
                 println!("Dio true, me desplazaré a la pos del inc.");
-                self.current_info.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
+                self.set_inc_id_to_resolve(incident.get_id()); // Aux: ver si va acá o con la "condición b". [].
 
-                self.current_info.set_state(DronState::RespondingToIncident);
+                self.set_state(DronState::RespondingToIncident);
 
                 // Volar hasta la posición del incidente
                 let destination = incident.get_position();
@@ -278,7 +287,7 @@ impl Dron {
         } else {
             println!("Sin suficiente batería para resolver el inc, vuelo a mantenimiento.");
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
-            self.current_info.set_state(DronState::Mantainance);
+            self.set_state(DronState::Mantainance);
 
             // Volar a la posición de Mantenimiento
             let destination = self.dron_properties.get_range_center_position();
@@ -316,7 +325,7 @@ impl Dron {
         let event = format!("Recibido inc resuelto de id: {}", inc.get_id());
         println!("{:?}", event);
 
-        if let Some(my_inc_id) = self.current_info.get_inc_id_to_resolve() {
+        if let Some(my_inc_id) = self.get_inc_id_to_resolve()? {
             if inc.get_id() == my_inc_id {
                 self.go_back_to_range_center_position(mqtt_client)?;
             }
@@ -336,8 +345,7 @@ impl Dron {
         self.fly_to(destination, mqtt_client)?;
 
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
-        self.current_info
-            .set_state(DronState::ExpectingToRecvIncident);
+        self.set_state(DronState::ExpectingToRecvIncident);
 
         Ok(())
     }
@@ -379,7 +387,7 @@ impl Dron {
         destination: (f64, f64),
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        let origin = self.current_info.get_current_position();
+        let origin = self.get_current_position()?;
         let dir = self.calculate_direction(origin, destination);
         println!(
             "Fly_to: dir: {:?}, vel: {}",
@@ -390,7 +398,7 @@ impl Dron {
 
         let mut current_pos = origin;
         while (current_pos.0 < destination.0) && (current_pos.1 < destination.1) {
-            current_pos = self.current_info.increment_current_position_in(dir);
+            current_pos = self.increment_current_position_in(dir)?;
 
             // Simular el vuelo, el dron se desplaza
             let a = 300; // aux
@@ -398,14 +406,17 @@ impl Dron {
 
             println!(
                 "Dron: incrementé mi posición, pos actual: {:?}",
-                self.current_info.get_current_position()
+                self.get_current_position()
             );
             // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                mqtt_client_l.mqtt_publish(
-                    AppsMqttTopics::DronTopic.to_str(),
-                    &self.current_info.to_bytes(),
-                )?;
+                if let Ok(ci) = &self.current_info.lock(){
+                    mqtt_client_l.mqtt_publish(
+                        AppsMqttTopics::DronTopic.to_str(),
+                        &ci.to_bytes(),
+                    )?;
+    
+                }
             };
         }
 
@@ -413,14 +424,17 @@ impl Dron {
         self.unset_flying_info_values();
         println!(
             "Dron: llegué a destino [todavía aprox], pos actual: {:?}",
-            self.current_info.get_current_position()
+            self.get_current_position()
         );
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            mqtt_client_l.mqtt_publish(
-                AppsMqttTopics::DronTopic.to_str(),
-                &self.current_info.to_bytes(),
-            )?;
+            if let Ok(ci) = &self.current_info.lock(){
+                mqtt_client_l.mqtt_publish(
+                    AppsMqttTopics::DronTopic.to_str(),
+                    &ci.to_bytes(),
+                )?;
+
+            }
         };
 
         println!("Fin vuelo hasta incidente.");
@@ -432,12 +446,74 @@ impl Dron {
     fn set_flying_info_values(&mut self, dir: (f64, f64)) {
         let speed = self.dron_properties.get_speed();
         let info = DronFlyingInfo::new(dir, speed);
-        self.current_info.set_flying_info(info);
+        self.set_flying_info(info);
     }
 
     /// Establece `None` como `flying_info`, lo cual indica que el dron no está actualmente en desplazamiento.
-    fn unset_flying_info_values(&mut self) {
-        self.current_info.unset_flying_info();
+    /// Toma lock en el proceso.
+    fn unset_flying_info_values(&mut self) -> Result<(), Error> {
+
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.unset_flying_info();
+            return Ok(());
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+
+    //// Funciones que toman lock ////
+    
+    /// Toma lock y devuelve su nivel de batería.
+    fn get_battery_lvl(&self) -> Result<u8, Error> {
+        if let Ok(ci) = self.current_info.lock() {
+         return Ok(ci.get_battery_lvl());
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    /// Toma lock y establece el inc id a resolver.
+    fn set_inc_id_to_resolve(&self, inc_id: u8) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            &ci.set_inc_id_to_resolve(inc_id);
+            return Ok(());
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    fn set_state(&self, new_state: DronState) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.set_state(new_state);
+            return Ok(());
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    fn get_current_position(&self) -> Result<(f64, f64), Error> {
+        if let Ok(ci) = self.current_info.lock() {
+            return Ok(ci.get_current_position());
+           }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    fn increment_current_position_in(&self, dir: (f64, f64)) -> Result<(f64, f64), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            return Ok(ci.increment_current_position_in(dir));
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    fn set_flying_info(&self, info: DronFlyingInfo) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.set_flying_info(info);
+            return Ok(());
+        }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
+    }
+    
+    fn get_inc_id_to_resolve(&self) -> Result<Option<u8>, Error> {
+        if let Ok(ci) = self.current_info.lock() {
+            return Ok(ci.get_inc_id_to_resolve());
+           }
+        Err(Error::new(ErrorKind::Other, "Error al tomar lock de current info."))
     }
 }
 
