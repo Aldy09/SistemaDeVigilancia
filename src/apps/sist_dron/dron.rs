@@ -292,20 +292,28 @@ impl Dron {
 
     fn decide_if_should_move_to_incident(
         &self,
-        _incident: &Incident,
+        incident: &Incident,
         _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
-        let mut candidate_drones: Vec<(u8, f64)> = Vec::new(); // candidate_dron = (dron_id, distance_to_incident)
+        
+        let mut should_move = false;
+        thread::sleep(Duration::from_millis(500));
+        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+            if let Some((_incident_position, candidate_drones)) = distances.get_mut(&incident.get_id()) {
+                // Ordenar por el valor f64 de la tupla, de menor a mayor
+                candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
+        
+                // Seleccionar los primeros dos elementos después de ordenar
+                let closest_two_drones: Vec<u8> =
+                    candidate_drones.iter().take(2).map(|&(id, _)| id).collect();
+        
+                // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
+                should_move = closest_two_drones.contains(&self.get_id()?);
+            }
+        }
 
-        // Ordenar por el valor f64 de la tupla, de menor a mayor
-        candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
+        Ok(should_move)
 
-        // Seleccionar los primeros dos elementos después de ordenar
-        let closest_two_drones: Vec<u8> =
-            candidate_drones.iter().take(2).map(|&(id, _)| id).collect();
-
-        // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
-        Ok(closest_two_drones.contains(&self.get_id()?))
     }
 
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
