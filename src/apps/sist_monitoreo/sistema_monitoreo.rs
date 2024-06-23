@@ -87,7 +87,7 @@ impl SistemaMonitoreo {
                 .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
         );
 
-        children.push(spawn_receive_incidents_thread(logger));
+        children.push(spawn_write_incidents_to_logger_thread(logger));
 
         children.push(
             sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx),
@@ -273,7 +273,7 @@ impl SistemaMonitoreo {
     }
 }
 
-fn spawn_receive_incidents_thread(logger: Logger) -> JoinHandle<()> {
+fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
     thread::spawn(move || loop {
         while let Ok(msg) = logger.logger_rx.recv() {
             logger.write_in_file(msg);

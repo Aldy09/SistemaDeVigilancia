@@ -2,7 +2,7 @@ use std::io::{Error, ErrorKind};
 
 use super::super::properties::Properties;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SistDronProperties {
     max_battery_lvl: u8,
     min_operational_battery_lvl: u8,
