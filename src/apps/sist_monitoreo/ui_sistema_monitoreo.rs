@@ -120,7 +120,7 @@ pub struct UISistemaMonitoreo {
     places: Places,
     last_incident_id: u8,
     exit_tx: Sender<bool>,
-    incidents_to_resolve: Vec<IncidentWithDrones>,
+    incidents_to_resolve: Vec<IncidentWithDrones>, // posicion 0  --> (inc_id_to_resolve, drones(dron1, dron2)) // posicion 1 --> (inc_id_to_resolve 2, drones(dron1, dron2))
     hashmap_incidents: HashMap<u8, Incident>,
 }
 
@@ -209,12 +209,12 @@ impl UISistemaMonitoreo {
 
                     match incident_index {
                         Some(index) => {
-                            println!("EL INCIDENTE EXISTE ASIQUE PUSHEO EL DRON");
+                            println!("EL INCIDENTE ESTA AGREGADO ASIQUE PUSHEO EL DRON");
                             // Si el incidente ya existe, agrega el dron al vector de drones del incidente.
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
-                            println!("EL INCIDENTE NO EXISTE ASIQUE LO CREO Y PUSHEO EL DRON");
+                            println!("EL INCIDENTE NO ESTA AGREGADO ASIQUE LO CREO Y PUSHEO EL DRON");
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_id: inc_id,
@@ -224,6 +224,9 @@ impl UISistemaMonitoreo {
                     }
                 }
             }
+
+            //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
+
             println!("EL vector de incidentes a resolver es: {:?}", self.incidents_to_resolve);
 
             for incident in self.incidents_to_resolve.iter() {
@@ -232,6 +235,7 @@ impl UISistemaMonitoreo {
                     let inc_id = incident.incident_id; // Asumiendo que la estructura tiene un campo inc_id
                     let incident = self.hashmap_incidents.get_mut(&inc_id).unwrap();
                     incident.set_resolved();
+                    self.publish_incident_tx.send(incident.clone()).unwrap();
                     self.places
                         .remove_place(inc_id, "Incident".to_string());
                 }

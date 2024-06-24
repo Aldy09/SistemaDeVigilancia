@@ -333,6 +333,8 @@ impl Dron {
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
 
+                
+
                 if should_move {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
