@@ -10,8 +10,13 @@ use std::{
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
+    apps::incident_state::IncidentState, mqtt::client::mqtt_client::MQTTClient,
+    mqtt::messages::publish_message::PublishMessage,
+};
+use crate::{
     apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident, sist_dron::dron_state::DronState
+        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident,
+        sist_dron::dron_state::DronState,
     },
     logging::{
         logger::Logger,
@@ -19,16 +24,13 @@ use crate::{
     },
     mqtt::messages::message_type::MessageType,
 };
-use crate::{
-    apps::incident_state::IncidentState,
-    mqtt::client::mqtt_client::MQTTClient,
-    mqtt::messages::publish_message::PublishMessage,
-};
 
 use super::{
     dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
     sist_dron_properties::SistDronProperties,
 };
+
+type DistancesType = Arc<Mutex<HashMap<u8, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_id, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -43,7 +45,7 @@ pub struct Dron {
 
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
 
-    drone_distances_by_incident: Arc<Mutex<HashMap<u8, ((f64,f64), Vec<(u8, f64)>)>>>, // (inc_id, ( (inc_pos),(dron_id, distance_to_incident)) )
+    drone_distances_by_incident: DistancesType,
 }
 
 #[allow(dead_code)]
@@ -61,13 +63,14 @@ impl Dron {
                     mqtt_client.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
                 }
 
-                 dron.spawn_threads(mqtt_client, logger_rx)?;
-
+                dron.spawn_threads(mqtt_client, logger_rx)?;
             }
-            Err(_) => return Err(Error::new(
-                std::io::ErrorKind::Other,
-                "Error al establecer la conexion",
-            ))
+            Err(_) => {
+                return Err(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Error al establecer la conexion",
+                ))
+            }
         }
 
         Ok(dron)
@@ -86,17 +89,15 @@ impl Dron {
 
         self.subscribe_to_topics(Arc::clone(&mqtt_client_sh))?;
 
-       
         join_all_threads(children);
 
         Ok(())
-
     }
 
     pub fn clone_ref(&self) -> Self {
         Self {
             current_info: Arc::clone(&self.current_info),
-            dron_properties: self.dron_properties.clone(),
+            dron_properties: self.dron_properties,
             logger_tx: self.logger_tx.clone(),
             drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
         }
@@ -150,7 +151,7 @@ impl Dron {
                             ))
                             .unwrap();
                         let handle_thread =
-                            self.spawn_process_recvd_msg_thread(publish_message, &mqtt_client);
+                            self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
                         children.push(handle_thread);
                     }
                     Err(e) => {
@@ -186,7 +187,6 @@ impl Dron {
         match msg.get_topic().as_str() {
             "Inc" => self.process_valid_inc(msg.get_payload(), mqtt_client),
             "Dron" => {
-
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.get_id()? != received_ci.get_id();
                 let recvd_dron_is_not_flying = received_ci.get_state() != DronState::Flying;
@@ -197,7 +197,7 @@ impl Dron {
                     self.process_valid_dron(received_ci)?;
                 }
                 Ok(())
-            },
+            }
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Topic no conocido",
@@ -231,11 +231,10 @@ impl Dron {
                 println!("HOLA TOPIC DRON, entrando, el hashmap: {:?}", distances);
                 //Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interes.
                 if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
-
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
-                
+
                     let self_distance = self.get_distance_to(*incident_position)?;
-            
+
                     println!("HOLA TOPIC DRON, antes de pushear self_distance: {:?}, self_distance: {:?}", self_distance, received_dron_distance);
                     //Agrego al vector la menor distancia entre los dos drones al incidente
                     if self_distance <= received_dron_distance {
@@ -244,11 +243,14 @@ impl Dron {
                         candidate_drones.push((received_dron.get_id(), received_dron_distance));
                     }
 
-                    println!("HOLA TOPIC DRON, he pusheado el de menor dist, el hashmap: {:?}", distances);
+                    println!(
+                        "HOLA TOPIC DRON, he pusheado el de menor dist, el hashmap: {:?}",
+                        distances
+                    );
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -257,21 +259,25 @@ impl Dron {
         incident: &Incident,
         _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
-        
         let mut should_move = false;
         println!("HOLA Esperando para recibir notificaciones de otros drones...");
         //thread::sleep(Duration::from_millis(500));
         thread::sleep(Duration::from_millis(3500)); // Aux Probando
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            println!("HOLA adentro del decide, estoy por consultarlo, el hashmap: {:?}", distances);
-            if let Some((_incident_position, candidate_drones)) = distances.get_mut(&incident.get_id()) {
+            println!(
+                "HOLA adentro del decide, estoy por consultarlo, el hashmap: {:?}",
+                distances
+            );
+            if let Some((_incident_position, candidate_drones)) =
+                distances.get_mut(&incident.get_id())
+            {
                 // Ordenar por el valor f64 de la tupla, de menor a mayor
                 candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
-        
+
                 // Seleccionar los primeros dos elementos después de ordenar
                 let closest_two_drones: Vec<u8> =
                     candidate_drones.iter().take(2).map(|&(id, _)| id).collect();
-        
+
                 // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
                 should_move = closest_two_drones.contains(&self.get_id()?);
 
@@ -288,7 +294,6 @@ impl Dron {
         }
 
         Ok(should_move)
-
     }
 
     /// Publica su estado, y analiza condiciones para desplazarse.
@@ -366,8 +371,6 @@ impl Dron {
         rad <= (adjusted_range)
     }
 
-    
-
     /// Analiza si el incidente que se resolvió fue el que el dron self estaba atendiendo.
     /// Si sí, entonces vuelve al centro de su rango (su posición inicial) y actualiza su estado.
     /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
@@ -403,7 +406,6 @@ impl Dron {
 
         Ok(())
     }
-    
 
     /// Calcula la dirección en la que debe volar desde una posición `origin` hasta `destination`.
     // Aux: esto estaría mejor en un struct posicion quizás? [] ver.
@@ -709,7 +711,7 @@ impl Dron {
             }
         }
     }
-    
+
     fn add_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             println!("HOLA antes del add to hashmap, el hashmap: {:?}", distances);
@@ -721,7 +723,6 @@ impl Dron {
             ErrorKind::Other,
             "Error al tomar lock de drone_distances_by_incident.",
         ))
-        
     }
 }
 
