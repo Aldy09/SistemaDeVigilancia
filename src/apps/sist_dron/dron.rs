@@ -427,9 +427,10 @@ impl Dron {
         direction
     }
 
-    /// Vuela hasta la posición de destino.
-    /// Desde que inicia el desplazamiento y hasta que llega posee flying_info
-    /// (dirección y velocidad de desplazamiento). Al llegar a destino ya no posee esos valores.
+    fn calculate_distance(&self, a: (f64, f64), b: (f64, f64)) -> f64 {
+        ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt()
+    }
+
     fn fly_to(
         &mut self,
         destination: (f64, f64),
@@ -446,7 +447,8 @@ impl Dron {
         self.set_flying_info_values(dir)?;
 
         let mut current_pos = origin;
-        while (current_pos.0 < destination.0) && (current_pos.1 < destination.1) {
+        let threshold = 0.01; // Define un umbral adecuado para tu aplicación
+        while self.calculate_distance(current_pos, destination) > threshold {
             current_pos = self.increment_current_position_in(dir)?;
 
             // Simular el vuelo, el dron se desplaza
@@ -457,7 +459,7 @@ impl Dron {
                 "Dron: incrementé mi posición, pos actual: {:?}",
                 self.get_current_position()
             );
-            // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
+            // Hace publish de su estado (de su current info)
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 if let Ok(ci) = &self.current_info.lock() {
                     mqtt_client_l
@@ -472,6 +474,10 @@ impl Dron {
             "Dron: llegué a destino [todavía aprox], pos actual: {:?}",
             self.get_current_position()
         );
+
+        // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
+        self.set_state(DronState::ManagingIncident)?;
+
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
@@ -480,7 +486,6 @@ impl Dron {
         };
 
         println!("Fin vuelo hasta incidente.");
-        self.set_state(DronState::RespondingToIncident)?;
 
         Ok(())
     }

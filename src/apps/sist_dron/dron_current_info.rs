@@ -4,7 +4,7 @@ use super::dron_flying_info::DronFlyingInfo;
 use super::dron_state::DronState;
 
 /// Struct que contiene los campos que identifican al Dron (el id) y que pueden modificarse durante su funcionamiento.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DronCurrentInfo {
     id: u8,
     // Posición actual

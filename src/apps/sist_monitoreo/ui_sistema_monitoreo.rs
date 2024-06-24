@@ -4,6 +4,7 @@ use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
+use crate::apps::sist_dron::dron_state::DronState;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 use crate::apps::sist_camaras::camera::Camera;
@@ -100,6 +101,11 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
     providers
 }
 
+#[derive(Debug)]
+struct IncidentWithDrones {
+    incident_id: u8,
+    drones: Vec<DronCurrentInfo>, // Asume DronCurrentInfo es el tipo de tus drones
+}
 pub struct UISistemaMonitoreo {
     providers: HashMap<Provider, Box<dyn TilesManager + Send>>,
     selected_provider: Provider,
@@ -114,6 +120,8 @@ pub struct UISistemaMonitoreo {
     places: Places,
     last_incident_id: u8,
     exit_tx: Sender<bool>,
+    incidents_to_resolve: Vec<IncidentWithDrones>,
+    hashmap_incidents: HashMap<u8, Incident>,
 }
 
 impl UISistemaMonitoreo {
@@ -141,6 +149,8 @@ impl UISistemaMonitoreo {
             places: super::super::vendor::Places::new(),
             last_incident_id: 0,
             exit_tx,
+            incidents_to_resolve: Vec::new(),
+            hashmap_incidents: HashMap::new(),
         }
     }
     fn send_incident(&self, incident: Incident) {
@@ -151,21 +161,21 @@ impl UISistemaMonitoreo {
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
 
-        if camera.is_not_deleted() {            
+        if camera.is_not_deleted() {
             let camera_id = camera.get_id();
             let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
             // Si existía, la elimino del mapa, para volver a dibujarla (xq puede tener cambiado el estado)
             self.places.remove_place(camera_id, "Camera".to_string());
-            
+
             // Se le pone un color dependiendo de su estado
             let style = match camera.get_state() {
-                CameraState::Active =>  Style {
+                CameraState::Active => Style {
                     symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
                     ..Default::default()
                 },
                 CameraState::SavingMode => Style::default(),
             };
-            
+
             let new_place = Place {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
@@ -175,7 +185,6 @@ impl UISistemaMonitoreo {
                 place_type: "Camera".to_string(),
             };
             self.places.add_place(new_place);
-
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
@@ -188,13 +197,48 @@ impl UISistemaMonitoreo {
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
-            // Aux: #ToDo pensar cómo se entera la ui de que un dron no existe más.
-            // aux: No es como en cámaras que sist cámaras avisa cuál se borró
-            // aux: xq acá el dron actúa por su cuenta (si desaparece no enviará nada #meParece).
-            // aux: Debería mandar cada tanto y solamente mostrarse? #pensar, xq esto lo agrega al places x siempre.
+
+            if dron.get_state() == DronState::ManagingIncident {
+                println!("ESTOY MANEJANDO UN INCIDENTE ASIQUE AGREGO AL VECTOR");
+                if let Some(inc_id) = dron.get_inc_id_to_resolve() {
+                    // Busca el incidente en el vector.
+                    let incident_index = self
+                        .incidents_to_resolve
+                        .iter()
+                        .position(|incident| incident.incident_id == inc_id);
+
+                    match incident_index {
+                        Some(index) => {
+                            println!("EL INCIDENTE EXISTE ASIQUE PUSHEO EL DRON");
+                            // Si el incidente ya existe, agrega el dron al vector de drones del incidente.
+                            self.incidents_to_resolve[index].drones.push(dron.clone());
+                        }
+                        None => {
+                            println!("EL INCIDENTE NO EXISTE ASIQUE LO CREO Y PUSHEO EL DRON");
+                            // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
+                            self.incidents_to_resolve.push(IncidentWithDrones {
+                                incident_id: inc_id,
+                                drones: vec![dron.clone()],
+                            });
+                        }
+                    }
+                }
+            }
+            println!("EL vector de incidentes a resolver es: {:?}", self.incidents_to_resolve);
+
+            for incident in self.incidents_to_resolve.iter() {
+                
+                if incident.drones.len() == 2 {
+                    let inc_id = incident.incident_id; // Asumiendo que la estructura tiene un campo inc_id
+                    let incident = self.hashmap_incidents.get_mut(&inc_id).unwrap();
+                    incident.set_resolved();
+                    self.places
+                        .remove_place(inc_id, "Incident".to_string());
+                }
+            }
+
             let (lat, lon) = dron.get_current_position();
             let dron_pos = Position::from_lon_lat(lon, lat);
-            //let state = dron.get_state(); // Aux: #ToDo ver si les cambiamos el color o qué cosa, según el state, ídem cameras. [].
 
             // Se crea el label a mostrar por pantalla, según si está o no volando.
             let dron_label;
@@ -329,6 +373,8 @@ impl eframe::App for UISistemaMonitoreo {
                                                 id: incident.get_id(),
                                                 place_type: "Incident".to_string(),
                                             };
+                                            self.hashmap_incidents
+                                                .insert(incident.get_id(), incident.clone());
                                             self.places.add_place(new_place_incident);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;

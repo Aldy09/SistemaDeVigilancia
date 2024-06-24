@@ -6,6 +6,8 @@ pub enum DronState {
     RespondingToIncident,
     Flying,
     Mantainance,
+    ManagingIncident,
+    IncidentResolved,
 }
 
 impl DronState {
@@ -15,6 +17,8 @@ impl DronState {
             DronState::RespondingToIncident => 2_u8.to_be_bytes(),
             DronState::Flying => 3_u8.to_be_bytes(),
             DronState::Mantainance => 4_u8.to_be_bytes(),
+            DronState::ManagingIncident => 5_u8.to_be_bytes(),
+            DronState::IncidentResolved => 6_u8.to_be_bytes(),
         }
     }
 
@@ -24,6 +28,8 @@ impl DronState {
             2 => Ok(DronState::RespondingToIncident),
             3 => Ok(DronState::Flying),
             4 => Ok(DronState::Mantainance),
+            5 => Ok(DronState::ManagingIncident),
+            6 => Ok(DronState::IncidentResolved),
             _ => Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Estado de dron no válido",
