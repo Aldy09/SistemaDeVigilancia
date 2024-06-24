@@ -445,20 +445,21 @@ impl Dron {
         );
         self.set_state(DronState::Flying)?;
         self.set_flying_info_values(dir)?;
-
+    
         let mut current_pos = origin;
-        let threshold = 0.01; // Define un umbral adecuado para tu aplicación
+        let threshold = 0.0001; // Define un umbral adecuado para tu aplicación
         while self.calculate_distance(current_pos, destination) > threshold {
             current_pos = self.increment_current_position_in(dir)?;
-
+    
             // Simular el vuelo, el dron se desplaza
             let a = 300; // aux
             sleep(Duration::from_micros(a));
-
+    
             println!(
                 "Dron: incrementé mi posición, pos actual: {:?}",
                 self.get_current_position()
             );
+            // Hace publish de su estado (de su current info)
             // Hace publish de su estado (de su current info)
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 if let Ok(ci) = &self.current_info.lock() {
@@ -467,7 +468,7 @@ impl Dron {
                 }
             };
         }
-
+    
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values()?;
         println!(
@@ -484,11 +485,11 @@ impl Dron {
                 mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
             }
         };
-
+    
         println!("Fin vuelo hasta incidente.");
 
         Ok(())
-    }
+    } 
 
     /// Establece como `flying_info` a la dirección recibida, y a la velocidad leída del archivo de configuración.
     fn set_flying_info_values(&mut self, dir: (f64, f64)) -> Result<(), Error> {
