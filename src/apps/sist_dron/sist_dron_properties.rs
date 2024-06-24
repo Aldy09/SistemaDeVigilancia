@@ -2,7 +2,7 @@ use std::io::{Error, ErrorKind};
 
 use super::super::properties::Properties;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SistDronProperties {
     max_battery_lvl: u8,
     min_operational_battery_lvl: u8,
@@ -156,5 +156,10 @@ impl SistDronProperties {
     /// Devuelve la velocidad de vuelo del dron
     pub fn get_speed(&self) -> f64 {
         self.speed
+    }
+    
+    pub fn set_range_center_position(&mut self, lat_inicial: f64, lon_inicial: f64) {
+        self.range_center_lat = lat_inicial;
+        self.range_center_lon = lon_inicial;
     }
 }

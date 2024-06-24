@@ -4,7 +4,7 @@ use super::dron_flying_info::DronFlyingInfo;
 use super::dron_state::DronState;
 
 /// Struct que contiene los campos que identifican al Dron (el id) y que pueden modificarse durante su funcionamiento.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DronCurrentInfo {
     id: u8,
     // Posición actual
@@ -166,6 +166,10 @@ impl DronCurrentInfo {
     /// Setea el id del incidente que el dron se encuentra actualmente resolviendo.
     pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
         self.inc_id_to_resolve = Some(inc_id);
+    }
+    /// Borra el id del incidente resuelto
+    pub fn unset_inc_id_to_resolve(&mut self) {
+        self.inc_id_to_resolve = None;
     }
 
     /// Setea la flying_info recibida.

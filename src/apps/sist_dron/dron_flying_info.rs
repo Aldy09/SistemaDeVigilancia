@@ -1,7 +1,7 @@
 use std::io::Error;
 
 /// Dirección y velocidad con las que vuela el dron.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DronFlyingInfo {
     direction: (f64, f64), // vector unitario de dirección al volar, con componentes lat y lon
     speed: f64,            // velocidad de desplazamiento al volar
