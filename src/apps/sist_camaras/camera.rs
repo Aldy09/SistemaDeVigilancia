@@ -175,7 +175,7 @@ impl Camera {
     // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
-        let const_border_range: f64 = 4.0; // Constante que debe ir en arch de configuración.
+        let const_border_range: f64 = 3.0; // Constante que debe ir en arch de configuración.
         // Se fija si están en rango de lindantes.
         let in_range = self.is_within_range_from_self(
             candidate_bordering.get_latitude(),
@@ -213,16 +213,13 @@ impl Camera {
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        //let adjusted_range = range / 400.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
-                                                 // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
-
+        // Se modifica el range de las cámaras, ahora que son latitudes de verdad y no "3 4".        
         let adjusted_range = 0.00135 + 0.0012 * range;
-        // aux dron: let adjusted_range = range / 1000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+
         println!(
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
         ); // debug []
-        //println!()
         rad <= (adjusted_range)
     }
 }
@@ -278,35 +275,14 @@ mod test {
 
     #[test]
     fn test_3_camaras_lejanas_no_son_lindantes() {
-        /*//     Aux: obelisco: lon -58.3861838  lat: -34.6037344
-        let lat = -34.6037344;
-        let lon = -58.3861838;
-        let range = 10;
-        let incr = 0.0000005;*/
-        //let mut cam_1 = Camera::new(1, lat, lon, range);
-        // A más de cuatro cuadras: -58.3938 -34.6044
-        //let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3938, 1); // 4 cuadras a la izq de cam 5.
-        // 58.3954 -34.6045
-        //let mut cam_a: Camera = Camera::new(10, -34.4045, -58.1954, 1); // RE lejos
-
-        // -58.3907 -34.6043
-        //let mut cam_a: Camera = Camera::new(10, -34.6043, -58.3907, 1); // 2 cuadras a la izq de cam 5.
-        
-        // -58.3920 -34.6044
-        //let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3920, 1); // 3 cuadras a la izq de cam 5.
-
-        //5 cuadras: o sea afuera de las 4 cuadras de lindantes
+        // A 5 cuadras de la otra cámara, es decir, afuera de las 4 cuadras de lindantes
         //-58.3950 -34.6044
         let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3950, 1); // 3 cuadras a la izq de cam 5.
 
-        // Otra cámara, con misma longitud, y latitud MUY incrementada
-        //let mut cam_2 = Camera::new(2, lat + 10.0 * incr, lon, range);
-        //let mut cam_b: Camera = Camera::new(4, -34.6042, -58.3909, 1); // Aux: cámara 4.
+        // Otra cámara, con misma longitud, y latitud más lejana
         let mut cam_b: Camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
 
-        //cam_1.mutually_add_if_bordering(&mut cam_2);
         cam_b.mutually_add_if_bordering(&mut cam_a);
-        // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
 
         // No se han agregado mutuamente, xq no entraron dentro del border_range para ser consideradas lindantes
         assert!(!cam_a.border_cameras.contains(&cam_b.get_id()));
