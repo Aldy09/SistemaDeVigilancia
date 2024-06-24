@@ -109,25 +109,33 @@ impl Camera {
 
     /// Agrega el inc_id a su lista de incidentes a los que le presta atención,
     /// y se cambia el estado a activo. Maneja su marcado.
-    pub fn append_to_incs_being_managed(&mut self, inc_id: u8) {
+    /// Devuelve si cambió su estado interno (a Activo).
+    pub fn append_to_incs_being_managed(&mut self, inc_id: u8) -> bool {
+        let mut state_has_changed = false;
         self.incs_being_managed.push(inc_id);
         // Si ya estaba en estado activo, la dejo como estaba (para no marcarla como modificada)
         if self.state != CameraState::Active {
             self.set_state_to(CameraState::Active);
+            state_has_changed = true;
         };
+        state_has_changed
     }
 
     /// Elimina el inc_id de su lista de incidentes a los que les presta atención,
     /// y si ya no le quedan incidentes, se cambia el estado a modo ahorro de energía.
     /// Maneja su marcado.
-    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8) {
+    /// Devuelve si cambió su estado interno (a Ahorro de energía).
+    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8) -> bool {
+        let mut state_has_changed = false;
         if let Some(pos_de_inc_id) = self.incs_being_managed.iter().position(|&x| x == inc_id) {
             self.incs_being_managed.remove(pos_de_inc_id);
             // Maneja su lista y se cambiarse el estado si corresponde
             if self.incs_being_managed.is_empty() {
                 self.set_state_to(CameraState::SavingMode);
+                state_has_changed = true;
             }
         }
+        state_has_changed
     }
 
     /// Función getter utilizada con propósitos de debugging.
@@ -167,7 +175,8 @@ impl Camera {
     // Analiza si se encuentra la cámara recibida por parámetro dentro del border_range, en caso afirmativo:
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
-        let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
+        let const_border_range: f64 = 4.0; // Constante que debe ir en arch de configuración.
+        // Se fija si están en rango de lindantes.
         let in_range = self.is_within_range_from_self(
             candidate_bordering.get_latitude(),
             candidate_bordering.get_longitude(),
@@ -212,6 +221,7 @@ impl Camera {
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
         ); // debug []
+        println!()
         rad <= (adjusted_range)
     }
 }
@@ -251,27 +261,49 @@ mod test {
         // Se han agregado mutuamente, xq sí qentraron dentro del border_range para ser consideradas lindantes
         assert!(cam_1.border_cameras.contains(&cam_2.get_id()));
         assert!(cam_2.border_cameras.contains(&cam_1.get_id()));
+
+        //
+        // Ídem con datos "reales"
+        let mut cam_5: Camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
+        let mut cam_6: Camera = Camera::new(6, -34.6039, -58.3837, 1); // Aux: cámara 6.
+        
+        cam_5.mutually_add_if_bordering(&mut cam_6);
+
+        // Se han agregado mutuamente, xq sí qentraron dentro del border_range para ser consideradas lindantes
+        assert!(cam_5.border_cameras.contains(&cam_6.get_id()));
+        assert!(cam_6.border_cameras.contains(&cam_5.get_id()));
+
     }
 
     #[test]
     fn test_3_camaras_lejanas_no_son_lindantes() {
-        //     Aux: obelisco: lon -58.3861838  lat: -34.6037344
-
+        /*//     Aux: obelisco: lon -58.3861838  lat: -34.6037344
         let lat = -34.6037344;
         let lon = -58.3861838;
         let range = 10;
-        let incr = 0.0000005;
-        let mut cam_1 = Camera::new(1, lat, lon, range);
+        let incr = 0.0000005;*/
+        //let mut cam_1 = Camera::new(1, lat, lon, range);
+        // A más de cuatro cuadras: -58.3938 -34.6044
+        //let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3938, 1); // 4 cuadras a la izq de cam 5.
+        // 58.3954 -34.6045
+        //let mut cam_a: Camera = Camera::new(10, -34.4045, -58.1954, 1); // RE lejos
+
+        // -58.3907 -34.6043
+        let mut cam_a: Camera = Camera::new(10, -34.6043, -58.3907, 1); // 2 cuadras a la izq de cam 5.
+        
 
         // Otra cámara, con misma longitud, y latitud MUY incrementada
-        let mut cam_2 = Camera::new(2, lat + 10.0 * incr, lon, range);
+        //let mut cam_2 = Camera::new(2, lat + 10.0 * incr, lon, range);
+        //let mut cam_b: Camera = Camera::new(4, -34.6042, -58.3909, 1); // Aux: cámara 4.
+        let mut cam_b: Camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
 
-        cam_1.mutually_add_if_bordering(&mut cam_2);
+        //cam_1.mutually_add_if_bordering(&mut cam_2);
+        cam_b.mutually_add_if_bordering(&mut cam_a);
         // Aux con estos datos da: Dio que la cuenta vale: 0.0000004999999987376214
 
         // No se han agregado mutuamente, xq no entraron dentro del border_range para ser consideradas lindantes
-        assert!(!cam_1.border_cameras.contains(&cam_2.get_id()));
-        assert!(!cam_2.border_cameras.contains(&cam_1.get_id()));
+        assert!(!cam_a.border_cameras.contains(&cam_b.get_id()));
+        assert!(!cam_b.border_cameras.contains(&cam_a.get_id()));
     }
 
     // #[test]
@@ -292,10 +324,11 @@ mod test {
         // Rango de 1 cuadra.
         let camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
         
-        let (lat, lon) = (-34.6042, -58.3897);
+        let (lat, lon) = (-34.6042, -58.3897); // una cuadra a la izq de la cam 5
         let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
         
-        assert!(is_in_range);
+        //assert!(is_in_range);
+        assert!(false);
         
     }
 

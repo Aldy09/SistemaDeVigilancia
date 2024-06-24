@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
+use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
@@ -149,19 +150,32 @@ impl UISistemaMonitoreo {
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
-        if camera.is_not_deleted() {
-            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-            let camera_id = camera.get_id();
 
+        if camera.is_not_deleted() {            
+            let camera_id = camera.get_id();
+            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+            // Si existía, la elimino del mapa, para volver a dibujarla (xq puede tener cambiado el estado)
+            self.places.remove_place(camera_id, "Camera".to_string());
+            
+            // Se le pone un color dependiendo de su estado
+            let style = match camera.get_state() {
+                CameraState::Active =>  Style {
+                    symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
+                    ..Default::default()
+                },
+                CameraState::SavingMode => Style::default(),
+            };
+            
             let new_place = Place {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
                 symbol: '📷',
-                style: Style::default(), //ESTE ES DEL LABEL, NO DEL ICONO
+                style: style, //ESTE ES DEL LABEL, NO DEL ICONO
                 id: camera_id,
                 place_type: "Camera".to_string(),
             };
             self.places.add_place(new_place);
+
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
