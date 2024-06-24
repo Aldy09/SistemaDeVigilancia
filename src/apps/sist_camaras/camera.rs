@@ -213,15 +213,16 @@ impl Camera {
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        let adjusted_range = range / 400.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        //let adjusted_range = range / 400.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
                                                  // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
 
+        let adjusted_range = 0.00135 + 0.0012 * range;
         // aux dron: let adjusted_range = range / 1000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
         println!(
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
         ); // debug []
-        println!()
+        //println!()
         rad <= (adjusted_range)
     }
 }
@@ -289,8 +290,14 @@ mod test {
         //let mut cam_a: Camera = Camera::new(10, -34.4045, -58.1954, 1); // RE lejos
 
         // -58.3907 -34.6043
-        let mut cam_a: Camera = Camera::new(10, -34.6043, -58.3907, 1); // 2 cuadras a la izq de cam 5.
+        //let mut cam_a: Camera = Camera::new(10, -34.6043, -58.3907, 1); // 2 cuadras a la izq de cam 5.
         
+        // -58.3920 -34.6044
+        //let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3920, 1); // 3 cuadras a la izq de cam 5.
+
+        //5 cuadras: o sea afuera de las 4 cuadras de lindantes
+        //-58.3950 -34.6044
+        let mut cam_a: Camera = Camera::new(10, -34.6044, -58.3950, 1); // 3 cuadras a la izq de cam 5.
 
         // Otra cámara, con misma longitud, y latitud MUY incrementada
         //let mut cam_2 = Camera::new(2, lat + 10.0 * incr, lon, range);
@@ -327,8 +334,8 @@ mod test {
         let (lat, lon) = (-34.6042, -58.3897); // una cuadra a la izq de la cam 5
         let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
         
-        //assert!(is_in_range);
-        assert!(false);
+        assert!(is_in_range);
+        //assert!(false);
         
     }
 
