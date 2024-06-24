@@ -204,9 +204,14 @@ impl Camera {
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        let adjusted_range = range / 10000000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        let adjusted_range = range / 400.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
                                                  // println!("Dio que la cuenta vale: {}, y adj_range vale: {}", rad, adjusted_range); // debug []
 
+        // aux dron: let adjusted_range = range / 1000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
+        println!(
+            "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
+            rad, adjusted_range, range
+        ); // debug []
         rad <= (adjusted_range)
     }
 }
@@ -226,20 +231,6 @@ mod test {
 
         assert_eq!(camera_reconstruida, camera);
     }
-    // #[test]
-    // fn text_will_register() {
-    //     let camera = Camera::new(12, 3.0, 4.0, 5, vec![6]);
-    //     assert_eq!(camera.will_register((3.0, 4.0)), true);
-    //     assert_eq!(camera.will_register((3.0, 4.1)), true);
-    //     assert_eq!(camera.will_register((3.0, 4.2)), true);
-    //     assert_eq!(camera.will_register((3.0, 4.3)), true);
-    //     assert_eq!(camera.will_register((3.0, 4.4)), true);
-    //     assert_eq!(camera.will_register((3.0, 4.5)), false);
-    //     assert_eq!(camera.will_register((3.0, 4.6)), false);
-    //     assert_eq!(camera.will_register((3.0, 4.7)), false);
-    //     assert_eq!(camera.will_register((3.0, 4.8)), false);
-    //     assert_eq!(camera.will_register((3.0, 4.9)), false);
-    // }
 
     #[test]
     fn test_2_camaras_cercanas_son_lindantes() {
@@ -281,5 +272,43 @@ mod test {
         // No se han agregado mutuamente, xq no entraron dentro del border_range para ser consideradas lindantes
         assert!(!cam_1.border_cameras.contains(&cam_2.get_id()));
         assert!(!cam_2.border_cameras.contains(&cam_1.get_id()));
+    }
+
+    // #[test]
+    // fn test_4_testing_camera_range() {
+
+    //     let camera = Camera::new(5, -34.6040, -58.3873, 3); // Aux: cámara 5.
+        
+    //     let (lat, lon) = (-34.6042, -58.3897);
+    //     let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
+        
+    //     assert!(is_in_range);
+        
+    // }
+
+    #[test]
+    fn test_4a_una_pos_dentro_de_range_cuadras_esta_dentro_del_rango() {
+
+        // Rango de 1 cuadra.
+        let camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
+        
+        let (lat, lon) = (-34.6042, -58.3897);
+        let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
+        
+        assert!(is_in_range);
+        
+    }
+
+    #[test]
+    fn test_4b_una_pos_mas_lejana_esta_fuera_del_rango() {
+
+        // Rango de 1 cuadra.
+        let camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
+        
+        let (lat, lon) = (-34.6042, -58.3902);
+        let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
+        
+        assert!(!is_in_range);
+        
     }
 }
