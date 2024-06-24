@@ -339,6 +339,7 @@ impl Dron {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
                     self.fly_to(destination, mqtt_client)?;
+                    self.remove_incident_to_hashmap(&inc_id)?;
                 }
             } else {
                 println!("print aux: el inc No está en mi rango.")
@@ -387,6 +388,7 @@ impl Dron {
         if let Some(my_inc_id) = self.get_inc_id_to_resolve()? {
             if inc.get_id() == my_inc_id {
                 self.go_back_to_range_center_position(mqtt_client)?;
+                self.unset_inc_id_to_resolve()?;
             }
         }
 
@@ -538,6 +540,17 @@ impl Dron {
             "Error al tomar lock de current info.",
         ))
     }
+    /// Toma lock y borra el inc id a resolver.
+    fn unset_inc_id_to_resolve(&self) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.unset_inc_id_to_resolve();
+            return Ok(());
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de current info.",
+        ))
+    }
 
     fn set_state(&self, new_state: DronState) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
@@ -626,7 +639,7 @@ impl Dron {
     fn new_internal(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
-        let dron_properties = SistDronProperties::new(properties_file)?;
+        let mut dron_properties = SistDronProperties::new(properties_file)?;
         let drone_distances_by_incident = Arc::new(Mutex::new(HashMap::new()));
 
         // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
@@ -636,6 +649,8 @@ impl Dron {
         //Posicion inicial del dron
         let (lat_inicial, lon_inicial) =
             calculate_initial_position(rng_center_lat, rng_center_lon, id);
+        dron_properties.set_range_center_position(lat_inicial,lon_inicial);
+            
         let current_info = DronCurrentInfo::new(
             id,
             /*
@@ -652,7 +667,6 @@ impl Dron {
             "Dron {} se crea en posición (lat, lon): {}, {}.",
             id, rng_center_lat, rng_center_lon
         );
-
         let dron = Dron {
             current_info: Arc::new(Mutex::new(current_info)),
             // Las siguientes son las constantes, que vienen del arch de config:
@@ -724,6 +738,19 @@ impl Dron {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             println!("HOLA antes del add to hashmap, el hashmap: {:?}", distances);
             distances.insert(inc_id.get_id(), (inc_id.get_position(), Vec::new()));
+            println!("HOLA dsp del add to hashmap, el hashmap: {:?}", distances);
+            return Ok(());
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de drone_distances_by_incident.",
+        ))
+    }
+
+    fn remove_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
+        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
+            println!("HOLA antes del add to hashmap, el hashmap: {:?}", distances);
+            distances.remove(&inc_id.get_id());
             println!("HOLA dsp del add to hashmap, el hashmap: {:?}", distances);
             return Ok(());
         }

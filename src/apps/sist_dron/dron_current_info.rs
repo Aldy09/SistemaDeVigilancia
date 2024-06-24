@@ -167,6 +167,10 @@ impl DronCurrentInfo {
     pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
         self.inc_id_to_resolve = Some(inc_id);
     }
+    /// Borra el id del incidente resuelto
+    pub fn unset_inc_id_to_resolve(&mut self) {
+        self.inc_id_to_resolve = None;
+    }
 
     /// Setea la flying_info recibida.
     pub fn set_flying_info(&mut self, info: DronFlyingInfo) {
