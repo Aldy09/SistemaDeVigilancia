@@ -105,30 +105,36 @@ impl Dron {
 
     /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
     fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
         self.receive_messages_from_subscribed_topics(&mqtt_client);
         self.finalize_mqtt_client(&mqtt_client)?;
         Ok(())
     }
 
     /// Se suscribe al topic recibido.
-    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
+    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) -> Result<(), Error>{
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
                 Ok(subscribe_message) => {
-                    self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(
-                            "Dron".to_string(),
-                            MessageType::Subscribe(subscribe_message),
-                            OperationType::Sent,
-                        ))
-                        .unwrap();
+                    let struct_event = StructsToSaveInLogger::MessageType(
+                        "Dron".to_string(),
+                        MessageType::Subscribe(subscribe_message),
+                        OperationType::Sent);
+                    if self.logger_tx.send(struct_event).is_err() {
+                        return Err(Error::new(
+                            std::io::ErrorKind::Other,
+                            "Cliente: Error al intentar loggear."))
+                    }
                 }
-                Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
+                Err(_) => return Err(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Cliente: Error al hacer un subscribe a topic",
+                ))
             }
         }
+        Ok(())
     }
 
     /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron.
@@ -143,13 +149,16 @@ impl Dron {
                 match mqtt_client_l.mqtt_receive_msg_from_subs_topic() {
                     //Publish message: Incidente o dron
                     Ok(publish_message) => {
-                        self.logger_tx
-                            .send(StructsToSaveInLogger::MessageType(
-                                "Dron".to_string(),
-                                MessageType::Publish(publish_message.clone()),
-                                OperationType::Received,
-                            ))
-                            .unwrap();
+                        let struct_event = StructsToSaveInLogger::MessageType(
+                            "Dron".to_string(),
+                            MessageType::Publish(publish_message.clone()),
+                            OperationType::Received,
+                        );
+                        if self.logger_tx.send(struct_event).is_err() {
+                            // Aux: el tx podría estar en un logger, y llamar logger.log(string) x ej.
+                            println!("Cliente: Error al intentar loggear.");
+                        }
+                            
                         let handle_thread =
                             self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
                         children.push(handle_thread);
