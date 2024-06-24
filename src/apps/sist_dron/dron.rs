@@ -190,10 +190,12 @@ impl Dron {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.get_id()? != received_ci.get_id();
                 let recvd_dron_is_not_flying = received_ci.get_state() != DronState::Flying;
+                let recvd_dron_is_not_managing_incident = received_ci.get_state() != DronState::ManagingIncident;
 
                 // Si la current_info recibida es de mi propio publish, no me interesa compararme conmigo mismo.
                 // Si el current_info recibida es de un dron que está volando, tampoco me interesa, esos publish serán para sistema de moniteo.
-                if not_myself && recvd_dron_is_not_flying {
+                // Si el current_info recibida es de un dron que está en la ubicación de un incidente, tampoco me interesa, esos publish serán para sistema de moniteo.
+                if not_myself && recvd_dron_is_not_flying && recvd_dron_is_not_managing_incident {
                     self.process_valid_dron(received_ci)?;
                 }
                 Ok(())
@@ -284,7 +286,7 @@ impl Dron {
                 println!("HOLA después del contains, el bool da: {}", should_move);
 
                 // Si está vacío, no se recibió aviso de un dron más cercano, entonces voy yo
-                if closest_two_drones.is_empty() {
+                if closest_two_drones.is_empty() || closest_two_drones.len() == 1 {
                     should_move = true;
                 }
                 println!("HOLA después del is_empty, el bool da: {}", should_move);
@@ -332,7 +334,7 @@ impl Dron {
 
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
-
+                println!("Dio que debería moverme: {}", should_move);
                 if should_move {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
