@@ -119,7 +119,7 @@ impl MQTTServer {
 
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.disconnect_previous_client_if_already_connected(client_id)?;
+            self.disconnect_previous_client_if_already_connected(&client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), stream)?;
@@ -129,8 +129,8 @@ impl MQTTServer {
         // y se maneja la conexión(handle_connection)
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
-                self.add_user(stream, username);
-                self.handle_connection(username, stream)?;
+                self.add_user(stream, &username);
+                self.handle_connection(&username, stream)?;
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -139,12 +139,12 @@ impl MQTTServer {
         Ok(())
     }
 
-    fn is_guest_mode_active(&self, user: Option<&str>, passwd: Option<&str>) -> bool {
+    fn is_guest_mode_active(&self, user: Option<&String>, passwd: Option<&String>) -> bool {
         user.is_none() && passwd.is_none()
     }
 
     /// Autentica al usuario con las credenciales almacenadas en el archivo credentials.txt
-    fn authenticate(&self, user: Option<&str>, passwd: Option<&str>) -> bool {
+    fn authenticate(&self, user: Option<&String>, passwd: Option<&String>) -> bool {
         let mut is_authentic: bool = false;
         let credentials_path = Path::new("credentials.txt");
         if let Ok(lines) = read_lines(credentials_path) {
