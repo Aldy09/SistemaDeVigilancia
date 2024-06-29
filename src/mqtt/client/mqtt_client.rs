@@ -1,3 +1,5 @@
+use crate::mqtt::messages::connect_return_code::ConnectReturnCode;
+//use crate::mqtt::messages::message::Message;
 use crate::mqtt::messages::{
     connect_message::ConnectMessage, disconnect_message::DisconnectMessage,
     publish_flags::PublishFlags, publish_message::PublishMessage,
@@ -5,7 +7,7 @@ use crate::mqtt::messages::{
 };
 use crate::mqtt::mqtt_utils::mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
-    write_message_to_stream,
+    write_message_to_stream, get_fixed_header_from_stream_without_timeout,
 };
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -26,7 +28,7 @@ use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 /// Posee el `stream` que usará para comunicarse con el `MQTTServer`.
 /// El `stream` es un detalle de implementación que las apps que usen esta librería desconocen.
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 pub struct MQTTClient {
     stream: Arc<Mutex<TcpStream>>,
     handle_child: Option<JoinHandle<()>>,
@@ -36,16 +38,33 @@ pub struct MQTTClient {
     read_connack: Arc<Mutex<bool>>,
 
     read_acks: Arc<Mutex<HashMap<u16, bool>>>,
+}*/
+
+type StreamType = Arc<Mutex<TcpStream>>;
+type GenericMessage = dyn Send;
+#[derive(Debug)]
+pub struct MQTTClient {
+    stream: StreamType,
+    children: Option<Vec<JoinHandle<()>>>,
+    publish_msg_to_client_rx: Option<Receiver<PublishMessage>>,
+    available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
+    //acks_by_packet_id: // read control messages:
+    read_acks: Arc<Mutex<HashMap<u16, bool>>>,
+    //acks_tx: Sender<GenericMessage>,
 }
 
 impl MQTTClient {
+    /// Función que crea e inicializa una instancia de `MQTTClient`, y realiza la conexión TCP con el servidor.
+    /// Recibe el `client_id` del cliente que llama a esta función, y la `addr` que es la dirección del
+    /// servidor al que conectarse.
+    /// Devuelve el struct mencionado, o bien un error en caso de que fallara el intento de conexión.
     pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
         // Inicializaciones
         // Intenta conectar al servidor MQTT
         let stream_tcp = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
-        let stream = Arc::new(Mutex::new(stream_tcp));
+        let mut stream = Arc::new(Mutex::new(stream_tcp));
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
@@ -58,50 +77,68 @@ impl MQTTClient {
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
-        write_message_to_stream(&msg_bytes, &stream)?;
+        write_message_to_stream(&msg_bytes, &mut stream)?;
         println!("Envía connect: \n   {:?}", &connect_msg);
-        println!("   El Connect en bytes: {:?}", msg_bytes);
 
-        // Más inicializaciones
-        let (mut mqtt, tx) = MQTTClient::mqtt_new(stream);
-        //
+        println!("Mqtt cliente leyendo: esperando connack.");
+        // Leo un fixed header, deberá ser de un connect
+        read_connack(&mut stream)?;
 
-        let self_p_child = mqtt.clone_refs_for_child_read();
-        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo
-        let h: JoinHandle<()> = thread::spawn(move || {
-            let _res = self_p_child.read_from_server(&tx); // []
-        });
-        mqtt.set_child_to_wait(h);
-
-        // Fin inicializaciones.
-
-        // Espero que el hijo que lee reciba y me informe que recibió el ack.
-        let mut ack_is_comming = false;
-        while !ack_is_comming {
-            if let Ok(connack_is_comming) = mqtt.read_connack.lock() {
-                if *connack_is_comming {
-                    // Llegó el ack
-                    ack_is_comming = true;
-                    println!("CONN: LLEGA EL ACK"); // debug []
-                }
-            }
-        }
+        let mqtt = Self::initialize(stream)?;
 
         Ok(mqtt)
     }
 
-    fn mqtt_new(stream: Arc<Mutex<TcpStream>>) -> (Self, Sender<PublishMessage>) {
-        let (tx, rx) = mpsc::channel::<PublishMessage>();
+    /// Realiza las inicializaciones necesarias para el funcionamiento interno del `MQTTClient`.
+    fn initialize(stream: StreamType) -> Result<Self, Error> {
+        // Más inicializaciones
+        // El hilo outgoing tendrá el rx, y el hilo que lee del stream le mandará mensajes por el tx.
+        // Para uso interno:
+        //let (ack_tx, ack_rx) = mpsc::channel::<GenericMessage>();
+        // Para devolver publish message a app:
+        let (to_app_client_tx, publish_msg_to_client_rx) = mpsc::channel::<PublishMessage>();
 
-        let mqtt = MQTTClient {
-            stream: stream.clone(),
-            handle_child: None,
-            rx: Some(rx),
+        let mut mqtt =
+            MQTTClient::mqtt_new(stream, publish_msg_to_client_rx);//, ack_tx.clone());
+
+        let mut handles = vec![];
+        // Lanzo hilo para leer
+        let mut self_for_read_child = mqtt.clone_refs_for_child_read()?;
+        // Crea un hilo para leer desde servidor, y lo guarda para esperarlo. Hilo que lee, manda por tx a hijo que hace write.
+        let h_read: JoinHandle<()> = thread::spawn(move || {
+            let _res = self_for_read_child.read_from_server(&to_app_client_tx.clone());
+            // []
+        });
+        handles.push(h_read);
+
+        // []:
+        let mut self_for_write_child = mqtt.clone_refs_for_child_read()?;
+        // Crea un hilo para escribir al servidor, y lo guarda para esperarlo
+        let h_write: JoinHandle<()> = thread::spawn(move || {
+           // let _res = self_for_write_child.write_to_server(ack_rx); // []
+        });
+        handles.push(h_write);
+        
+
+        mqtt.children = Some(handles);
+        // Fin inicializaciones.
+
+        Ok(mqtt)
+    }
+
+    fn mqtt_new(
+        stream: StreamType,
+        publish_msg_to_client_rx: Receiver<PublishMessage>,
+        //: Sender<GenericMessage>,
+    ) -> Self {
+        MQTTClient {
+            stream,
+            children: None,
+            publish_msg_to_client_rx: Some(publish_msg_to_client_rx),
             available_packet_id: 0,
-            read_connack: Arc::new(Mutex::new(false)),
             read_acks: Arc::new(Mutex::new(HashMap::new())),
-        };
-        (mqtt, tx)
+            //acks_tx,
+        }
     }
 
     // Nuestras apps clientes llamarán a esta función (los drones, etc)
@@ -161,7 +198,7 @@ impl MQTTClient {
         //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
     ) -> Result<PublishMessage, Error> {
         // Veo si tengo el rx (hijo no lo tiene)
-        if let Some(rx) = &self.rx {
+        if let Some(rx) = &self.publish_msg_to_client_rx {
             // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
             // Leo
             match rx.recv_timeout(Duration::from_micros(300)) {
@@ -205,20 +242,17 @@ impl MQTTClient {
     /// Función que debe ser llamada por cada cliente que utilice la librería,
     /// como último paso, al finalizar.
     pub fn finish(&mut self) {
-        if let Some(h) = self.handle_child.take() {
-            let res = h.join();
-            if res.is_err() {
-                println!("Mqtt cliente: error al esperar hijo de lectura.");
+        if let Some(children) = self.children.take() {
+            for child in children {
+                let res = child.join();
+                if res.is_err() {
+                    println!("Mqtt cliente: error al esperar hijo de lectura.");
+                }
             }
         }
     }
 
-    /// Setea el handle del hijo para poder esperarlo y terminar correctamente.
-    fn set_child_to_wait(&mut self, h: JoinHandle<()>) {
-        self.handle_child = Some(h);
-    }
-
-    /// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
+    /*/// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
     /// que utiliza el MQTTClient para el cual se está llamando a esta función, con la diferencia de que
     /// los campos para esperar al hijo y para recibir mensajes publish están seteados en `None` ya que no son
     /// de interés para un hijo del MQTTClient original.
@@ -231,6 +265,20 @@ impl MQTTClient {
             read_connack: self.read_connack.clone(),
             read_acks: self.read_acks.clone(),
         }
+    }*/
+    /// Devuelve otro struct MQTTClient, con referencias a las mismas estructuras englobadas en ^Arc Mutex^
+    /// que utiliza el MQTTClient para el cual se está llamando a esta función, con la diferencia de que
+    /// los campos para esperar al hijo y para recibir mensajes publish están seteados en `None` ya que no son
+    /// de interés para un hijo del MQTTClient original.
+    fn clone_refs_for_child_read(&self) -> Result<Self, Error> {
+        Ok(Self {
+            stream: self.stream.clone(),
+            children: None,
+            publish_msg_to_client_rx: None,
+            available_packet_id: self.available_packet_id,
+            read_acks: self.read_acks.clone(),
+            //acks_tx: self.acks_tx.clone(),
+        })
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
@@ -288,7 +336,7 @@ impl MQTTClient {
         &self,
         fixed_header_info: &([u8; 2], FixedHeader),
         tx: &Sender<PublishMessage>,
-    ) -> Result<(), Error> {
+        ) -> Result<(), Error> {
         // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
         let (fixed_header_bytes, fixed_header) = fixed_header_info;
         // Soy client, siempre inicio yo la conexión, puedo recibir distintos tipos de mensaje.
@@ -309,11 +357,8 @@ impl MQTTClient {
                 let msg = ConnackMessage::from_bytes(&msg_bytes)?; //
                 println!("   Mensaje conn ack completo recibido: {:?}", msg);
 
-                // Marco que el ack fue recibido, para que el otro hilo pueda enterarse
-                if let Ok(mut read_connack_locked) = self.read_connack.lock() {
-                    *read_connack_locked = true;
-                    // [] acá
-                }
+                write_message_to_stream(&msg.to_bytes(), &self.stream);
+
             }
             3 => {
                 // Publish
@@ -398,5 +443,38 @@ impl MQTTClient {
         //self.last_used_packet_id
         self.available_packet_id += 1;
         self.available_packet_id
+    }
+}
+
+/// Lee un fixed header y verifica que haya sido de tipo Connack
+fn read_connack(stream: &mut StreamType) -> Result<(), Error> {
+    // Lee un fixed header
+    let (fixed_header_buf, fixed_header) =
+        get_fixed_header_from_stream_without_timeout(stream)?;
+    let fixed_header_info = (fixed_header_buf, fixed_header);
+
+    // Verifica que haya sido de tipo Connack
+    let recvd_msg_type = fixed_header_info.1.get_message_type();
+    if recvd_msg_type == 2 {
+        // ConnAck
+        println!("Mqtt cliente leyendo: recibo conn ack");
+        let recvd_bytes = get_whole_message_in_bytes_from_stream(
+            &fixed_header_info.1,
+            stream,
+            &fixed_header_info.0,
+            "conn ack",
+        )?;
+        // Entonces tengo el mensaje completo
+        let msg = ConnackMessage::from_bytes(&recvd_bytes)?; //
+        println!("   Mensaje conn ack completo recibido: {:?}", msg);
+        let ret = msg.get_connect_return_code();
+        if ret == ConnectReturnCode::ConnectionAccepted {
+            Ok(())
+        } else {
+            Err(Error::new(ErrorKind::InvalidData, ""))
+        }
+    } else {
+        // No debería darse
+        Err(Error::new(ErrorKind::InvalidData, ""))
     }
 }
