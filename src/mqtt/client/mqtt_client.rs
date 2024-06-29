@@ -290,8 +290,9 @@ impl MQTTClient {
 
         // Inicio primer mensaje
         let mut fixed_header_info: ([u8; 2], FixedHeader);
+        let (mut fixed_h_buf, mut fixed_h);
         let ceros: &[u8; 2] = &[0; 2];
-        let mut empty: bool;
+        let mut empty: bool = false;
 
         //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
@@ -305,9 +306,9 @@ impl MQTTClient {
             };
             thread::sleep(Duration::from_millis(300)); // []
         }*/
-        let (mut fixed_h_buf, mut fixed_h) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
+        /*let (mut fixed_h_buf, mut fixed_h) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
         fixed_header_info = (fixed_h_buf, fixed_h);
-        empty = &fixed_header_info.0 == ceros;
+        empty = &fixed_header_info.0 == ceros;*/
         // Fin
 
         /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
@@ -315,7 +316,7 @@ impl MQTTClient {
         let mut empty = &fixed_header_info.0 == ceros;*/
         while !empty {
             println!("Mqtt cliente leyendo: siguiente msj");
-            self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.
+            //self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.
 
             // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
             // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
@@ -336,6 +337,8 @@ impl MQTTClient {
             (fixed_h_buf, fixed_h) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
             fixed_header_info = (fixed_h_buf, fixed_h);
             empty = &fixed_header_info.0 == ceros;
+
+            self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.
         }
         Ok(())
     }
