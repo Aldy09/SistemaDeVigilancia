@@ -5,10 +5,10 @@ use crate::mqtt::messages::{
     publish_flags::PublishFlags, publish_message::PublishMessage,
     subscribe_message::SubscribeMessage,
 };
-use crate::mqtt::mqtt_utils::mqtt_server_client_utils::{
+use crate::mqtt::mqtt_utils::{self, mqtt_server_client_utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback,
     write_message_to_stream, get_fixed_header_from_stream_without_timeout,
-};
+}};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::{self, Error};
@@ -40,7 +40,8 @@ pub struct MQTTClient {
     read_acks: Arc<Mutex<HashMap<u16, bool>>>,
 }*/
 
-type StreamType = Arc<Mutex<TcpStream>>;
+//type StreamType = Arc<Mutex<TcpStream>>;
+type StreamType = TcpStream;
 type GenericMessage = dyn Send;
 #[derive(Debug)]
 pub struct MQTTClient {
@@ -64,7 +65,8 @@ impl MQTTClient {
         let stream_tcp = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
 
-        let mut stream = Arc::new(Mutex::new(stream_tcp));
+        //let mut stream = Arc::new(Mutex::new(stream_tcp));
+        let mut stream = stream_tcp;
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
@@ -77,7 +79,7 @@ impl MQTTClient {
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
         let msg_bytes = connect_msg.to_bytes();
-        write_message_to_stream(&msg_bytes, &mut stream)?;
+        mqtt_utils::aux_server_utils::write_message_to_stream(&msg_bytes, &mut stream)?;
         println!("Envía connect: \n   {:?}", &connect_msg);
 
         println!("Mqtt cliente leyendo: esperando connack.");
@@ -103,7 +105,7 @@ impl MQTTClient {
 
         let mut handles = vec![];
         // Lanzo hilo para leer
-        let self_for_read_child = mqtt.clone_refs_for_child_read()?;
+        let mut self_for_read_child = mqtt.clone_refs_for_child_read()?;
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo. Hilo que lee, manda por tx a hijo que hace write.
         let h_read: JoinHandle<()> = thread::spawn(move || {
             let _res = self_for_read_child.read_from_server(&to_app_client_tx.clone());
@@ -162,7 +164,7 @@ impl MQTTClient {
 
         // Lo envío
         let bytes_msg = publish_message.to_bytes();
-        write_message_to_stream(&bytes_msg, &self.stream)?;
+        mqtt_utils::aux_server_utils::write_message_to_stream(&bytes_msg, &mut self.stream)?;
         println!("Mqtt publish: envío bytes publish: \n   {:?}", bytes_msg);
 
         Ok(publish_message)
@@ -183,7 +185,7 @@ impl MQTTClient {
 
         // Lo envío
         let subs_bytes = subscribe_msg.to_bytes();
-        write_message_to_stream(&subs_bytes, &self.stream)?;
+        mqtt_utils::aux_server_utils::write_message_to_stream(&subs_bytes, &mut self.stream)?;
         println!(
             "Mqtt subscribe: enviado mensaje en bytes: \n   {:?}",
             subs_bytes
@@ -220,21 +222,21 @@ impl MQTTClient {
     }
 
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
-    pub fn mqtt_disconnect(&self) -> Result<(), Error> {
+    pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         let msg = DisconnectMessage::new();
 
         // Lo envío
         let bytes_msg = msg.to_bytes();
-        write_message_to_stream(&bytes_msg, &self.stream)?;
+        mqtt_utils::aux_server_utils::write_message_to_stream(&bytes_msg, &mut self.stream)?;
         println!("Mqtt disconnect: bytes {:?}", msg);
 
         // Cerramos la conexión con el servidor
-        if let Ok(s) = self.stream.lock() {
-            match s.shutdown(Shutdown::Both) {
+        //if let Ok(s) = self.stream.lock() {
+            match self.stream.shutdown(Shutdown::Both) {
                 Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
                 Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
             }
-        }
+        //}
 
         Ok(())
     }
@@ -272,7 +274,7 @@ impl MQTTClient {
     /// de interés para un hijo del MQTTClient original.
     fn clone_refs_for_child_read(&self) -> Result<Self, Error> {
         Ok(Self {
-            stream: self.stream.clone(),
+            stream: self.stream.try_clone()?,
             children: None,
             publish_msg_to_client_rx: None,
             available_packet_id: self.available_packet_id,
@@ -282,7 +284,7 @@ impl MQTTClient {
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
-    fn read_from_server(&self, tx: &Sender<PublishMessage>) -> Result<(), Error> {
+    fn read_from_server(&mut self, tx: &Sender<PublishMessage>) -> Result<(), Error> {
         // Este bloque de código de acá abajo es similar a lo que hay en server,
         // pero la función que lee un mensaje lo procesa de manera diferente.
 
@@ -293,8 +295,8 @@ impl MQTTClient {
 
         //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
-        loop {
-            if let Ok((fixed_h_buf, fixed_h)) = get_fixed_header_from_stream(&self.stream.clone()) {
+        /*loop {
+            if let Ok((fixed_h_buf, fixed_h)) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream) {
                 // println!("While: leí bien.");
                 // Guardo lo leído y comparo para siguiente vuelta del while
                 fixed_header_info = (fixed_h_buf, fixed_h);
@@ -302,7 +304,10 @@ impl MQTTClient {
                 break;
             };
             thread::sleep(Duration::from_millis(300)); // []
-        }
+        }*/
+        let (mut fixed_h_buf, mut fixed_h) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
+        fixed_header_info = (fixed_h_buf, fixed_h);
+        empty = &fixed_header_info.0 == ceros;
         // Fin
 
         /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
@@ -315,7 +320,7 @@ impl MQTTClient {
             // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
             // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
             println!("Mqtt cliente leyendo: esperando más mensajes.");
-            loop {
+            /*loop {
                 if let Ok((fixed_h_buf, fixed_h)) =
                     get_fixed_header_from_stream(&self.stream.clone())
                 {
@@ -326,14 +331,18 @@ impl MQTTClient {
                     break;
                 };
                 thread::sleep(Duration::from_millis(300)); // []
-            }
+            }*/
+
+            (fixed_h_buf, fixed_h) = mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
+            fixed_header_info = (fixed_h_buf, fixed_h);
+            empty = &fixed_header_info.0 == ceros;
         }
         Ok(())
     }
 
     /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
     fn read_a_message(
-        &self,
+        &mut self,
         fixed_header_info: &([u8; 2], FixedHeader),
         tx: &Sender<PublishMessage>,
         ) -> Result<(), Error> {
@@ -347,9 +356,9 @@ impl MQTTClient {
             2 => {
                 // ConnAck
                 println!("Mqtt cliente leyendo: recibo conn ack");
-                msg_bytes = get_whole_message_in_bytes_from_stream(
+                msg_bytes = mqtt_utils::aux_server_utils::get_whole_message_in_bytes_from_stream(
                     fixed_header,
-                    &self.stream,
+                    &mut self.stream,
                     fixed_header_bytes,
                     "conn ack",
                 )?;
@@ -362,9 +371,9 @@ impl MQTTClient {
                 // Publish
                 println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
                 // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
-                msg_bytes = get_whole_message_in_bytes_from_stream(
+                msg_bytes = mqtt_utils::aux_server_utils::get_whole_message_in_bytes_from_stream(
                     fixed_header,
-                    &self.stream,
+                    &mut self.stream,
                     fixed_header_bytes,
                     "publish",
                 )?;
@@ -373,7 +382,7 @@ impl MQTTClient {
                 //println!("   Mensaje publish completo recibido: {:?}", msg);
 
                 // Le respondo un pub ack
-                let _ = send_puback(&msg, &self.stream);
+                let _ = mqtt_utils::aux_mqtt_client_utils::send_puback(&msg, &mut self.stream);
 
                 // Envío por el channel para que le llegue al cliente real (app cliente)
                 match tx.send(msg) {
@@ -384,9 +393,9 @@ impl MQTTClient {
             4 => {
                 // PubAck
                 println!("Mqtt cliente leyendo: recibo pub ack");
-                msg_bytes = get_whole_message_in_bytes_from_stream(
+                msg_bytes = mqtt_utils::aux_server_utils::get_whole_message_in_bytes_from_stream(
                     fixed_header,
-                    &self.stream,
+                    &mut self.stream,
                     fixed_header_bytes,
                     "pub ack",
                 )?;
@@ -397,9 +406,9 @@ impl MQTTClient {
             9 => {
                 // SubAck
                 println!("Mqtt cliente leyendo: recibo sub ack");
-                msg_bytes = get_whole_message_in_bytes_from_stream(
+                msg_bytes = mqtt_utils::aux_server_utils::get_whole_message_in_bytes_from_stream(
                     fixed_header,
-                    &self.stream,
+                    &mut self.stream,
                     fixed_header_bytes,
                     "sub ack",
                 )?;
@@ -413,12 +422,12 @@ impl MQTTClient {
                 println!("Mqtt cliente leyendo: recibo disconnect");
 
                 // Cerramos la conexión con el servidor
-                if let Ok(s) = self.stream.lock() {
-                    match s.shutdown(Shutdown::Both) {
+                //if let Ok(s) = self.stream.lock() {
+                    match self.stream.shutdown(Shutdown::Both) {
                         Ok(_) => println!("Conexión terminada con éxito"),
                         Err(e) => println!("Error al terminar la conexión: {:?}", e),
                     }
-                }
+                //}
             }
 
             _ => {
@@ -448,7 +457,7 @@ impl MQTTClient {
 fn read_connack(stream: &mut StreamType) -> Result<(), Error> {
     // Lee un fixed header
     let (fixed_header_buf, fixed_header) =
-        get_fixed_header_from_stream_without_timeout(stream)?;
+        mqtt_utils::aux_server_utils::get_fixed_header_from_stream_without_timeout(stream)?;
     let fixed_header_info = (fixed_header_buf, fixed_header);
 
     // Verifica que haya sido de tipo Connack
@@ -456,7 +465,7 @@ fn read_connack(stream: &mut StreamType) -> Result<(), Error> {
     if recvd_msg_type == 2 {
         // ConnAck
         println!("Mqtt cliente leyendo: recibo conn ack");
-        let recvd_bytes = get_whole_message_in_bytes_from_stream(
+        let recvd_bytes = mqtt_utils::aux_server_utils::get_whole_message_in_bytes_from_stream(
             &fixed_header_info.1,
             stream,
             &fixed_header_info.0,

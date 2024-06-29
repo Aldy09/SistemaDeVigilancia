@@ -102,13 +102,14 @@ pub fn write_message_to_stream(
 }
 
 /// Envía un mensaje de tipo PubAck por el stream.
-pub fn send_puback(msg: &PublishMessage, stream: &Arc<Mutex<TcpStream>>) -> Result<(), Error> {
+pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
     if let Some(packet_id) = msg.get_packet_identifier() {
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
-        write_message_to_stream(&ack_msg_bytes, stream)?;
+        crate::mqtt::mqtt_utils::aux_server_utils::write_message_to_stream(&ack_msg_bytes, stream)?;
         println!("   tipo publish: Enviado el ack: {:?}", ack);
     }
 
     Ok(())
 }
+
