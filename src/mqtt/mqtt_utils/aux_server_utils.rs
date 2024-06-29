@@ -90,7 +90,7 @@ pub fn write_message_to_stream(
 /// Determina el tipo del mensaje recibido que inicia por `fixed_header`.
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
-pub fn get_fixed_header_from_stream_without_timeout(
+pub fn get_fixed_header_from_stream(
     stream: &mut StreamType,
 ) -> Result<([u8; 2], FixedHeader), Error> {
     const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();

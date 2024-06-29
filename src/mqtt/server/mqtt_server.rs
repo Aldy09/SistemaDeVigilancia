@@ -1,7 +1,7 @@
 use crate::mqtt::messages::{connack_message::ConnackMessage, connack_session_present::SessionPresent, connect_message::ConnectMessage, connect_return_code::ConnectReturnCode, disconnect_message::DisconnectMessage, puback_message::PubAckMessage, publish_message::PublishMessage, suback_message::SubAckMessage, subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode};
  // Add the missing import
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::mqtt_utils::aux_server_utils::{complete_byte_message_read, get_fixed_header_from_stream_without_timeout, get_whole_message_in_bytes_from_stream, write_message_to_stream};
+use crate::mqtt::mqtt_utils::aux_server_utils::{complete_byte_message_read, get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, write_message_to_stream};
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
 use std::collections::HashMap;
@@ -199,7 +199,7 @@ impl MQTTServer {
 
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream_without_timeout(stream)?;
+                get_fixed_header_from_stream(stream)?;
                     
         // println!("While: leí bien.");
         fixed_header_info = (fixed_h_buf, fixed_h);
@@ -220,7 +220,7 @@ impl MQTTServer {
                                                                                  // Leo fixed header para la siguiente iteración del while
             println!("Server esperando más mensajes.");
             let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream_without_timeout(stream)?;    
+                get_fixed_header_from_stream(stream)?;    
             // Guardo lo leído y comparo para siguiente vuelta del while
             fixed_header_info = (fixed_h_buf, fixed_h);
             empty = &fixed_header_info.0 == ceros;            
@@ -387,7 +387,7 @@ impl MQTTServer {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         
         // Leo un fixed header, deberá ser de un connect
-        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream_without_timeout(&mut stream)?;
+        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(&mut stream)?;
         let fixed_header_info = (fixed_header_buf, fixed_header);
         // Fin Probando
         //let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;

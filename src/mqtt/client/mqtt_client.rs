@@ -10,7 +10,7 @@ use crate::mqtt::messages::{
     write_message_to_stream, get_fixed_header_from_stream_without_timeout,
 }};*/
 
-use crate::mqtt::mqtt_utils::aux_server_utils::{get_fixed_header_from_stream_without_timeout, get_whole_message_in_bytes_from_stream, send_puback, write_message_to_stream};
+use crate::mqtt::mqtt_utils::aux_server_utils::{get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, send_puback, write_message_to_stream};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::{self, Error};
@@ -299,31 +299,10 @@ impl MQTTClient {
         //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         
-
-        /*let mut fixed_header_info = get_fixed_header_from_stream(&stream.clone())?; // [] acá estamos
-        let ceros: &[u8; 2] = &[0; 2];
-        let mut empty = &fixed_header_info.0 == ceros;*/
-        while !empty {
-            println!("Mqtt cliente leyendo: siguiente msj");
-            //self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.
-
-            // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
-            // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+        while !empty {            
+            // Leo fixed header para la siguiente iteración del while
             println!("Mqtt cliente leyendo: esperando más mensajes.");
-            /*loop {
-                if let Ok((fixed_h_buf, fixed_h)) =
-                    get_fixed_header_from_stream(&self.stream.clone())
-                {
-                    // println!("While: leí bien.");
-                    // Guardo lo leído y comparo para siguiente vuelta del while
-                    fixed_header_info = (fixed_h_buf, fixed_h);
-                    empty = &fixed_header_info.0 == ceros;
-                    break;
-                };
-                thread::sleep(Duration::from_millis(300)); // []
-            }*/
-
-            (fixed_h_buf, fixed_h) = get_fixed_header_from_stream_without_timeout(&mut self.stream)?;
+            (fixed_h_buf, fixed_h) = get_fixed_header_from_stream(&mut self.stream)?;
             fixed_header_info = (fixed_h_buf, fixed_h);
             empty = &fixed_header_info.0 == ceros;
 
@@ -414,12 +393,11 @@ impl MQTTClient {
                 println!("Mqtt cliente leyendo: recibo disconnect");
 
                 // Cerramos la conexión con el servidor
-                //if let Ok(s) = self.stream.lock() {
-                    match self.stream.shutdown(Shutdown::Both) {
-                        Ok(_) => println!("Conexión terminada con éxito"),
-                        Err(e) => println!("Error al terminar la conexión: {:?}", e),
-                    }
-                //}
+                match self.stream.shutdown(Shutdown::Both) {
+                    Ok(_) => println!("Conexión terminada con éxito"),
+                    Err(e) => println!("Error al terminar la conexión: {:?}", e),
+                }
+            
             }
 
             _ => {
@@ -438,8 +416,6 @@ impl MQTTClient {
     /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
     /// en el envío para el cual fue llamada esta función.
     fn generate_packet_id(&mut self) -> u16 {
-        //self.last_used_packet_id += 1;
-        //self.last_used_packet_id
         self.available_packet_id += 1;
         self.available_packet_id
     }
@@ -449,7 +425,7 @@ impl MQTTClient {
 fn read_connack(stream: &mut StreamType) -> Result<(), Error> {
     // Lee un fixed header
     let (fixed_header_buf, fixed_header) =
-        get_fixed_header_from_stream_without_timeout(stream)?;
+        get_fixed_header_from_stream(stream)?;
     let fixed_header_info = (fixed_header_buf, fixed_header);
 
     // Verifica que haya sido de tipo Connack
