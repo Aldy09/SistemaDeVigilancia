@@ -193,37 +193,31 @@ impl MQTTServer {
         username: &str,
         stream: &mut StreamType,
     ) -> Result<(), Error> {
-        // Inicio
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         let ceros: &[u8; 2] = &[0; 2];
         let mut empty: bool;
 
-        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         let (fixed_h_buf, fixed_h) =
                 get_fixed_header_from_stream_without_timeout(stream)?;
-            
+                    
         // println!("While: leí bien.");
-        // Guardo lo leído y comparo para siguiente vuelta del while
         fixed_header_info = (fixed_h_buf, fixed_h);
         empty = &fixed_header_info.0 == ceros;
         
-        // Fin
 
         /*println!("Server esperando mensajes.");
         let mut fixed_header_info = get_fixed_header_from_stream(stream)?;
         let ceros: &[u8; 2] = &[0; 2];
         let mut empty = &fixed_header_info.0 == ceros;
         */
+
         
         let mut msg_bytes: Vec<u8>;
         while !empty {
             msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-            // Auc: esta función process_message es la que queremos que vaya adentro del pool.execute.
             self.process_message(username, stream, &fixed_header_info.1, msg_bytes)?; // esta función lee UN mensaje.
-                                                                                 // Leo para la siguiente iteración
-                                                                                 // Leo fixed header para la siguiente iteración del while, como la función utiliza timeout, la englobo en un loop
-                                                                                 // cuando leyío algo, corto el loop y continúo a la siguiente iteración del while
+                                                                                 // Leo fixed header para la siguiente iteración del while
             println!("Server esperando más mensajes.");
             let (fixed_h_buf, fixed_h) =
                 get_fixed_header_from_stream_without_timeout(stream)?;    

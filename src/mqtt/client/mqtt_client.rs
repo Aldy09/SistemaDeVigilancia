@@ -103,7 +103,7 @@ impl MQTTClient {
 
         let mut handles = vec![];
         // Lanzo hilo para leer
-        let mut self_for_read_child = mqtt.clone_refs_for_child_read()?;
+        let self_for_read_child = mqtt.clone_refs_for_child_read()?;
         // Crea un hilo para leer desde servidor, y lo guarda para esperarlo. Hilo que lee, manda por tx a hijo que hace write.
         let h_read: JoinHandle<()> = thread::spawn(move || {
             let _res = self_for_read_child.read_from_server(&to_app_client_tx.clone());
@@ -112,7 +112,7 @@ impl MQTTClient {
         handles.push(h_read);
 
         // []:
-        let mut self_for_write_child = mqtt.clone_refs_for_child_read()?;
+        //let self_for_write_child = mqtt.clone_refs_for_child_read()?;
         // Crea un hilo para escribir al servidor, y lo guarda para esperarlo
         let h_write: JoinHandle<()> = thread::spawn(move || {
            // let _res = self_for_write_child.write_to_server(ack_rx); // []
@@ -356,8 +356,6 @@ impl MQTTClient {
                 // Entonces tengo el mensaje completo
                 let msg = ConnackMessage::from_bytes(&msg_bytes)?; //
                 println!("   Mensaje conn ack completo recibido: {:?}", msg);
-
-                write_message_to_stream(&msg.to_bytes(), &self.stream);
 
             }
             3 => {
