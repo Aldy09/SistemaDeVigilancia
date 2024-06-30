@@ -1,8 +1,9 @@
+
 #[derive(Debug, PartialEq)]
-pub struct Payload<'a> {
-    pub client_id: &'a str,
-    pub will_topic: Option<&'a str>,
-    pub will_message: Option<&'a str>,
-    pub username: Option<&'a str>,
-    pub password: Option<&'a str>,
+pub struct Payload {
+    pub client_id: String,
+    pub will_topic: Option<String>,
+    pub will_message: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
