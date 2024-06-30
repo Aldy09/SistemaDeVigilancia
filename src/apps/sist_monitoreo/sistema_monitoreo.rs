@@ -4,8 +4,11 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crossbeam_channel::Sender;
-use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
+
+
+use crossbeam_channel::Receiver as CrossbeamReceiver;
+
+
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
@@ -21,46 +24,25 @@ use crate::mqtt::{
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 use crate::apps::{
     app_type::AppType,
-    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
+    common_clients::exit_when_asked,
     incident::Incident,
 };
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
-    pub publish_message_tx: Sender<PublishMessage>,
-    pub logger_tx: mpsc::Sender<StructsToSaveInLogger>,
+    pub publish_message_tx: MpscSender<PublishMessage>,
+    pub logger_tx: MpscSender<StructsToSaveInLogger>,
 }
 
 impl SistemaMonitoreo {
-    pub fn new() -> Self {
-        let broker_addr = get_broker_address();
-
-        let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
-        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
+    pub fn new(publish_message_tx: MpscSender<PublishMessage>, logger_tx: MpscSender<StructsToSaveInLogger> ) -> Self {
+        
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             publish_message_tx,
             logger_tx,
         };
-
-        match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_client) => {
-                let child_threads = sistema_monitoreo.spawn_threads(
-                    mqtt_client,
-                    &sistema_monitoreo,
-                    logger_rx,
-                    publish_message_rx,
-                );
-
-                join_all_threads(child_threads);
-            }
-            Err(e) => println!(
-                "Error al establecer la conexión con el broker MQTT: {:?}",
-                e
-            ),
-        }
 
         sistema_monitoreo
     }
@@ -281,25 +263,7 @@ fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
     })
 }
 
-pub fn establish_mqtt_broker_connection(
-    broker_addr: &SocketAddr,
-) -> Result<MQTTClient, Box<dyn std::error::Error>> {
-    let client_id = "Sistema-Monitoreo";
-    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
-    match mqtt_client_res {
-        Ok(mqtt_client) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(mqtt_client)
-        }
-        Err(e) => {
-            println!(
-                "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",
-                e
-            );
-            Err(e.into())
-        }
-    }
-}
+
 
 pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
     match e.kind() {
@@ -328,8 +292,4 @@ pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
     }
 }
 
-impl Default for SistemaMonitoreo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
