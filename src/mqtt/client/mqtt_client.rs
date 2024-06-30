@@ -49,11 +49,11 @@ impl MQTTClient {
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
         let mut connect_msg = ConnectMessage::new(
-            client_id,
+            client_id.to_string(),
             None, // will_topic
             None, // will_message
-            Some("usuario0"),
-            Some("rustx123"),
+            Some("usuario0".to_string()),
+            Some("rustx123".to_string()),
         );
 
         // Intenta enviar el mensaje CONNECT al servidor MQTT
