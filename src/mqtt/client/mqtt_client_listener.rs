@@ -1,4 +1,3 @@
-use std::sync::mpsc;
 use std::{net::TcpStream, sync::mpsc::Sender};
 
 use std::io::{Error, ErrorKind};
@@ -21,26 +20,18 @@ type StreamType = TcpStream;
 pub struct MQTTClientListener {
     stream: StreamType,
     client_tx: Sender<PublishMessage>,
-    listener_tx: mpsc::Sender<PublishMessage>,
-    listener_rx: mpsc::Receiver<PublishMessage>,
 }
 
 impl MQTTClientListener {
     pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>) -> Self {
-        let (listener_tx, listener_rx) = mpsc::channel::<PublishMessage>();
         MQTTClientListener {
             stream,
             client_tx,
-            listener_tx,
-            listener_rx,
         }
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
-    fn read_from_server(&mut self) -> Result<(), Error> {
-        // Este bloque de código de acá abajo es similar a lo que hay en server,
-        // pero la función que lee un mensaje lo procesa de manera diferente.
-
+    pub fn read_from_server(&mut self) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
 
         println!("Mqtt cliente leyendo: esperando más mensajes.");
@@ -97,7 +88,7 @@ impl MQTTClientListener {
                 let _ = send_puback(&msg, &mut self.stream);
 
                 // Envío por el channel para que le llegue al cliente real (app cliente)
-                match self.listener_tx.send(msg) {
+                match self.client_tx.send(msg) {
                     Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
                     Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
                 };
@@ -129,10 +120,13 @@ impl MQTTClientListener {
         Ok(())
     }
 
-    pub fn mqtt_receive_msg_from_subs_topic(&self) -> Result<PublishMessage, Error> {
-        match self.listener_rx.recv() {
-            Ok(msg) => Ok(msg),
-            Err(e) => Err(Error::new(ErrorKind::Other, e)),
-        }
+
+}
+
+impl Clone for MQTTClientListener {
+    fn clone(&self) -> Self {
+        let stream = self.stream.try_clone().unwrap();
+        let client_tx = self.client_tx.clone();
+        MQTTClientListener { stream, client_tx }
     }
 }

@@ -1,20 +1,22 @@
 use std::{
     collections::HashMap,
-    net::TcpStream,
-    sync::{mpsc, Mutex},
+    net::{SocketAddr, TcpStream},
+    sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle},
 };
+
+use std::io::{Error, ErrorKind};
 
 use rustx::{
     apps::{
-        common_clients::get_broker_address,
-        sist_camaras::{camera::Camera, sistema_camaras::SistemaCamaras},
+        common_clients::{get_broker_address, join_all_threads},
+        sist_camaras::{camera::Camera, manage_stored_cameras::read_cameras_from_file, sistema_camaras::SistemaCamaras},
     },
     logging::structs_to_save_in_logger::StructsToSaveInLogger,
     mqtt::{
         client::{
             mqtt_client::{self, MQTTClient},
-            mqtt_client_listener,
-            mqtt_client_server_connection::MqttClientConnection,
+            mqtt_client_listener::{self, MQTTClientListener},
+            mqtt_client_server_connection::{mqtt_connect_to_broker, MqttClientConnection},
         },
         messages::publish_message::{self, PublishMessage},
     },
@@ -53,9 +55,9 @@ fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
     Arc::new(Mutex::new(cameras))
 }
 
-fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<(TcpStream), Error> {
+fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStream, Error> {
     let client_id = "Sistema-Camaras";
-    let handshake_result = MqttClientConnection::mqtt_connect_to_broker(client_id, broker_addr);
+    let handshake_result = mqtt_connect_to_broker(client_id, broker_addr);
     match handshake_result {
         Ok(stream) => {
             println!("Cliente: Conectado al broker MQTT.");
@@ -87,20 +89,19 @@ fn main() {
             let mut handlers = Vec::<JoinHandle<()>>::new();
             let mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
-            let mqtt_client = MQTTClient::new(stream, mqtt_client_listener);
+            let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener);
             let sistema_camaras = SistemaCamaras::new(
                 cameras_tx,
                 logger_tx,
                 exit_tx,
                 cameras,
-                publish_message_rx,
                 mqtt_client,
             );
 
             handlers.push(thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
             }));
-            handlers.push(sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx));
+            handlers.push(sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx));
 
             join_all_threads(handlers);
         }

@@ -20,9 +20,7 @@ pub struct MQTTClientWritter {
 }
 
 impl MQTTClientWritter {
-    pub fn new(
-        stream: StreamType
-    ) -> MQTTClientWritter {
+    pub fn new(stream: StreamType) -> MQTTClientWritter {
         MQTTClientWritter {
             stream,
             available_packet_id: 0,
@@ -85,12 +83,11 @@ impl MQTTClientWritter {
         println!("Mqtt disconnect: bytes {:?}", msg);
 
         // Cerramos la conexión con el servidor
-        //if let Ok(s) = self.stream.lock() {
-            match self.stream.shutdown(Shutdown::Both) {
-                Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
-                Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
-            }
-        //}
+
+        match self.stream.shutdown(Shutdown::Both) {
+            Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
+            Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
+        }
 
         Ok(())
     }
@@ -101,5 +98,15 @@ impl MQTTClientWritter {
     fn generate_packet_id(&mut self) -> u16 {
         self.available_packet_id += 1;
         self.available_packet_id
+    }
+}
+
+impl Clone for MQTTClientWritter {
+    fn clone(&self) -> Self {
+        let stream = self.stream.try_clone().unwrap();
+        MQTTClientWritter {
+            stream,
+            available_packet_id: self.available_packet_id,
+        }
     }
 }
