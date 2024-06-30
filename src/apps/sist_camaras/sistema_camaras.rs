@@ -43,58 +43,35 @@ pub struct SistemaCamaras {
     cameras_tx: mpsc::Sender<Vec<u8>>,
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     exit_tx: mpsc::Sender<bool>,
+    publish_message_rx: mpsc::Receiver<PublishMessage>,
+    mqtt_client: MQTTClient,
     //incs_being_managed: HashMap<u8, Vec<u8>>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
 }
 
 impl SistemaCamaras {
-    pub fn new() -> Self {
-        println!("SISTEMA DE CAMARAS\n");
+    pub fn new(cameras_tx: Sender<Vec<u8>>, logger_tx: Sender<StructsToSaveInLogger>, exit_tx: Sender<bool>, cameras: Arc<Mutex<HashMap<u8, Camera>>>, publish_message_rx: Receiver<PublishMessage>, mqtt_client: MQTTClient) -> Self {
+       
 
-        let broker_addr = get_broker_address();
-        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-        let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
-        //let incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
-        let cameras = create_cameras();
-        let cameras_c = cameras.clone();
-
-        let mut sistema_camaras: SistemaCamaras = Self {
+        let sistema_camaras: SistemaCamaras = Self {
             cameras_tx,
             logger_tx,
             exit_tx,
-            //incs_being_managed,
             cameras,
+            publish_message_rx,
+            mqtt_client,
         };
 
-        match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_client) => {
-                sleep(Duration::from_secs(2)); // Sleep to start everything 'at the same time'
-                let children = sistema_camaras.spawn_threads(
-                    mqtt_client,
-                    &cameras_c,
-                    cameras_rx,
-                    logger_rx,
-                    exit_rx,
-                );
-                join_all_threads(children);
-            }
-            Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
-        }
-
-        sistema_camaras
+         sistema_camaras
     }
 
-    fn spawn_threads(
+    pub fn spawn_threads(
         &mut self,
-        mqtt_client: MQTTClient,
-        cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
         cameras_rx: Receiver<Vec<u8>>,
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
-
-        let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
         let logger = Logger::new(logger_rx);
 
@@ -102,13 +79,13 @@ impl SistemaCamaras {
 
         children.push(self.spawn_abm_cameras_thread(
             //shareable_cameras.clone(),
-            cameras,
+            &self.cameras,
             self_clone.cameras_tx,
             self_clone.exit_tx,
         ));
         children.push(self.spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
         children.push(spawn_exit_when_asked_thread(
-            mqtt_client_sh.clone(),
+            self.mqtt_client.clone(),
             exit_rx,
         ));
         children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone()));
