@@ -396,17 +396,11 @@ impl SistemaCamaras {
     /// Recibe mensajes de los topics a los que se ha suscrito.
     fn receive_messages_from_subscribed_topics(
         &mut self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
         
     ) {
         let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
-
-        /*let mut rx;
-        if let Ok(mqtt_client) = mqtt_client.lock() {
-            rx = mqtt_client.get_publish_messages_rx()?;
-        }*/
 
         loop {
             match rx.recv() {
@@ -417,18 +411,6 @@ impl SistemaCamaras {
                     //}
                 }
             }
-
-            /*// Lo que había:
-            if let Ok(mqtt_client) = mqtt_client.lock() {
-                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    Ok(msg) => self.handle_received_message(msg, cameras, &mut incs_being_managed),
-                    Err(e) => {
-                        if is_disconnected_error(e) {
-                            break;
-                        }
-                    }
-                }
-            }*/
         }
     }
 
@@ -445,7 +427,6 @@ impl SistemaCamaras {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
                     self_clone.receive_messages_from_subscribed_topics(
-                        &mqtt_client.clone(),
                         rx,
                         &mut cameras_cloned,
                     );

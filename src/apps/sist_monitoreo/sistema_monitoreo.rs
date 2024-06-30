@@ -170,7 +170,7 @@ impl SistemaMonitoreo {
     pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
         self.subscribe_to_topic(&mqtt_client, "Cam");
         self.subscribe_to_topic(&mqtt_client, "Dron");
-        self.receive_messages_from_subscribed_topics(&mqtt_client, mqtt_rx);
+        self.receive_messages_from_subscribed_topics(mqtt_rx);
         finalize_mqtt_client(&mqtt_client);
     }
 
@@ -193,7 +193,7 @@ impl SistemaMonitoreo {
     }
 
     // Recibe mensajes de los topics a los que se ha suscrito
-    pub fn receive_messages_from_subscribed_topics(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
+    pub fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
         loop {
             match mqtt_rx.recv() {
                 //Publish message: camera o dron
@@ -213,28 +213,6 @@ impl SistemaMonitoreo {
                     //}
                 }
             }
-
-            /*if let Ok(mqtt_client) = mqtt_client.lock() {
-            
-                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    //Publish message: camera o dron
-                    Ok(publish_message) => {
-                        self.logger_tx
-                            .send(StructsToSaveInLogger::MessageType(
-                                "Sistema Monitoreo".to_string(),
-                                MessageType::Publish(publish_message.clone()),
-                                OperationType::Received,
-                            ))
-                            .unwrap();
-                        self.send_publish_message_to_ui(publish_message)
-                    }
-                    Err(e) => {
-                        if is_disconnected_error(e) {
-                            break;
-                        }
-                    }
-                }
-            }*/
         }
     }
 

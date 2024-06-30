@@ -193,38 +193,6 @@ impl MQTTClient {
         Ok(subscribe_msg)
     }
 
-    /*pub fn get_publish_messages_rx(&self) -> &Option<Receiver<PublishMessage>> {
-        if let Some(rx) = self.publish_msg_to_client_rx {
-            &Some(rx)
-
-        } else {
-            &Some(Error::new(ErrorKind::InvalidData, ""))
-        }
-    }*/
-
-    /*/// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(
-        &self,
-        //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
-    ) -> Result<PublishMessage, Error> {
-        // Veo si tengo el rx (hijo no lo tiene)
-        if let Some(rx) = &self.publish_msg_to_client_rx {
-            // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
-            // Leo
-            match rx.recv() {
-                Ok(msg) => Ok(msg),
-                // (mapeo el error, por compatibilidad de tipos)
-                Err(e) => 
-                    Err(Error::new(ErrorKind::NotConnected, e)),
-            }
-        } else {
-            Err(Error::new(
-                ErrorKind::Other,
-                "Error: no está seteado el rx.",
-            ))
-        }
-    }*/
-
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         let msg = DisconnectMessage::new();

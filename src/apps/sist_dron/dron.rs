@@ -172,33 +172,6 @@ impl Dron {
                     //}
                 }
             }
-
-            /* //Lo que había
-            if let Ok(mqtt_client_l) = mqtt_client.lock() {
-                match mqtt_client_l.mqtt_receive_msg_from_subs_topic() {
-                    //Publish message: Incidente o dron
-                    Ok(publish_message) => {
-                        let struct_event = StructsToSaveInLogger::MessageType(
-                            "Dron".to_string(),
-                            MessageType::Publish(publish_message.clone()),
-                            OperationType::Received,
-                        );
-                        if self.logger_tx.send(struct_event).is_err() {
-                            // Aux: el tx podría estar en un logger, y llamar logger.log(string) x ej.
-                            println!("Cliente: Error al intentar loggear.");
-                        }
-                            
-                        let handle_thread =
-                            self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
-                        children.push(handle_thread);
-                    }
-                    Err(e) => {
-                        if is_disconnected_error(e) {
-                            break;
-                        }
-                    }
-                }
-            }*/
         }
 
         join_all_threads(children);
