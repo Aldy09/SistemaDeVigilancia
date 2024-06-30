@@ -15,6 +15,32 @@ use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 /// Determina el tipo del mensaje recibido que inicia por `fixed_header`.
 /// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
 /// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
+pub fn get_fixed_header_from_stream_without_timeout(
+    stream: &Arc<Mutex<TcpStream>>,
+) -> Result<([u8; 2], FixedHeader), Error> {
+    const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
+    let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
+
+    // Tomo lock y leo del stream
+    if let Ok(mut s) = stream.lock() {
+        // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock    
+        // Leer
+        let _res = s.read(&mut fixed_header_buf)?;
+            
+    } else {
+        return Err(Error::new(ErrorKind::Other, "Error al tomar lock para leer"));
+    }
+
+    // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
+    let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
+
+    Ok((fixed_header_buf, fixed_header))
+}
+
+/// Lee `fixed_header` bytes del `stream`, sabe cuántos son por ser de tamaño fijo el fixed_header.
+/// Determina el tipo del mensaje recibido que inicia por `fixed_header`.
+/// Devuelve el tipo, y por cuestiones de optimización (ahorrar conversiones)
+/// devuelve también fixed_header (el struct encabezado del mensaje) y fixed_header_buf (sus bytes).
 pub fn get_fixed_header_from_stream(
     stream: &Arc<Mutex<TcpStream>>,
 ) -> Result<([u8; 2], FixedHeader), Error> {

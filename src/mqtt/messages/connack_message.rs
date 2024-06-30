@@ -25,7 +25,7 @@ impl ConnackMessage {
 
         let variable_header = VariableHeader {
             connect_acknowledge_flags,
-            connect_return_code: return_code as u8,
+            connect_return_code: return_code,
         };
 
         ConnackMessage {
@@ -41,7 +41,7 @@ impl ConnackMessage {
 
         // Variable Header
         let connect_acknowledge_flags = self.variable_header.connect_acknowledge_flags;
-        let connect_return_code = self.variable_header.connect_return_code;
+        let connect_return_code = self.variable_header.connect_return_code.to_byte()[0];
 
         let bytes = vec![
             message_type,
@@ -61,7 +61,7 @@ impl ConnackMessage {
 
         let variable_header = VariableHeader {
             connect_acknowledge_flags: bytes[2],
-            connect_return_code: bytes[3],
+            connect_return_code: ConnectReturnCode::from_byte([bytes[3]])?,
         };
 
         // un if message_type != de (2<<4) {dar error}
@@ -70,6 +70,10 @@ impl ConnackMessage {
             fixed_header,
             variable_header,
         })
+    }
+
+    pub fn get_connect_return_code(&self) -> ConnectReturnCode {
+        self.variable_header.connect_return_code.clone()
     }
 }
 
@@ -87,7 +91,7 @@ mod tests {
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);
-        assert_eq!(connack_packet.variable_header.connect_return_code, 0);
+        assert_eq!(connack_packet.variable_header.connect_return_code, ConnectReturnCode::ConnectionAccepted);
     }
 
     #[test]
@@ -111,6 +115,6 @@ mod tests {
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);
-        assert_eq!(connack_packet.variable_header.connect_return_code, 0);
+        assert_eq!(connack_packet.variable_header.connect_return_code, ConnectReturnCode::ConnectionAccepted);
     }
 }

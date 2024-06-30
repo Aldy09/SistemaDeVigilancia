@@ -1,25 +1,26 @@
 use std::{
-    collections::{HashMap, VecDeque},
-    net::TcpStream,
-    sync::{Arc, Mutex},
+    collections::{HashMap, VecDeque}, io::Error, net::TcpStream, sync::{Arc, Mutex}
 };
 
+//use crate::mqtt::mqtt_utils::stream_type::StreamType;
+type StreamType = TcpStream;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
+
 
 #[derive(Debug)]
 #[allow(dead_code)]
 
 pub struct User {
-    stream: Arc<Mutex<TcpStream>>,
+    stream: StreamType,
     username: String,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
 
 impl User {
-    pub fn new(stream: Arc<Mutex<TcpStream>>, username: String) -> Self {
+    pub fn new(stream: StreamType, username: String) -> Self {
         User {
             stream,
             username,
@@ -28,8 +29,8 @@ impl User {
         }
     }
     // Getters
-    pub fn get_stream(&self) -> Arc<Mutex<TcpStream>> {
-        Arc::clone(&self.stream)
+    pub fn get_stream(&self) -> Result<StreamType, Error> {
+        self.stream.try_clone()
     }
 
     pub fn get_username(&self) -> String {
@@ -45,7 +46,7 @@ impl User {
     }
 
     // Setters
-    pub fn set_stream(&mut self, stream: Arc<Mutex<TcpStream>>) {
+    pub fn set_stream(&mut self, stream: StreamType) {
         self.stream = stream;
     }
 

@@ -177,6 +177,12 @@ impl DronCurrentInfo {
         self.flying_info = Some(info);
     }
 
+    /// Setea la posición actual del dron.
+    pub fn set_current_position(&mut self, new_position: (f64, f64)){
+        self.latitude = new_position.0;
+        self.longitude = new_position.1;
+    }
+
     /// Incrementa la posición actual en la dirección recibida, y devuelve la nueva posición actual.
     pub fn increment_current_position_in(&mut self, dir: (f64, f64)) -> (f64, f64) {
         // La dirección es un vector unitario, pero para poder sumarlo a la lat y long y que tenga sentido
