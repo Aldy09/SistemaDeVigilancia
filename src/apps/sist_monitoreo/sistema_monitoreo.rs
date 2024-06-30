@@ -9,10 +9,10 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use crate::logging::{
+use crate::{apps::common_clients::is_disconnected_error, logging::{
     logger::Logger,
     structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-};
+}};
 use crate::mqtt::{
     client::mqtt_client::MQTTClient,
     messages::{message_type::MessageType, publish_message::PublishMessage},
@@ -206,7 +206,7 @@ impl SistemaMonitoreo {
                         self.send_publish_message_to_ui(publish_message)
                     }
                     Err(e) => {
-                        if !handle_message_receiving_error(e) {
+                        if is_disconnected_error(e) {
                             break;
                         }
                     }
@@ -299,27 +299,6 @@ pub fn establish_mqtt_broker_connection(
             Err(e.into())
         }
     }
-}
-
-pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
-    match e.kind() {
-        std::io::ErrorKind::TimedOut => true,
-        std::io::ErrorKind::NotConnected => {
-            println!("Cliente: No hay más PublishMessage's por leer.");
-            false
-        }
-        _ => {
-            println!("Cliente: error al leer los publish messages recibidos.");
-            true
-        }
-    }
-    /*/*if e == RecvTimeoutError::Timeout {
-    }*/
-
-    if e == RecvTimeoutError::Disconnected {
-        println!("Cliente: No hay más PublishMessage's por leer.");
-        break;
-    }*/
 }
 
 pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {

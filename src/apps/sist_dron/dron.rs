@@ -10,8 +10,7 @@ use std::{
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
-    apps::incident_state::IncidentState, mqtt::client::mqtt_client::MQTTClient,
-    mqtt::messages::publish_message::PublishMessage,
+    apps::{common_clients::is_disconnected_error, incident_state::IncidentState}, mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
 };
 use crate::{
     apps::{
@@ -164,7 +163,7 @@ impl Dron {
                         children.push(handle_thread);
                     }
                     Err(e) => {
-                        if !self.handle_message_receiving_error(e) {
+                        if is_disconnected_error(e) {
                             break;
                         }
                     }
@@ -740,21 +739,6 @@ impl Dron {
             mqtt_client.finish();
         }
         Ok(())
-    }
-
-    // Aux: puede estar en un common xq es copypaste de la de monitoreo
-    fn handle_message_receiving_error(&self, e: std::io::Error) -> bool {
-        match e.kind() {
-            std::io::ErrorKind::TimedOut => true,
-            std::io::ErrorKind::NotConnected => {
-                println!("Cliente: No hay más PublishMessage's por leer.");
-                false
-            }
-            _ => {
-                println!("Cliente: error al leer los publish messages recibidos.");
-                true
-            }
-        }
     }
 
     fn add_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
