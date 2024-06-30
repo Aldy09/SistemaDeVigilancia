@@ -9,6 +9,9 @@ use std::{
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
+use tokio::net::unix::pipe::Receiver;
+
+use crate::mqtt::mqtt_utils::mqtt_info_type::MQTTInfo;
 use crate::{
     apps::{common_clients::is_disconnected_error, incident_state::IncidentState}, mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
 };
@@ -56,13 +59,13 @@ impl Dron {
 
         // Connect a server mqtt
         match dron.establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mut mqtt_client) => {
+            Ok((mut mqtt_client, mqtt_rx)) => {
                 // Publica su estado inicial
                 if let Ok(ci) = &dron.current_info.lock() {
                     mqtt_client.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
                 }
 
-                dron.spawn_threads(mqtt_client, logger_rx)?;
+                dron.spawn_threads(mqtt_client, mqtt_rx, logger_rx)?;
             }
             Err(_) => {
                 return Err(Error::new(
@@ -78,6 +81,7 @@ impl Dron {
     pub fn spawn_threads(
         &mut self,
         mqtt_client: MQTTClient,
+        mqtt_rx: MpscReceiver<PublishMessage>,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
     ) -> Result<(), Error> {
         let logger = Logger::new(logger_rx);
@@ -86,7 +90,7 @@ impl Dron {
 
         children.push(spawn_dron_stuff_to_logger_thread(logger));
 
-        self.subscribe_to_topics(Arc::clone(&mqtt_client_sh))?;
+        self.subscribe_to_topics(Arc::clone(&mqtt_client_sh), mqtt_rx)?;
 
         join_all_threads(children);
 
@@ -103,10 +107,10 @@ impl Dron {
     }
 
     /// Se suscribe a topics inc y dron, y lanza la recepción de mensajes y finalización.
-    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    fn subscribe_to_topics(&mut self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) -> Result<(), Error> {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
-        self.receive_messages_from_subscribed_topics(&mqtt_client);
+        self.receive_messages_from_subscribed_topics(&mqtt_client, mqtt_rx);
         self.finalize_mqtt_client(&mqtt_client)?;
         Ok(())
     }
@@ -141,9 +145,35 @@ impl Dron {
     pub fn receive_messages_from_subscribed_topics(
         &mut self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
+        mqtt_rx: MpscReceiver<PublishMessage>
     ) {
         let mut children = vec![];
         loop {
+            match mqtt_rx.recv() {
+                //Publish message: Incidente o dron
+                Ok(publish_message) => {
+                    let struct_event = StructsToSaveInLogger::MessageType(
+                        "Dron".to_string(),
+                        MessageType::Publish(publish_message.clone()),
+                        OperationType::Received,
+                    );
+                    if self.logger_tx.send(struct_event).is_err() {
+                        // Aux: el tx podría estar en un logger, y llamar logger.log(string) x ej.
+                        println!("Cliente: Error al intentar loggear.");
+                    }
+                        
+                    let handle_thread =
+                        self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
+                    children.push(handle_thread);
+                }
+                Err(_e) => {
+                    //if is_disconnected_error(e) {
+                        break;
+                    //}
+                }
+            }
+
+            /* //Lo que había
             if let Ok(mqtt_client_l) = mqtt_client.lock() {
                 match mqtt_client_l.mqtt_receive_msg_from_subs_topic() {
                     //Publish message: Incidente o dron
@@ -168,7 +198,7 @@ impl Dron {
                         }
                     }
                 }
-            }
+            }*/
         }
 
         join_all_threads(children);
@@ -713,13 +743,13 @@ impl Dron {
     pub fn establish_mqtt_broker_connection(
         &self,
         broker_addr: &SocketAddr,
-    ) -> Result<MQTTClient, Error> {
+    ) -> Result<MQTTInfo, Error> {
         if let Ok(ci) = self.current_info.lock() {
             let client_id = format!("dron-{}", ci.get_id());
-            let mqtt_client = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
+            let mqtt_info = MQTTClient::mqtt_connect_to_broker(client_id.as_str(), broker_addr)?;
             println!("Cliente: Conectado al broker MQTT.");
 
-            return Ok(mqtt_client);
+            return Ok(mqtt_info);
         };
 
         Err(Error::new(
