@@ -133,6 +133,7 @@ impl SistemaCamaras {
         match self.cameras.lock() {
             Ok(cams) => {
                 for camera in (*cams).values() {
+                    println!("CÁMARAS: iniciando, enviando cámara: {:?}", camera);
                     self.send_camera_bytes(camera, &self.cameras_tx);
                 }
             }
@@ -301,6 +302,7 @@ impl SistemaCamaras {
                                     camera_to_update.get_id_e_incs_for_debug_display()
                                 );
                                 if state_has_changed {
+                                    println!("CÁMARAS: a activo, enviando cámara: {:?}", camera_to_update);
                                     self.send_camera_bytes(camera_to_update, &self.cameras_tx);
                                 }
                             }
@@ -337,6 +339,7 @@ impl SistemaCamaras {
                         // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
                         let state_has_changed = bordering_cam.append_to_incs_being_managed(inc.get_id());
                         if state_has_changed {
+                            println!("CÁMARAS: a saving, enviando cámara: {:?}", bordering_cam);
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
                         }
                     };
