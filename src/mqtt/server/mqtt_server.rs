@@ -113,7 +113,7 @@ impl MQTTServer {
 
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.disconnect_previous_client_if_already_connected(&client_id)?;
+            self.disconnect_previous_client_if_already_connected(client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;

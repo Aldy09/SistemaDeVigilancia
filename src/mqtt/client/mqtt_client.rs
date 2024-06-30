@@ -18,7 +18,6 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, puback_message::PubAckMessage, suback_message::SubAckMessage,

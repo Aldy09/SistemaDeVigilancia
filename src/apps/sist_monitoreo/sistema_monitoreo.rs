@@ -207,10 +207,9 @@ impl SistemaMonitoreo {
                         .unwrap();
                     self.send_publish_message_to_ui(publish_message)
                 }
-                Err(_e) => {
-                    //if is_disconnected_error(e) {
-                        break;
-                    //}
+                Err(_) => {
+                    is_disconnected_error();
+                    break;
                 }
             }
         }

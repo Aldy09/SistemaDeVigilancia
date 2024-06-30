@@ -9,8 +9,6 @@ use std::{
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use tokio::net::unix::pipe::Receiver;
-
 use crate::mqtt::mqtt_utils::mqtt_info_type::MQTTInfo;
 use crate::{
     apps::{common_clients::is_disconnected_error, incident_state::IncidentState}, mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
@@ -166,10 +164,9 @@ impl Dron {
                         self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
                     children.push(handle_thread);
                 }
-                Err(_e) => {
-                    //if is_disconnected_error(e) {
-                        break;
-                    //}
+                Err(_) => {
+                    is_disconnected_error();
+                    break;
                 }
             }
         }

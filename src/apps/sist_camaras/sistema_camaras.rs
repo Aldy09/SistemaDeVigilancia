@@ -405,10 +405,9 @@ impl SistemaCamaras {
         loop {
             match rx.recv() {
                 Ok(msg) => self.handle_received_message(msg, cameras, &mut incs_being_managed),
-                Err(_e) => {
-                    //if is_disconnected_error(e) {
-                        break;
-                    //}
+                Err(_) => {
+                    is_disconnected_error();
+                    break;
                 }
             }
         }
