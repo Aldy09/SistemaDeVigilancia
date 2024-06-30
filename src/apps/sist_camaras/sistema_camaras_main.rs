@@ -1,7 +1,23 @@
-use std::{collections::HashMap, net::TcpStream, sync::{mpsc, Mutex}};
+use std::{
+    collections::HashMap,
+    net::TcpStream,
+    sync::{mpsc, Mutex},
+};
 
 use rustx::{
-    apps::{common_clients::get_broker_address, sist_camaras::{camera::Camera, sistema_camaras::SistemaCamaras}}, logging::structs_to_save_in_logger::StructsToSaveInLogger, mqtt::{client::{mqtt_client::MQTTClient, mqtt_client_server_connection::MqttClientConnection}, messages::publish_message::{self, PublishMessage}}
+    apps::{
+        common_clients::get_broker_address,
+        sist_camaras::{camera::Camera, sistema_camaras::SistemaCamaras},
+    },
+    logging::structs_to_save_in_logger::StructsToSaveInLogger,
+    mqtt::{
+        client::{
+            mqtt_client::{self, MQTTClient},
+            mqtt_client_listener,
+            mqtt_client_server_connection::MqttClientConnection,
+        },
+        messages::publish_message::{self, PublishMessage},
+    },
 };
 
 type Channels = (
@@ -15,13 +31,21 @@ type Channels = (
     mpsc::Receiver<PublishMessage>,
 );
 
-
 fn create_channels() -> Channels {
     let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
     let (exit_tx, exit_rx) = mpsc::channel::<bool>();
     let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
-    (cameras_tx, cameras_rx, exit_tx, exit_rx, logger_tx, logger_rx, publish_message_tx, publish_message_rx)
+    (
+        cameras_tx,
+        cameras_rx,
+        exit_tx,
+        exit_rx,
+        logger_tx,
+        logger_rx,
+        publish_message_tx,
+        publish_message_rx,
+    )
 }
 
 fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
@@ -35,7 +59,7 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<(TcpStre
     match handshake_result {
         Ok(stream) => {
             println!("Cliente: Conectado al broker MQTT.");
-            Ok(())
+            Ok(stream)
         }
         Err(e) => {
             println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
@@ -44,20 +68,41 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<(TcpStre
     }
 }
 
-
 fn main() {
     let broker_addr = get_broker_address();
-    let (cameras_tx, cameras_rx, exit_tx, exit_rx, logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
+    let (
+        cameras_tx,
+        cameras_rx,
+        exit_tx,
+        exit_rx,
+        logger_tx,
+        logger_rx,
+        publish_message_tx,
+        publish_message_rx,
+    ) = create_channels();
     let cameras = create_cameras();
-    let cameras_c = cameras.clone();
 
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(stream) => {
-            let mqtt_client = MQTTClient::new(publish_message_tx, stream);
-            let sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras, publish_message_rx, mqtt_client);
-            let children = sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx);
-            
-            join_all_threads(children);
+            let mut handlers = Vec::<JoinHandle<()>>::new();
+            let mqtt_client_listener =
+                MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
+            let mqtt_client = MQTTClient::new(stream, mqtt_client_listener);
+            let sistema_camaras = SistemaCamaras::new(
+                cameras_tx,
+                logger_tx,
+                exit_tx,
+                cameras,
+                publish_message_rx,
+                mqtt_client,
+            );
+
+            handlers.push(thread::spawn(move || {
+                let _ = mqtt_client_listener.read_from_server();
+            }));
+            handlers.push(sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx));
+
+            join_all_threads(handlers);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }

@@ -1,4 +1,4 @@
-use std::{net::TcpStream, sync::mpsc::Sender};
+use std::net::TcpStream;
 
 use std::io::{Error, ErrorKind};
 
@@ -16,18 +16,15 @@ type StreamType = TcpStream;
 #[derive(Debug)]
 pub struct MQTTClientWritter {
     stream: StreamType,
-    publish_msg_to_client_tx: Sender<PublishMessage>,
     available_packet_id: u16,
 }
 
 impl MQTTClientWritter {
     pub fn new(
-        stream: StreamType,
-        publish_msg_to_client_tx: Sender<PublishMessage>,
+        stream: StreamType
     ) -> MQTTClientWritter {
         MQTTClientWritter {
             stream,
-            publish_msg_to_client_tx,
             available_packet_id: 0,
         }
     }
