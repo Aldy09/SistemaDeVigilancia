@@ -460,7 +460,7 @@ impl Dron {
         self.set_flying_info_values(dir)?;
     
         let mut current_pos = origin;
-        let threshold = 0.0001; // Define un umbral adecuado para tu aplicación
+        let threshold = 0.001; // Define un umbral adecuado para tu aplicación
         while self.calculate_distance(current_pos, destination) > threshold {
             current_pos = self.increment_current_position_in(dir)?;
     
@@ -481,6 +481,9 @@ impl Dron {
                 }
             };
         }
+
+        // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
+        self.set_current_position(destination)?;
     
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values()?;
@@ -595,6 +598,17 @@ impl Dron {
     fn set_flying_info(&self, info: DronFlyingInfo) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
             ci.set_flying_info(info);
+            return Ok(());
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de current info.",
+        ))
+    }
+
+    fn set_current_position(&self, new_position: (f64, f64)) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.set_current_position(new_position);
             return Ok(());
         }
         Err(Error::new(

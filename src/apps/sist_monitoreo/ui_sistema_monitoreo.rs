@@ -180,7 +180,7 @@ impl UISistemaMonitoreo {
                 position: Position::from_lon_lat(longitude, latitude),
                 label: format!("Camera {}", camera_id),
                 symbol: '📷',
-                style: style, //ESTE ES DEL LABEL, NO DEL ICONO
+                style, //ESTE ES DEL LABEL, NO DEL ICONO
                 id: camera_id,
                 place_type: "Camera".to_string(),
             };
