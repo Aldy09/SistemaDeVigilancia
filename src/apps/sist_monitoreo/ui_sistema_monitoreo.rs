@@ -140,6 +140,24 @@ impl UISistemaMonitoreo {
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
 
         let (repaint_tx, repaint_rx) = unbounded::<bool>();
+
+        let mantainance_style= Style {
+            symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
+            ..Default::default()
+        };
+
+        let mantainance_ui = Place {
+            position: places::mantenimiento(),
+            label: format!("Mantenimiento"),
+            symbol: '🔋',
+            style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
+            id: 0,
+            place_type: "Mantenimiento".to_string(),
+        };
+
+        let mut places = Places::new();
+        places.add_place(mantainance_ui);
+
         Self {
             providers: providers(egui_ctx.to_owned()),
             selected_provider: Provider::OpenStreetMap,
@@ -153,7 +171,7 @@ impl UISistemaMonitoreo {
             publish_message_rx,
             repaint_tx,
             repaint_rx,
-            places: super::super::vendor::Places::new(),
+            places,
             last_incident_id: 0,
             exit_tx,
             incidents_to_resolve: Vec::new(),
@@ -298,9 +316,9 @@ impl eframe::App for UISistemaMonitoreo {
             ..Default::default()
         };
 
-        /*egui::CentralPanel::default().show(ctx, |_ui| {
-            ctx.request_repaint()
-        });*/
+        egui::CentralPanel::default().show(ctx, |_ui| {
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        });
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
@@ -311,7 +329,7 @@ impl eframe::App for UISistemaMonitoreo {
                     self.handle_drone_message(publish_message, ctx);
                     
                 }
-                ctx.request_repaint();
+                //ctx.request_repaint();
             }
             /*if let Ok(_) = self.repaint_rx.try_recv() {
                 println!("UI: hago repaint, mi places es: {:?}", self.places);

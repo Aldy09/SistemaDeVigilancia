@@ -6,6 +6,10 @@ pub fn obelisco() -> Position {
     Position::from_lon_lat(-58.3861838, -34.6037344)
 }
 
+pub fn mantenimiento() -> Position {
+    Position::from_lon_lat(-58.3816, -34.6037)
+}
+
 /// Taking a public bus (line 106) is probably the cheapest option to get from
 /// the train station to the airport.
 /// https://www.wroclaw.pl/en/how-and-where-to-buy-public-transport-tickets-in-wroclaw
