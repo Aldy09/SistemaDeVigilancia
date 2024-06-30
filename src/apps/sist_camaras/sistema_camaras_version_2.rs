@@ -2,6 +2,7 @@ type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
+use crate::apps::common_clients::is_disconnected_error;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
@@ -433,10 +434,4 @@ fn spawn_exit_when_asked_thread(
     thread::spawn(move || {
         exit_when_asked(mqtt_client_sh, exit_rx);
     })
-}
-
-impl Default for SistemaCamaras {
-    fn default() -> Self {
-        Self::new()
-    }
 }
