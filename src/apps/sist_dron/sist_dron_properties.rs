@@ -162,4 +162,8 @@ impl SistDronProperties {
         self.range_center_lat = lat_inicial;
         self.range_center_lon = lon_inicial;
     }
+    pub fn get_max_battery_lvl(&self) -> u8 {
+        self.max_battery_lvl
+    }
+    
 }

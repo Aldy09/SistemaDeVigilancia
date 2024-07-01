@@ -13,12 +13,7 @@ use std::sync::{
     Arc, Mutex, MutexGuard,
 };
 use std::thread::{self, JoinHandle};
-type Channels = (
-    mpsc::Sender<Vec<u8>>,
-    mpsc::Receiver<Vec<u8>>,
-    mpsc::Sender<bool>,
-    mpsc::Receiver<bool>,
-);
+
 //use rustx::apps::properties::Properties;
 
 use std::io::Error;

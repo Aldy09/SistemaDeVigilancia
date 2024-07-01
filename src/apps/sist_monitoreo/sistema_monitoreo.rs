@@ -1,5 +1,4 @@
 use std::{
-    net::SocketAddr,
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
@@ -128,6 +127,7 @@ impl SistemaMonitoreo {
             incidents: self.incidents.clone(),
             egui_tx: self.egui_tx.clone(),
             logger_tx: self.logger_tx.clone(),
+            mqtt_client: self.mqtt_client.clone(),
         }
     }
 
@@ -142,17 +142,10 @@ impl SistemaMonitoreo {
         })
     }
 
-    pub fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finish();
-        }
-    }
-
     pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
         self.subscribe_to_topic(&mqtt_client, "Cam");
         self.subscribe_to_topic(&mqtt_client, "Dron");
         self.receive_messages_from_subscribed_topics(mqtt_rx);
-        finalize_mqtt_client(&mqtt_client);
     }
 
     pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
@@ -263,9 +256,4 @@ fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
 }
 
 
-pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
-    if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        mqtt_client.finish();
-    }
-}
 

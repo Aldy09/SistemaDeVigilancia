@@ -16,7 +16,7 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
-    pub fn new(stream: TcpStream, listener: MQTTClientListener) -> MQTTClient {
+    pub fn new(stream: StreamType, listener: MQTTClientListener) -> MQTTClient {
         let writer = MQTTClientWritter::new(stream.try_clone().unwrap());
         MQTTClient { writer, listener }
     }

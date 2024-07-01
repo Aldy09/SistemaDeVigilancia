@@ -1,10 +1,10 @@
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpStream},
-    sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle},
+    sync::{mpsc, Arc, Mutex}, thread::{self},
 };
 
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 
 use rustx::{
     apps::{
@@ -14,11 +14,11 @@ use rustx::{
     logging::structs_to_save_in_logger::StructsToSaveInLogger,
     mqtt::{
         client::{
-            mqtt_client::{self, MQTTClient},
-            mqtt_client_listener::{self, MQTTClientListener},
-            mqtt_client_server_connection::{mqtt_connect_to_broker, MqttClientConnection},
+            mqtt_client::MQTTClient,
+            mqtt_client_listener::MQTTClientListener,
+            mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::{self, PublishMessage},
+        messages::publish_message::PublishMessage,
     },
 };
 
@@ -86,22 +86,21 @@ fn main() {
 
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(stream) => {
-            let mut handlers = Vec::<JoinHandle<()>>::new();
-            let mqtt_client_listener =
+            let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
-            let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener);
-            let sistema_camaras = SistemaCamaras::new(
+            let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
+            let mut sistema_camaras = SistemaCamaras::new(
                 cameras_tx,
                 logger_tx,
                 exit_tx,
                 cameras,
                 mqtt_client,
             );
+            let mut handlers = sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx);
 
             handlers.push(thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
             }));
-            handlers.push(sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx));
 
             join_all_threads(handlers);
         }
