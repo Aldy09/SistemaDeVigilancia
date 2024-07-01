@@ -6,6 +6,7 @@ type StreamType = TcpStream;
 use crate::mqtt::messages::connack_message::ConnackMessage;
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::connect_return_code::ConnectReturnCode;
+use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::mqtt_utils::aux_server_utils::{
     get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream,
     write_message_to_stream,
@@ -52,7 +53,7 @@ fn read_connack(stream: &mut StreamType) -> Result<(), Error> {
 
     // Verifica que haya sido de tipo Connack
     let recvd_msg_type = fixed_header_info.1.get_message_type();
-    if recvd_msg_type == 2 {
+    if recvd_msg_type == PacketType::Connack {
         // ConnAck
         println!("Mqtt cliente leyendo: recibo conn ack");
         let recvd_bytes = get_whole_message_in_bytes_from_stream(

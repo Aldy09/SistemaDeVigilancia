@@ -4,6 +4,7 @@ use std::io::{Error, ErrorKind};
 
 use crate::mqtt::messages::connack_message::ConnackMessage;
 
+use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::messages::puback_message::PubAckMessage;
 use crate::mqtt::messages::suback_message::SubAckMessage;
 
@@ -24,17 +25,12 @@ pub struct MQTTClientListener {
 
 impl MQTTClientListener {
     pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>) -> Self {
-        MQTTClientListener {
-            stream,
-            client_tx,
-        }
+        MQTTClientListener { stream, client_tx }
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
     pub fn read_from_server(&mut self) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
-
-        println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
             match get_fixed_header_from_stream(&mut self.stream) {
@@ -47,7 +43,6 @@ impl MQTTClientListener {
                         break;
                     }
 
-                    println!("Mqtt cliente listener: mensaje recibido.");
                     self.read_a_message(&fixed_header_info)?; // esta función lee UN mensaje.
                 }
                 Ok(None) => {}
@@ -70,10 +65,8 @@ impl MQTTClientListener {
             fixed_header_bytes,
         )?;
 
-        println!("el mensaje recibido es de tipo: {:?}", tipo);
-
         match tipo {
-            2 => {
+            PacketType::Connack => {
                 // ConnAck
                 println!("Mqtt cliente leyendo: recibo conn ack");
 
@@ -81,7 +74,7 @@ impl MQTTClientListener {
                 let msg = ConnackMessage::from_bytes(&msg_bytes)?; //
                 println!("   Mensaje conn ack completo recibido: {:?}", msg);
             }
-            3 => {
+            PacketType::Publish => {
                 // Publish
                 println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
                 // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
@@ -96,14 +89,14 @@ impl MQTTClientListener {
                     Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
                 };
             }
-            4 => {
+            PacketType::Puback => {
                 // PubAck
                 println!("Mqtt cliente leyendo: recibo pub ack");
 
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 println!("   Mensaje pub ack completo recibido: {:?}", msg);
             }
-            9 => {
+            PacketType::Suback => {
                 // SubAck
                 println!("Mqtt cliente leyendo: recibo sub ack");
 
@@ -122,8 +115,6 @@ impl MQTTClientListener {
 
         Ok(())
     }
-
-
 }
 
 impl Clone for MQTTClientListener {

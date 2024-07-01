@@ -1,3 +1,4 @@
+use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, connack_session_present::SessionPresent,
     connect_message::ConnectMessage, connect_return_code::ConnectReturnCode,
@@ -19,7 +20,6 @@ use std::io::{Error, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{
-    mpsc::{self, Sender},
     Arc, Mutex,
 };
 
@@ -35,7 +35,6 @@ fn clean_file(file_path: &str) -> Result<(), Error> {
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
-    publish_msgs_tx: Sender<Box<dyn Send>>,
 }
 
 impl MQTTServer {
@@ -45,11 +44,8 @@ impl MQTTServer {
             println!("Error al limpiar el archivo: {:?}", e);
         }
 
-        let (tx, _rx) = mpsc::channel::<Box<dyn Send>>();
-
         let mqtt_server = Self {
-            connected_users: Arc::new(Mutex::new(HashMap::new())),
-            publish_msgs_tx: tx, // []
+            connected_users: Arc::new(Mutex::new(HashMap::new()))
         };
         let listener = create_server(ip, port)?;
 
@@ -336,7 +332,7 @@ impl MQTTServer {
 
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
-            3 => {
+            PacketType::Publish => {
                 // Publish
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
                 println!("   Mensaje publish completo recibido: {:?}", msg);
@@ -355,7 +351,7 @@ impl MQTTServer {
                 }*/
                 self.handle_publish_message(&msg)?;
             }
-            8 => {
+            PacketType::Subscribe => {
                 // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
                 // println!(" Subscribe:  Antes de add_topics_to_subscriber");
@@ -365,7 +361,7 @@ impl MQTTServer {
                 //self.send_suback_to_outgoing(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
                 self.send_suback(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
             }
-            4 => {
+            PacketType::Puback => {
                 // PubAck
                 println!("Recibo mensaje tipo PubAck");
                 // Entonces tengo el mensaje completo
@@ -396,7 +392,7 @@ impl MQTTServer {
 
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
         match fixed_header.get_message_type() {
-            1 => {
+            PacketType::Connect => {
                 self.process_connect(fixed_header, stream, fixed_header_buf)?;
             }
             _ => {
@@ -410,8 +406,7 @@ impl MQTTServer {
 
     fn clone_ref(&self) -> Self {
         Self {
-            connected_users: self.connected_users.clone(),
-            publish_msgs_tx: self.publish_msgs_tx.clone(), // []
+            connected_users: self.connected_users.clone()
         }
     }
 

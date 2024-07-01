@@ -1,3 +1,5 @@
+use crate::mqtt::messages::packet_type::PacketType;
+
 /// Struct que contiene los primeros dos bytes de cualquier tipo de mensaje del protocolo MQTT.
 /// El byte 1 contiene el tipo de mensaje en sus 4 bits más significativos,
 /// y ceros o posiblemente flags (dependiendo del tipo de mensaje) en sus 4 bits menos significativos.
@@ -27,8 +29,12 @@ impl FixedHeader {
         }
     }
 
-    pub fn get_message_type(&self) -> u8 {
+    pub fn get_message_type_byte(&self) -> u8 {
         self.message_type_byte >> 4
+    }
+
+    pub fn get_message_type(&self) -> PacketType {
+        PacketType::from(self.get_message_type_byte())
     }
 
     pub const fn get_rem_len(&self) -> usize {

@@ -2,7 +2,7 @@ use std::{
     io::{Error, ErrorKind, Read, Write}, net::{Shutdown, TcpStream}, sync::mpsc::Sender
 };
 
-use crate::mqtt::messages::{puback_message::PubAckMessage, publish_message::PublishMessage, suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
+use crate::mqtt::messages::{packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage, suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 type StreamType = TcpStream;
 
@@ -136,7 +136,7 @@ pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), E
 
 /// Devuelve si el fixed header correspondía o no al tipo de DisconnectMessage.
 pub fn is_disconnect_msg(fixed_header: &FixedHeader) -> bool {
-    fixed_header.get_message_type() == 14            
+    fixed_header.get_message_type() == PacketType::Disconnect            
 }
 
 /// Cerramos la conexión por el stream recibido.

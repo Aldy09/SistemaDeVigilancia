@@ -60,10 +60,12 @@ impl SistemaMonitoreo {
 
         children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx));
 
+        // Thread para hacer publish de un incidente que llega atraves de la UI
         children.push(
             self
-                .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
+                .spawn_publish_incidents_in_topic_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
         );
+
 
         children.push(spawn_write_incidents_to_logger_thread(logger));
 
@@ -96,7 +98,7 @@ impl SistemaMonitoreo {
         );
     }
 
-    pub fn spawn_send_incidents_thread(
+    pub fn spawn_publish_incidents_in_topic_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: MpscReceiver<Incident>,
