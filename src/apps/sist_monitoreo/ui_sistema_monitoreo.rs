@@ -13,7 +13,6 @@ use crate::apps::vendor::{
 };
 use crate::apps::{places, plugins::ImagesPluginData};
 use crossbeam::channel::Receiver;
-use crossbeam_channel::{unbounded, Sender as CrossbeamSender};
 use egui::Context;
 use egui::{menu, Color32};
 use std::sync::mpsc::Sender;
@@ -118,8 +117,6 @@ pub struct UISistemaMonitoreo {
     longitude: String,
     publish_incident_tx: Sender<Incident>,
     publish_message_rx: Receiver<PublishMessage>,
-    repaint_tx: CrossbeamSender<bool>,
-    repaint_rx: Receiver<bool>,
     places: Places,
     last_incident_id: u8,
     exit_tx: Sender<bool>,
@@ -138,8 +135,6 @@ impl UISistemaMonitoreo {
 
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
-
-        let (repaint_tx, repaint_rx) = unbounded::<bool>();
 
         let mantainance_style= Style {
             symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
@@ -169,8 +164,6 @@ impl UISistemaMonitoreo {
             longitude: String::new(),
             publish_incident_tx: tx,
             publish_message_rx,
-            repaint_tx,
-            repaint_rx,
             places,
             last_incident_id: 0,
             exit_tx,
@@ -183,7 +176,7 @@ impl UISistemaMonitoreo {
         let _ = self.publish_incident_tx.send(incident);
     }
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
-    fn handle_camera_message(&mut self, publish_message: PublishMessage, ctx: &Context) {
+    fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
         println!("UI: recibida cámara: {:?}, estado: {:?}", camera, camera.get_state());
 
@@ -221,7 +214,7 @@ impl UISistemaMonitoreo {
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
-    fn handle_drone_message(&mut self, msg: PublishMessage, _ctx: &Context) {
+    fn handle_drone_message(&mut self, msg: PublishMessage) {
         if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
             println!("UI: recibido dron: {:?}, estado: {:?}", dron, dron.get_state());
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
@@ -323,10 +316,10 @@ impl eframe::App for UISistemaMonitoreo {
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
                 if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
-                    self.handle_camera_message(publish_message, ctx);
+                    self.handle_camera_message(publish_message);
                     
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
-                    self.handle_drone_message(publish_message, ctx);
+                    self.handle_drone_message(publish_message);
                     
                 }
                 //ctx.request_repaint();
