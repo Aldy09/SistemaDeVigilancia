@@ -118,7 +118,7 @@ fn main() -> Result<(), Error> {
 
 
 fn spawn_dron_stuff_to_string_logger_thread(string_logger_writer: StringLoggerWriter) -> JoinHandle<()> {
-    thread::spawn(move || loop {
+    thread::spawn(move || {
         while let Ok(msg) = string_logger_writer.logger_rx.recv() {
             if string_logger_writer.write_to_file(msg).is_err() {
                 println!("LoggerWriter: error al escribir al archivo de log.");
