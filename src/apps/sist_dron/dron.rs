@@ -521,7 +521,7 @@ impl Dron {
         };
 
         println!("Fin vuelo."); // se podría borrar
-        self.logger.log(format!("Fin vuelo."));
+        self.logger.log("Fin vuelo.".to_string());
 
         Ok(())
     }
@@ -575,7 +575,7 @@ impl Dron {
         };
 
         println!("Fin vuelo."); // se podría borrar
-        self.logger.log(format!("Fin vuelo."));
+        self.logger.log("Fin vuelo.".to_string());
 
         Ok(())
     }
@@ -856,7 +856,7 @@ impl Dron {
         }
 
         if should_go_to_maintanence {
-            self.logger.log(format!("Batería baja, debo ir a mantenimiento."));
+            self.logger.log("Batería baja, debo ir a mantenimiento.".to_string());
             // Se determina a qué posición volver después de cargarse
             let position_to_go;
             if self.get_state()? == DronState::ManagingIncident {
@@ -870,7 +870,7 @@ impl Dron {
             self.fly_to_mantainance(maintanence_position, mqtt_client, true)?;
             sleep(Duration::from_secs(3));
             
-            self.logger.log(format!("Recargando batería al 100%."));
+            self.logger.log("Recargando batería al 100%.".to_string());
             self.set_battery_lvl()?; // podría llamarse recharge battery.
 
             // Vuelve a la posición correspondiente
