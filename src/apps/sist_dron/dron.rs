@@ -926,17 +926,29 @@ mod test {
     use std::sync::mpsc;
 
     use crate::apps::sist_dron::dron_state::DronState;
+    use crate::logging::string_logger::StringLogger;
     use crate::logging::structs_to_save_in_logger::StructsToSaveInLogger;
 
     use super::Dron;
 
     use super::calculate_initial_position;
 
-    #[test]
-    fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
+    fn create_dron_1() -> Dron {
+        let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
+        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
         let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
 
-        let dron = Dron::new_internal(1, logger_tx).unwrap();
+        Dron::new_internal(1, logger_tx, logger).unwrap()
+    }
+
+    #[test]
+    fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
+        /*let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
+        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
+        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+
+        let dron = Dron::new_internal(1, logger_tx, logger).unwrap();*/
+        let dron = create_dron_1();
 
         assert_eq!(dron.get_id().unwrap(), 1);
         assert_eq!(
@@ -947,13 +959,10 @@ mod test {
 
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
-        let dron = Dron::new_internal(1, logger_tx).unwrap();
+        
+        let dron = create_dron_1();
 
         // El dron inicia desde esta posición.
-        // Aux, #ToDo: para que inicien desde su range center real, y no todos desde el mismo punto del mapa,
-        //  aux: quizás sería necesario involucrar al id en la cuenta, ej una lat base + id*algún_factor, para espaciarlos en el mapa al iniciar. Ver [].
         assert_eq!(
             dron.get_current_position().unwrap(),
             dron.dron_properties.get_range_center_position()
@@ -962,9 +971,8 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
-        let dron = Dron::new_internal(1, logger_tx).unwrap();
+        
+        let dron = create_dron_1();
 
         // Dados destino y origen
         let origin = (0.0, 0.0); // desde el (0,0)
@@ -983,9 +991,8 @@ mod test {
 
     #[test]
     fn test_3b_calculate_direction_da_la_direccion_esperada() {
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
-        let dron = Dron::new_internal(1, logger_tx).unwrap();
+        
+        let dron = create_dron_1();
 
         // Dados destino y origen
         let origin = dron.get_current_position().unwrap(); // desde (incident_position, candidate_dron) que no es el (0,0)
