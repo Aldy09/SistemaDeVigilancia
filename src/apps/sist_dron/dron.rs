@@ -491,7 +491,7 @@ impl Dron {
             dir,
             self.dron_properties.get_speed()
         );
-        self.set_state(DronState::Flying, flag_maintanance)?;
+        // self.set_state(DronState::Flying, flag_maintanance)?;
         self.set_flying_info_values(dir, flag_maintanance)?;
 
         let mut current_pos = origin;
@@ -526,9 +526,10 @@ impl Dron {
             "Dron: llegué a destino [todavía aprox], pos actual: {:?}",
             self.get_current_position()
         );
-
+        println!("Adentro de Fly_to Mantenimiento antes del set state");
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, true)?;
+        println!("Adentro de Fly_to Mantenimiento despues del set state");
 
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
@@ -610,7 +611,7 @@ impl Dron {
         dir: (f64, f64),
         flag_maintanance: bool,
     ) -> Result<(), Error> {
-        let is_mantainance_set = self.get_state()? == DronState::Mantainance && flag_maintanance;
+        let is_mantainance_set = flag_maintanance;
         let is_not_maintainance_set =
             self.get_state()? != DronState::Mantainance && !flag_maintanance;
         if is_mantainance_set || is_not_maintainance_set {
@@ -677,10 +678,11 @@ impl Dron {
 
     fn set_state(&self, new_state: DronState, flag_maintanance: bool) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
-            let is_mantainance_set = ci.get_state() == DronState::Mantainance && flag_maintanance;
+            let is_mantainance_set = flag_maintanance;
             let is_not_maintainance_set =
                 ci.get_state() != DronState::Mantainance && !flag_maintanance;
             if is_mantainance_set || is_not_maintainance_set {
+                println!("Entro a setear el estado");
                 ci.set_state(new_state);
                 return Ok(());
             } else {
@@ -712,7 +714,7 @@ impl Dron {
         flag_maintanance: bool,
     ) -> Result<(f64, f64), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
-            let is_mantainance_set = ci.get_state() == DronState::Mantainance && flag_maintanance;
+            let is_mantainance_set = flag_maintanance;
             let is_not_maintainance_set =
                 ci.get_state() != DronState::Mantainance && !flag_maintanance;
             if is_mantainance_set || is_not_maintainance_set {
@@ -936,7 +938,9 @@ impl Dron {
 
             self.fly_to_mantainance(maintanence_position, mqtt_client, true)?;
             sleep(Duration::from_secs(3));
+            println!("Antes del set battery");
             self.set_battery_lvl()?;
+            println!("Despues del set battery");
 
             //Vuelve a la posicion correspondiente
             self.fly_to_mantainance(position_to_go, mqtt_client, true)?;

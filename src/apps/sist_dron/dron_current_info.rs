@@ -222,7 +222,11 @@ impl DronCurrentInfo {
     /// establece solo el estado del dron en Mantenimiento y el id del incidente a resolver en None. Para prepararse a volar a mantenimiento
     pub fn decrement_and_check_battery_lvl(&mut self, min_battery:u8)-> bool{  
         let mut should_charge = false;
-        self.battery_lvl -= 5;
+        if self.battery_lvl >= 5 {
+            self.battery_lvl -= 5;
+        } else {
+            self.battery_lvl = 0;
+        }
         if self.battery_lvl < min_battery {
             should_charge = true;
             self.inc_id_to_resolve = None;
