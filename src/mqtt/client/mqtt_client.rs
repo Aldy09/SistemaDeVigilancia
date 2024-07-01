@@ -21,8 +21,13 @@ impl MQTTClient {
     }
 
     // Delega la llamada al método mqtt_publish del writer
-    pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8],qos:u8) -> Result<PublishMessage, Error> {
-        self.writer.mqtt_publish(topic, payload,qos)
+    pub fn mqtt_publish(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+        qos: u8,
+    ) -> Result<PublishMessage, Error> {
+        self.writer.mqtt_publish(topic, payload, qos)
     }
 
     pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<SubscribeMessage, Error> {

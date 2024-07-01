@@ -36,12 +36,19 @@ pub struct SistemaMonitoreo {
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
     let contenido = fs::read_to_string(ruta_archivo)?;
-    let inicio = contenido.find("qos=").ok_or(io::Error::new(ErrorKind::NotFound, "No se encontró la etiqueta 'qos='"))?;
-   
-    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "El valor de QoS no es un número válido"))?;
+    let inicio = contenido.find("qos=").ok_or(io::Error::new(
+        ErrorKind::NotFound,
+        "No se encontró la etiqueta 'qos='",
+    ))?;
+
+    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "El valor de QoS no es un número válido",
+        )
+    })?;
     println!("Valor de QoS: {}", valor_qos);
-   Ok(valor_qos)
-    
+    Ok(valor_qos)
 }
 
 impl SistemaMonitoreo {
@@ -49,7 +56,9 @@ impl SistemaMonitoreo {
         logger_tx: MpscSender<StructsToSaveInLogger>,
         egui_tx: CrossbeamSender<PublishMessage>,
     ) -> Self {
-        let qos = leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties").unwrap_or(0);
+        let qos =
+            leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
+                .unwrap_or(0);
         println!("valor de QoS: {}", qos);
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
@@ -57,7 +66,6 @@ impl SistemaMonitoreo {
             egui_tx,
             qos,
         };
-        
 
         sistema_monitoreo
     }
@@ -69,7 +77,6 @@ impl SistemaMonitoreo {
         egui_rx: CrossbeamReceiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
-
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
@@ -99,7 +106,7 @@ impl SistemaMonitoreo {
     pub fn get_qos(&self) -> u8 {
         self.qos
     }
-    
+
     pub fn spawn_ui_thread(
         &self,
         incident_tx: MpscSender<Incident>,
@@ -252,7 +259,7 @@ impl SistemaMonitoreo {
 
         // Hago el publish
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_publish = mqtt_client.mqtt_publish("Inc", &incident.to_bytes(),self.get_qos());
+            let res_publish = mqtt_client.mqtt_publish("Inc", &incident.to_bytes(), self.get_qos());
             match res_publish {
                 Ok(publish_message) => {
                     self.logger_tx

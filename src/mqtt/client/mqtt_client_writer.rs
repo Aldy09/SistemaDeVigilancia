@@ -27,7 +27,12 @@ impl MQTTClientWritter {
         }
     }
 
-    pub fn mqtt_publish(&mut self, topic: &str, payload: &[u8],qos:u8) -> Result<PublishMessage, Error> {
+    pub fn mqtt_publish(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+        qos: u8,
+    ) -> Result<PublishMessage, Error> {
         println!("-----------------");
         let packet_id = self.generate_packet_id();
         // Creo un msj publish

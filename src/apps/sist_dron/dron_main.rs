@@ -11,7 +11,10 @@ use rustx::{
         common_clients::join_all_threads,
         sist_dron::{dron::Dron, utils::get_id_and_broker_address},
     },
-    logging::{string_logger::StringLogger, string_logger_writer::StringLoggerWriter, structs_to_save_in_logger::StructsToSaveInLogger},
+    logging::{
+        string_logger::StringLogger, string_logger_writer::StringLoggerWriter,
+        structs_to_save_in_logger::StructsToSaveInLogger,
+    },
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -63,7 +66,7 @@ fn main() -> Result<(), Error> {
 
     // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
-    
+
     // Se crean y configuran ambos extremos del string logger
     let (string_logger_tx, string_logger_rx) = mpsc::channel::<String>();
     let logger = StringLogger::new(string_logger_tx);
@@ -82,8 +85,11 @@ fn main() -> Result<(), Error> {
             match dron_res {
                 Ok(mut dron) => {
                     if let Ok(ci) = &dron.get_current_info().lock() {
-                        mqtt_client
-                            .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),dron.get_qos())?;
+                        mqtt_client.mqtt_publish(
+                            AppsMqttTopics::DronTopic.to_str(),
+                            &ci.to_bytes(),
+                            dron.get_qos(),
+                        )?;
                     }
 
                     let handler_1 = thread::spawn(move || {
@@ -116,8 +122,9 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-
-fn spawn_dron_stuff_to_string_logger_thread(string_logger_writer: StringLoggerWriter) -> JoinHandle<()> {
+fn spawn_dron_stuff_to_string_logger_thread(
+    string_logger_writer: StringLoggerWriter,
+) -> JoinHandle<()> {
     thread::spawn(move || {
         while let Ok(msg) = string_logger_writer.logger_rx.recv() {
             if string_logger_writer.write_to_file(msg).is_err() {

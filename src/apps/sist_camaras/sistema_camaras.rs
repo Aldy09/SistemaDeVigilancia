@@ -31,7 +31,6 @@ use crate::apps::app_type::AppType;
 use std::fs;
 use std::io::{self, ErrorKind};
 
-
 #[derive(Debug)]
 pub struct SistemaCamaras {
     cameras_tx: mpsc::Sender<Vec<u8>>,
@@ -43,8 +42,16 @@ pub struct SistemaCamaras {
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
     let contenido = fs::read_to_string(ruta_archivo)?;
-    let inicio = contenido.find("qos=").ok_or(io::Error::new(ErrorKind::NotFound, "No se encontró la etiqueta 'qos='"))?;
-    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "El valor de QoS no es un número válido"))?;
+    let inicio = contenido.find("qos=").ok_or(io::Error::new(
+        ErrorKind::NotFound,
+        "No se encontró la etiqueta 'qos='",
+    ))?;
+    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "El valor de QoS no es un número válido",
+        )
+    })?;
     Ok(valor_qos)
 }
 impl SistemaCamaras {
@@ -55,7 +62,8 @@ impl SistemaCamaras {
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
     ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
-        let qos = leer_qos_desde_archivo("src/apps/sist_camaras/qos_sistema_camaras.properties").unwrap();
+        let qos =
+            leer_qos_desde_archivo("src/apps/sist_camaras/qos_sistema_camaras.properties").unwrap();
 
         let sistema_camaras: SistemaCamaras = Self {
             cameras_tx,
@@ -196,7 +204,7 @@ impl SistemaCamaras {
     ) {
         while let Ok(cam_bytes) = rx.recv() {
             if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes,self.qos);
+                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
                 match res_publish {
                     Ok(publish_message) => {
                         self.logger_tx
@@ -385,7 +393,6 @@ impl SistemaCamaras {
         &mut self,
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
-        
     ) {
         let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
 
@@ -412,10 +419,7 @@ impl SistemaCamaras {
             match res {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
-                    self_clone.receive_messages_from_subscribed_topics(
-                        rx,
-                        &mut cameras_cloned,
-                    );
+                    self_clone.receive_messages_from_subscribed_topics(rx, &mut cameras_cloned);
                 }
                 Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
             };

@@ -1,17 +1,15 @@
 use std::sync::mpsc::Sender;
 
-
 #[derive(Debug)]
 pub struct StringLogger {
     tx: Sender<String>,
 }
 
 impl StringLogger {
-
     /// Extremo de envío del string logger.
     /// Es el encargado de enviar las strings a ser loggueadas.
     pub fn new(tx: Sender<String>) -> Self {
-        StringLogger {tx}
+        StringLogger { tx }
     }
 
     // Ejemplo: logger.log(format!("Ha ocurrido un evento: {}", string_event));
@@ -21,9 +19,8 @@ impl StringLogger {
             println!("Cliente: Error al intentar loggear.");
         }
     }
-    
+
     pub fn clone_ref(&self) -> StringLogger {
         Self::new(self.tx.clone())
     }
-    
 }
