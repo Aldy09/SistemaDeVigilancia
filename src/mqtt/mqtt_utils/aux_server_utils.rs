@@ -87,12 +87,12 @@ pub fn get_fixed_header_from_stream(
 
             println!("DEVOLVIENDO FIXED HEADER");
             Ok(Some((fixed_header_buf, fixed_header)))
-
-        },
+        }
         Err(e) => Err(e),
         _ => {
             //println!("READ NUEVO: Fixed header rama None, vale: {:?}");
-            Ok(None)},
+            Ok(None)
+        }
     }
 }
 

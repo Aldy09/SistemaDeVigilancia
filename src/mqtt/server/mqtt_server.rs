@@ -202,13 +202,14 @@ impl MQTTServer {
                     }
 
                     //msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-                    self.process_message(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
-                },
+                    self.process_message(username, stream, &fixed_header_info)?;
+                    // esta función lee UN mensaje.
+                }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
-                    break
-                },
+                    break;
+                }
                 Err(_) => todo!(),
             }
         }

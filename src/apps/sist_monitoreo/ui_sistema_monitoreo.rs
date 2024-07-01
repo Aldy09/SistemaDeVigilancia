@@ -136,7 +136,7 @@ impl UISistemaMonitoreo {
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
 
-        let mantainance_style= Style {
+        let mantainance_style = Style {
             symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
             ..Default::default()
         };
@@ -261,11 +261,10 @@ impl UISistemaMonitoreo {
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
-                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id){
+                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
                         incident.set_resolved();
                         self.send_incident(incident);
-                        self.places
-                            .remove_place(inc_id, "Incident".to_string());
+                        self.places.remove_place(inc_id, "Incident".to_string());
                     }
                 }
             }
@@ -318,17 +317,14 @@ impl eframe::App for UISistemaMonitoreo {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
         });
 
-
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
                 if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
-                    
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
                     self.handle_drone_message(publish_message);
-                    
                 }
-            }            
+            }
         });
 
         egui::CentralPanel::default()
@@ -432,7 +428,7 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             }
                         });
-                    }); 
+                    });
                 });
             });
     }
