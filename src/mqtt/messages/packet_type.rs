@@ -22,22 +22,22 @@ pub enum PacketType {
 impl From<u8> for PacketType {
     fn from(value: u8) -> Self {
         match value {
-            1 => return PacketType::Connect,
-            2 => return PacketType::Connack,
-            3 => return PacketType::Publish,
-            4 => return PacketType::Puback,
-            5 => return PacketType::Pubrec,
-            6 => return PacketType::Pubrel,
-            7 => return PacketType::Pubcomp,
-            8 => return PacketType::Subscribe,
-            9 => return PacketType::Suback,
-            10 => return PacketType::Unsubscribe,
-            11 => return PacketType::Unsuback,
-            12 => return PacketType::Pingreq,
-            13 => return PacketType::Pingresp,
-            14 => return PacketType::Disconnect,
+            1 =>  PacketType::Connect,
+            2 =>  PacketType::Connack,
+            3 =>  PacketType::Publish,
+            4 =>  PacketType::Puback,
+            5 =>  PacketType::Pubrec,
+            6 =>  PacketType::Pubrel,
+            7 =>  PacketType::Pubcomp,
+            8 =>  PacketType::Subscribe,
+            9 =>  PacketType::Suback,
+            10 =>  PacketType::Unsubscribe,
+            11 =>  PacketType::Unsuback,
+            12 =>  PacketType::Pingreq,
+            13 =>  PacketType::Pingresp,
+            14 =>  PacketType::Disconnect,
 
-            _ => return PacketType::Reserved,
-        };
+            _ => PacketType::Reserved,
+        }
     }
 }

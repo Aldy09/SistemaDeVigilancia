@@ -46,7 +46,7 @@ pub fn establish_mqtt_broker_connection(
         Ok(stream) => {
             println!("Cliente: Conectado al broker MQTT.");
 
-            return Ok(stream);
+            Ok(stream)
         }
         Err(e) => {
             println!(
