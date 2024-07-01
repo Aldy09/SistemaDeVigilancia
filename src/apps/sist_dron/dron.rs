@@ -14,7 +14,9 @@ use crate::{
         sist_dron::dron_state::DronState,
     },
     logging::{
-        logger::Logger, string_logger::StringLogger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}
+        logger::Logger,
+        string_logger::StringLogger,
+        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
     },
     mqtt::messages::message_type::MessageType,
 };
@@ -44,14 +46,17 @@ pub struct Dron {
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     logger: StringLogger,
 
-
     drone_distances_by_incident: DistancesType,
 }
 
 #[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
-    pub fn new(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>, logger: StringLogger) -> Result<Self, Error> {
+    pub fn new(
+        id: u8,
+        logger_tx: MpscSender<StructsToSaveInLogger>,
+        logger: StringLogger,
+    ) -> Result<Self, Error> {
         let dron = Self::new_internal(id, logger_tx, logger)?;
         dron.logger.log(format!("Dron: Iniciado dron {:?}", id));
 
@@ -70,7 +75,6 @@ impl Dron {
     pub fn get_current_info(&self) -> &Arc<Mutex<DronCurrentInfo>> {
         &self.current_info
     }
- 
 
     pub fn spawn_threads(
         &mut self,
@@ -109,7 +113,7 @@ impl Dron {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
         self.receive_messages_from_subscribed_topics(&mqtt_client, mqtt_rx);
-        
+
         Ok(())
     }
 
@@ -137,7 +141,8 @@ impl Dron {
                     }
                     // Fin: lo de arriba puede ser reemplazado por la línea de abajo.
 
-                    self.logger.log(format!("Dron: Suscripto a topic: {}", topic));
+                    self.logger
+                        .log(format!("Dron: Suscripto a topic: {}", topic));
                 }
                 Err(_) => {
                     return Err(Error::new(
@@ -173,7 +178,10 @@ impl Dron {
                     }
                     // Fin: lo de arriba puede reemplazarse por la línea de abajo.
 
-                    self.logger.log(format!("Dron: Recibo mensaje Publish: {:?}", publish_message));
+                    self.logger.log(format!(
+                        "Dron: Recibo mensaje Publish: {:?}",
+                        publish_message
+                    ));
 
                     let handle_thread =
                         self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
@@ -239,9 +247,9 @@ impl Dron {
     ) -> Result<(), Error> {
         let inc = Incident::from_bytes(payload);
         let inc_id = inc.get_id();
-        
+
         match *inc.get_state() {
-            IncidentState::ActiveIncident => { 
+            IncidentState::ActiveIncident => {
                 match self.manage_incident(inc, mqtt_client) {
                     // Si la función termina con éxito, se devuelve ok.
                     Ok(_) => Ok(()),
@@ -251,14 +259,18 @@ impl Dron {
                         // return por ser interrumpida por poca batería y tener que volar a mantenimiento.
                         // No es un error real, solo es una interrupción en el flujo de ejecución por ir a mantenimiento.
                         if e.kind() == ErrorKind::InvalidData {
-                            self.logger.log(format!("Se interrumpe procesamiento de inc {} para ir a mantenimiento.", inc_id));
+                            self.logger.log(format!(
+                                "Se interrumpe procesamiento de inc {} para ir a mantenimiento.",
+                                inc_id
+                            ));
                             Ok(())
                         // Caso contrario sí fue un error real, y se devuelve.
                         } else {
                             Err(e)
                         }
-                    },
-                }},
+                    }
+                }
+            }
             IncidentState::ResolvedIncident => {
                 self.go_back_if_my_inc_was_resolved(inc, mqtt_client)?;
                 Ok(())
@@ -271,19 +283,18 @@ impl Dron {
         // Obtengo el ID del incidente que el dron recibido está atendiendo
         if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
             if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-                
                 // Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interés.
                 if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
                     let self_distance = self.get_distance_to(*incident_position)?;
-                    
+
                     // Agrego al vector la menor distancia entre los dos drones al incidente
                     if self_distance <= received_dron_distance {
                         candidate_drones.push((self.get_id()?, self_distance));
                     } else {
                         candidate_drones.push((received_dron.get_id(), received_dron_distance));
-                    }                    
+                    }
                 }
             }
         }
@@ -297,11 +308,10 @@ impl Dron {
         _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
         let mut should_move = false;
-        
+
         //thread::sleep(Duration::from_millis(500));
         thread::sleep(Duration::from_millis(3500)); // Aux Probando
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            
             if let Some((_incident_position, candidate_drones)) =
                 distances.get_mut(&incident.get_id())
             {
@@ -314,16 +324,21 @@ impl Dron {
 
                 // Si el id del dron actual está en la lista de los dos más cercanos, entonces se mueve
                 should_move = closest_two_drones.contains(&self.get_id()?);
-                self.logger.log(format!("Lado topic dron, evaluando distancias, debería moverme: {}", should_move));
+                self.logger.log(format!(
+                    "Lado topic dron, evaluando distancias, debería moverme: {}",
+                    should_move
+                ));
 
                 // Si está vacío, no se recibió aviso de un dron más cercano, entonces voy yo
                 if closest_two_drones.is_empty() || closest_two_drones.len() == 1 {
                     should_move = true; // ()
-                    self.logger.log(format!("Lado topic dron, evaluando distancias, debería moverme porque no hay nadie más: {}", should_move)); 
+                    self.logger.log(format!("Lado topic dron, evaluando distancias, debería moverme porque no hay nadie más: {}", should_move));
                 }
-                
             } else {
-                self.logger.log(format!("Lado topic dron, esta condición no debería darse. Debería moverme: {}", should_move));
+                self.logger.log(format!(
+                    "Lado topic dron, esta condición no debería darse. Debería moverme: {}",
+                    should_move
+                ));
             }
         }
 
@@ -338,7 +353,8 @@ impl Dron {
     ) -> Result<(), Error> {
         let event = format!("Recibido inc activo de id: {}", inc_id.get_id()); // se puede borrar
         println!("{:?}", event); // se puede borrar
-        self.logger.log(format!("Recibido inc activo de id: {}", inc_id.get_id()));
+        self.logger
+            .log(format!("Recibido inc activo de id: {}", inc_id.get_id()));
 
         // Analizar condiciones para saber si se desplazará a la pos del incidente
         //  - batería es mayor al nivel bateria minima
@@ -350,9 +366,15 @@ impl Dron {
             self.is_within_range_from_self(inc_lat, inc_lon, self.dron_properties.get_range());
 
         if enough_battery {
-            if inc_in_range {         
-                println!("  está en rango, evaluando si desplazarme a inc {}", inc_id.get_id()); // se puede borrar
-                self.logger.log(format!("  está en rango, evaluando si desplazarme a inc {}", inc_id.get_id()));
+            if inc_in_range {
+                println!(
+                    "  está en rango, evaluando si desplazarme a inc {}",
+                    inc_id.get_id()
+                ); // se puede borrar
+                self.logger.log(format!(
+                    "  está en rango, evaluando si desplazarme a inc {}",
+                    inc_id.get_id()
+                ));
                 self.set_inc_id_to_resolve(inc_id.get_id())?; //
                 self.add_incident_to_hashmap(&inc_id)?;
 
@@ -369,7 +391,10 @@ impl Dron {
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
                 println!("   debería ir al incidente según cercanía: {}", should_move); // se puede borrar
-                self.logger.log(format!("   debería ir al incidente según cercanía: {}", should_move));
+                self.logger.log(format!(
+                    "   debería ir al incidente según cercanía: {}",
+                    should_move
+                ));
                 if should_move {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
@@ -378,11 +403,12 @@ impl Dron {
                 }
             } else {
                 println!("   el inc No está en mi rango."); // se puede borrar
-                self.logger.log(format!("  el inc {} No está en rango.", inc_id.get_id()));
+                self.logger
+                    .log(format!("  el inc {} No está en rango.", inc_id.get_id()));
             }
         } else {
             // No tiene suficiente batería, por lo que debe ir a mantenimiento a recargarse
-            self.set_state(DronState::Mantainance,false)?;
+            self.set_state(DronState::Mantainance, false)?;
 
             // Volar a la posición de Mantenimiento
             let destination = self.dron_properties.get_range_center_position();
@@ -401,7 +427,7 @@ impl Dron {
 
         // Ajuste para aprox dos manzanas en diagonal
         let adjusted_range = range / 1000.0; // hay que modificar el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
-        //println!("Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}", rad, adjusted_range, range); // debug []
+                                             //println!("Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}", rad, adjusted_range, range); // debug []
 
         rad <= (adjusted_range)
     }
@@ -414,14 +440,21 @@ impl Dron {
         inc: Incident,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        self.logger.log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
+        self.logger
+            .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
 
         if let Some(my_inc_id) = self.get_inc_id_to_resolve()? {
             if inc.get_id() == my_inc_id {
-                let event = format!("Recibido inc resuelto de id: {}, volviendo a posición inicial.", inc.get_id()); // se puede borrar
+                let event = format!(
+                    "Recibido inc resuelto de id: {}, volviendo a posición inicial.",
+                    inc.get_id()
+                ); // se puede borrar
                 println!("{:?}", event); // se puede borrar
 
-                self.logger.log(format!("Recibido inc resuelto de id: {}, volviendo a posición inicial", inc.get_id()));
+                self.logger.log(format!(
+                    "Recibido inc resuelto de id: {}, volviendo a posición inicial",
+                    inc.get_id()
+                ));
                 self.go_back_to_range_center_position(mqtt_client)?;
                 self.unset_inc_id_to_resolve()?;
             }
@@ -441,7 +474,7 @@ impl Dron {
         self.fly_to(destination, mqtt_client)?;
 
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
-        self.set_state(DronState::ExpectingToRecvIncident,false)?;
+        self.set_state(DronState::ExpectingToRecvIncident, false)?;
 
         Ok(())
     }
@@ -479,7 +512,11 @@ impl Dron {
         let origin = self.get_current_position()?;
         let dir = self.calculate_direction(origin, destination);
         println!("Fly_to: volando"); // se puede borrar
-        self.logger.log(format!("Fly_to: dir: {:?}, vel: {}",dir,self.dron_properties.get_speed()));
+        self.logger.log(format!(
+            "Fly_to: dir: {:?}, vel: {}",
+            dir,
+            self.dron_properties.get_speed()
+        ));
 
         // self.set_state(DronState::Flying, flag_maintanance)?; // diferencia en caso mantenimiento
         self.set_flying_info_values(dir, flag_maintanance)?;
@@ -492,7 +529,10 @@ impl Dron {
             // Simular el vuelo, el dron se desplaza
             let a = 300; // aux
             sleep(Duration::from_micros(a));
-            self.logger.log(format!("   incrementada la posición actual: {:?}",self.get_current_position()));
+            self.logger.log(format!(
+                "   incrementada la posición actual: {:?}",
+                self.get_current_position()
+            ));
 
             // Hace publish de su estado (de su current info)
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
@@ -508,7 +548,10 @@ impl Dron {
 
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values()?;
-        self.logger.log(format!("   llegué a destino: {:?}",self.get_current_position()));
+        self.logger.log(format!(
+            "   llegué a destino: {:?}",
+            self.get_current_position()
+        ));
 
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, true)?;
@@ -534,20 +577,27 @@ impl Dron {
         let origin = self.get_current_position()?;
         let dir = self.calculate_direction(origin, destination);
         println!("Fly_to: volando"); // se puede borrar
-        self.logger.log(format!("Fly_to: dir: {:?}, vel: {}",dir,self.dron_properties.get_speed()));
+        self.logger.log(format!(
+            "Fly_to: dir: {:?}, vel: {}",
+            dir,
+            self.dron_properties.get_speed()
+        ));
 
         self.set_state(DronState::Flying, false)?;
         self.set_flying_info_values(dir, false)?;
         let mut current_pos = origin;
-        let threshold = 0.001; // 
+        let threshold = 0.001; //
         while self.calculate_distance(current_pos, destination) > threshold {
             current_pos = self.increment_current_position_in(dir, false)?;
 
             // Simula el vuelo, el dron se desplaza
             let a = 300; // aux
             sleep(Duration::from_micros(a));
-            self.logger.log(format!("   incrementada la posición actual: {:?}",self.get_current_position()));
-            
+            self.logger.log(format!(
+                "   incrementada la posición actual: {:?}",
+                self.get_current_position()
+            ));
+
             // Hace publish de su estado (de su current info)
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 if let Ok(ci) = &self.current_info.lock() {
@@ -562,7 +612,10 @@ impl Dron {
 
         // Al llegar, el dron ya no se encuentra en desplazamiento.
         self.unset_flying_info_values()?;
-        self.logger.log(format!("   llegué a destino: {:?}",self.get_current_position()));
+        self.logger.log(format!(
+            "   llegué a destino: {:?}",
+            self.get_current_position()
+        ));
 
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, false)?;
@@ -699,7 +752,7 @@ impl Dron {
                     "Error al tomar lock de current info.",
                 ))
             }
-        }else{
+        } else {
             Err(Error::new(
                 ErrorKind::Other,
                 "Error al tomar lock de current info.",
@@ -802,7 +855,10 @@ impl Dron {
             DronState::ExpectingToRecvIncident,
         );
 
-        logger.log(format!("Dron {} creado en posición (lat, lon): {}, {}.", id, rng_center_lat, rng_center_lon));
+        logger.log(format!(
+            "Dron {} creado en posición (lat, lon): {}, {}.",
+            id, rng_center_lat, rng_center_lon
+        ));
         let dron = Dron {
             current_info: Arc::new(Mutex::new(current_info)),
             dron_properties,
@@ -841,7 +897,7 @@ impl Dron {
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let maintanence_position;
-        let should_go_to_maintanence:bool ;
+        let should_go_to_maintanence: bool;
 
         if let Ok(mut ci) = self.current_info.lock() {
             //decrementa la bateria
@@ -856,7 +912,8 @@ impl Dron {
         }
 
         if should_go_to_maintanence {
-            self.logger.log("Batería baja, debo ir a mantenimiento.".to_string());
+            self.logger
+                .log("Batería baja, debo ir a mantenimiento.".to_string());
             // Se determina a qué posición volver después de cargarse
             let position_to_go;
             if self.get_state()? == DronState::ManagingIncident {
@@ -865,11 +922,11 @@ impl Dron {
                 position_to_go = self.dron_properties.get_range_center_position();
             }
             // Vuela a mantenimiento
-            self.set_state(DronState::Mantainance,true)?;
+            self.set_state(DronState::Mantainance, true)?;
 
             self.fly_to_mantainance(maintanence_position, mqtt_client, true)?;
             sleep(Duration::from_secs(3));
-            
+
             self.logger.log("Recargando batería al 100%.".to_string());
             self.set_battery_lvl()?; // podría llamarse recharge battery.
 
@@ -884,7 +941,7 @@ impl Dron {
             ci.set_battery_lvl(self.dron_properties.get_max_battery_lvl());
             Ok(())
         } else {
-             Err(Error::new(
+            Err(Error::new(
                 ErrorKind::Other,
                 "Error al tomar lock de current info.",
             ))
@@ -959,7 +1016,6 @@ mod test {
 
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
-        
         let dron = create_dron_1();
 
         // El dron inicia desde esta posición.
@@ -971,7 +1027,6 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        
         let dron = create_dron_1();
 
         // Dados destino y origen
@@ -991,7 +1046,6 @@ mod test {
 
     #[test]
     fn test_3b_calculate_direction_da_la_direccion_esperada() {
-        
         let dron = create_dron_1();
 
         // Dados destino y origen

@@ -52,7 +52,6 @@ impl SistemaMonitoreo {
         egui_rx: CrossbeamReceiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
-
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 

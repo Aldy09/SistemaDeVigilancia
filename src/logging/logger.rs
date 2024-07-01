@@ -21,12 +21,12 @@ impl Logger {
             },
             StructsToSaveInLogger::MessageType(_, _, _) => "log.txt", // Use the default log file for MessageType
         };
-    
+
         let mut file = std::fs::OpenOptions::new()
             .append(true)
             .open(file_name)
             .unwrap();
-    
+
         match message {
             StructsToSaveInLogger::AppType(client_name, app_type, operation_type) => {
                 let operation_str = match operation_type {

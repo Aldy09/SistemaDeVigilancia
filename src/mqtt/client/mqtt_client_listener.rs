@@ -47,7 +47,8 @@ impl MQTTClientListener {
                 }
                 Ok(None) => {
                     println!("Se desconectó el server.");
-                    break}
+                    break;
+                }
                 Err(_) => todo!(),
             }
         }
