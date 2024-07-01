@@ -56,10 +56,9 @@ impl MQTTClientListener {
     }
 
     /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
+    /// Función interna que lee un mensaje, analiza su tipo, y lo procesa acorde a él.
     fn read_a_message(&mut self, fixed_header_info: &([u8; 2], FixedHeader)) -> Result<(), Error> {
-        // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
         let (fixed_header_bytes, fixed_header) = fixed_header_info;
-        // Soy client, siempre inicio yo la conexión, puedo recibir distintos tipos de mensaje.
         let tipo = fixed_header.get_message_type();
         let msg_bytes = get_whole_message_in_bytes_from_stream(
             fixed_header,
@@ -68,44 +67,10 @@ impl MQTTClientListener {
         )?;
 
         match tipo {
-            PacketType::Connack => {
-                // ConnAck
-                println!("Mqtt cliente leyendo: recibo conn ack");
-
-                // Entonces tengo el mensaje completo
-                let msg = ConnackMessage::from_bytes(&msg_bytes)?; //
-                println!("   Mensaje conn ack completo recibido: {:?}", msg);
-            }
-            PacketType::Publish => {
-                // Publish
-                println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
-                // Esto ocurre cuando me suscribí a un topic, y server me envía los msjs del topic al que me suscribí
-                let msg = PublishMessage::from_bytes(msg_bytes)?;
-
-                // Le respondo un pub ack
-                let _ = send_puback(&msg, &mut self.stream);
-
-                // Envío por el channel para que le llegue al cliente real (app cliente)
-                match self.client_tx.send(msg) {
-                    Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
-                    Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
-                };
-            }
-            PacketType::Puback => {
-                // PubAck
-                println!("Mqtt cliente leyendo: recibo pub ack");
-
-                let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
-                println!("   Mensaje pub ack completo recibido: {:?}", msg);
-            }
-            PacketType::Suback => {
-                // SubAck
-                println!("Mqtt cliente leyendo: recibo sub ack");
-
-                let msg = SubAckMessage::from_bytes(msg_bytes)?;
-                println!("   Mensaje sub ack completo recibido: {:?}", msg);
-            }
-
+            PacketType::Connack => self.handle_connack(msg_bytes)?,
+            PacketType::Publish => self.handle_publish(msg_bytes)?,
+            PacketType::Puback => self.handle_puback(msg_bytes)?,
+            PacketType::Suback => self.handle_suback(msg_bytes)?,
             _ => {
                 println!(
                     "   ERROR: tipo desconocido: recibido: \n   {:?}",
@@ -115,6 +80,38 @@ impl MQTTClientListener {
             }
         };
 
+        Ok(())
+    }
+
+    fn handle_connack(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
+        println!("Mqtt cliente leyendo: recibo conn ack");
+        let msg = ConnackMessage::from_bytes(&msg_bytes)?;
+        println!("   Mensaje conn ack completo recibido: {:?}", msg);
+        Ok(())
+    }
+
+    fn handle_publish(&mut self, msg_bytes: Vec<u8>) -> Result<(), Error> {
+        println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
+        let msg = PublishMessage::from_bytes(msg_bytes)?;
+        let _ = send_puback(&msg, &mut self.stream);
+        match self.client_tx.send(msg) {
+            Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
+            Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
+        };
+        Ok(())
+    }
+
+    fn handle_puback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
+        println!("Mqtt cliente leyendo: recibo pub ack");
+        let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
+        println!("   Mensaje pub ack completo recibido: {:?}", msg);
+        Ok(())
+    }
+
+    fn handle_suback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
+        println!("Mqtt cliente leyendo: recibo sub ack");
+        let msg = SubAckMessage::from_bytes(msg_bytes)?;
+        println!("   Mensaje sub ack completo recibido: {:?}", msg);
         Ok(())
     }
 }
