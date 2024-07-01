@@ -178,7 +178,11 @@ impl UISistemaMonitoreo {
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
-        println!("UI: recibida cámara: {:?}, estado: {:?}", camera, camera.get_state());
+        println!(
+            "UI: recibida cámara: {:?}, estado: {:?}",
+            camera,
+            camera.get_state()
+        );
 
         if camera.is_not_deleted() {
             let camera_id = camera.get_id();
@@ -204,26 +208,30 @@ impl UISistemaMonitoreo {
                 place_type: "Camera".to_string(),
             };
             self.places.add_place(camera_ui);
-            println!("REPAINT: add camera");
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
             println!("REPAINT: remove camera");
         }
         //let _ = self.repaint_tx.send(true);
+        //let _ = self.repaint_tx.send(true);
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
     fn handle_drone_message(&mut self, msg: PublishMessage) {
         if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
-            println!("UI: recibido dron: {:?}, estado: {:?}", dron, dron.get_state());
+            println!(
+                "UI: recibido dron: {:?}, estado: {:?}",
+                dron,
+                dron.get_state()
+            );
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
             println!("REPAINT: remove dron");
 
-            if dron.get_state() == DronState::ManagingIncident { // Llegó a la posición del inc.
-                println!("ESTOY MANEJANDO UN INCIDENTE ASIQUE AGREGO AL VECTOR");
+            if dron.get_state() == DronState::ManagingIncident {
+                // Llegó a la posición del inc.
                 if let Some(inc_id) = dron.get_inc_id_to_resolve() {
                     // Busca el incidente en el vector.
                     let incident_index = self
@@ -233,12 +241,10 @@ impl UISistemaMonitoreo {
 
                     match incident_index {
                         Some(index) => {
-                            println!("EL INCIDENTE ESTA AGREGADO ASIQUE PUSHEO EL DRON");
                             // Si el incidente ya existe, agrega el dron al vector de drones del incidente.
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
-                            println!("EL INCIDENTE NO ESTA AGREGADO ASIQUE LO CREO Y PUSHEO EL DRON");
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_id: inc_id,
@@ -251,10 +257,12 @@ impl UISistemaMonitoreo {
 
             //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
 
-            println!("EL vector de incidentes a resolver es: {:?}", self.incidents_to_resolve);
+            println!(
+                "EL vector de incidentes a resolver es: {:?}",
+                self.incidents_to_resolve
+            );
 
             for incident in self.incidents_to_resolve.iter() {
-                
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
                     if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id){
@@ -285,7 +293,7 @@ impl UISistemaMonitoreo {
             let dron_ui = Place {
                 position: dron_pos,
                 label: dron_label,
-                symbol: '✈',
+                symbol: '🚁',
                 style: Style::default(),
                 id: dron.get_id(),
                 place_type: "Dron".to_string(), // Para luego buscarlo en el places.
@@ -293,6 +301,7 @@ impl UISistemaMonitoreo {
 
             self.places.add_place(dron_ui);
         }
+        //let _ = self.repaint_tx.send(true);
         //let _ = self.repaint_tx.send(true);
     }
 
@@ -312,6 +321,7 @@ impl eframe::App for UISistemaMonitoreo {
         egui::CentralPanel::default().show(ctx, |_ui| {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
         });
+
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {

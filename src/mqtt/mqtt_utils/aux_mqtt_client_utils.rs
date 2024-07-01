@@ -112,4 +112,3 @@ pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), E
 
     Ok(())
 }
-

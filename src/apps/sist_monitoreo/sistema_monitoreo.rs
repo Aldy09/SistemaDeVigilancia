@@ -1,78 +1,57 @@
 use std::{
-    net::SocketAddr,
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
 
-use crossbeam_channel::Sender;
-use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
+use crossbeam_channel::Receiver as CrossbeamReceiver;
+use crossbeam_channel::Sender as CrossbeamSender;
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use crate::{apps::common_clients::is_disconnected_error, logging::{
-    logger::Logger,
-    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-}, mqtt::mqtt_utils::mqtt_info_type::MQTTInfo};
+use crate::{
+    apps::common_clients::is_disconnected_error,
+    logging::{
+        logger::Logger,
+        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+    },
+};
+
 use crate::mqtt::{
     client::mqtt_client::MQTTClient,
     messages::{message_type::MessageType, publish_message::PublishMessage},
 };
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{
-    app_type::AppType,
-    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
-    incident::Incident,
-};
+use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident::Incident};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
-    pub publish_message_tx: Sender<PublishMessage>,
-    pub logger_tx: mpsc::Sender<StructsToSaveInLogger>,
+    pub logger_tx: MpscSender<StructsToSaveInLogger>,
+    pub egui_tx: CrossbeamSender<PublishMessage>,
 }
 
 impl SistemaMonitoreo {
-    pub fn new() -> Self {
-        let broker_addr = get_broker_address();
-
-        let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
-        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
+    pub fn new(
+        logger_tx: MpscSender<StructsToSaveInLogger>,
+        egui_tx: CrossbeamSender<PublishMessage>,
+    ) -> Self {
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
-            publish_message_tx,
             logger_tx,
+            egui_tx,
         };
-
-        match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_info) => {
-                let child_threads = sistema_monitoreo.spawn_threads(
-                    mqtt_info,
-                    &sistema_monitoreo,
-                    logger_rx,
-                    publish_message_rx,
-                );
-
-                join_all_threads(child_threads);
-            }
-            Err(e) => println!(
-                "Error al establecer la conexión con el broker MQTT: {:?}",
-                e
-            ),
-        }
 
         sistema_monitoreo
     }
 
     pub fn spawn_threads(
         &self,
-        mqtt_info: MQTTInfo,
-        sistema_monitoreo: &SistemaMonitoreo,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
-        publish_message_rx: CrossbeamReceiver<PublishMessage>,
+        publish_message_rx: MpscReceiver<PublishMessage>,
+        egui_rx: CrossbeamReceiver<PublishMessage>,
+        mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
-        let (mqtt_client, mqtt_rx) = mqtt_info;
 
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
@@ -82,20 +61,21 @@ impl SistemaMonitoreo {
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
-        children.push(sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), mqtt_rx));
-
         children.push(
-            sistema_monitoreo
-                .spawn_send_incidents_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
+            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );
+
+        // Thread para hacer publish de un incidente que llega atraves de la UI
+        children.push(self.spawn_publish_incidents_in_topic_thread(
+            mqtt_client_incident_sh_clone.clone(),
+            incident_rx,
+        ));
 
         children.push(spawn_write_incidents_to_logger_thread(logger));
 
-        children.push(
-            sistema_monitoreo.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx),
-        );
+        children.push(self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx));
 
-        self.spawn_ui_thread(incident_tx, publish_message_rx, exit_tx);
+        self.spawn_ui_thread(incident_tx, egui_rx, exit_tx);
 
         children
     }
@@ -120,7 +100,7 @@ impl SistemaMonitoreo {
         );
     }
 
-    pub fn spawn_send_incidents_thread(
+    pub fn spawn_publish_incidents_in_topic_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: MpscReceiver<Incident>,
@@ -145,7 +125,7 @@ impl SistemaMonitoreo {
     pub fn clone_ref(&self) -> Self {
         Self {
             incidents: self.incidents.clone(),
-            publish_message_tx: self.publish_message_tx.clone(),
+            egui_tx: self.egui_tx.clone(),
             logger_tx: self.logger_tx.clone(),
         }
     }
@@ -153,7 +133,7 @@ impl SistemaMonitoreo {
     pub fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
-        mqtt_rx: MpscReceiver<PublishMessage>
+        mqtt_rx: MpscReceiver<PublishMessage>,
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
@@ -161,17 +141,14 @@ impl SistemaMonitoreo {
         })
     }
 
-    pub fn finalize_mqtt_client(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-        if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.finish();
-        }
-    }
-
-    pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
+    pub fn subscribe_to_topics(
+        &self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        mqtt_rx: MpscReceiver<PublishMessage>,
+    ) {
         self.subscribe_to_topic(&mqtt_client, "Cam");
         self.subscribe_to_topic(&mqtt_client, "Dron");
         self.receive_messages_from_subscribed_topics(mqtt_rx);
-        finalize_mqtt_client(&mqtt_client);
     }
 
     pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
@@ -216,7 +193,7 @@ impl SistemaMonitoreo {
     }
 
     pub fn send_publish_message_to_ui(&self, msg: PublishMessage) {
-        let res_send = self.publish_message_tx.send(msg);
+        let res_send = self.egui_tx.send(msg);
         match res_send {
             Ok(_) => println!("Cliente: Enviado mensaje a la UI"),
             Err(e) => println!("Cliente: Error al enviar mensaje a la UI: {:?}", e),
@@ -279,36 +256,4 @@ fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
             logger.write_in_file(msg);
         }
     })
-}
-
-pub fn establish_mqtt_broker_connection(
-    broker_addr: &SocketAddr,
-) -> Result<MQTTInfo, Box<dyn std::error::Error>> {
-    let client_id = "Sistema-Monitoreo";
-    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
-    match mqtt_client_res {
-        Ok(mqtt_info) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(mqtt_info)
-        }
-        Err(e) => {
-            println!(
-                "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",
-                e
-            );
-            Err(e.into())
-        }
-    }
-}
-
-pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
-    if let Ok(mut mqtt_client) = mqtt_client.lock() {
-        mqtt_client.finish();
-    }
-}
-
-impl Default for SistemaMonitoreo {
-    fn default() -> Self {
-        Self::new()
-    }
 }

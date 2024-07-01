@@ -1,27 +1,20 @@
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
+use std::sync::mpsc::Receiver;
+
 use crate::apps::common_clients::is_disconnected_error;
-use crate::mqtt::messages::publish_message::PublishMessage;
+use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
+
+pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
+
 use std::collections::HashMap;
 use std::sync::{
-    mpsc::{self, Receiver, Sender},
+    mpsc::{self, Sender},
     Arc, Mutex, MutexGuard,
 };
-use std::{
-    thread::{self, sleep, JoinHandle},
-    time::Duration,
-};
-type Channels = (
-    mpsc::Sender<Vec<u8>>,
-    mpsc::Receiver<Vec<u8>>,
-    mpsc::Sender<bool>,
-    mpsc::Receiver<bool>,
-);
-//use rustx::apps::properties::Properties;
-use crate::mqtt::mqtt_utils::mqtt_info_type::MQTTInfo;
+use std::thread::{self, JoinHandle};
 
 use std::io::Error;
-use std::net::SocketAddr;
 
 use crate::mqtt::messages::message_type::MessageType;
 
@@ -29,13 +22,9 @@ use crate::logging::{
     logger::Logger,
     structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
 };
-use crate::mqtt::client::mqtt_client::MQTTClient;
 
-use crate::apps::sist_camaras::{camera::Camera, manage_stored_cameras::read_cameras_from_file};
-use crate::apps::{
-    common_clients::{exit_when_asked, get_broker_address, join_all_threads},
-    incident::Incident,
-};
+use crate::apps::sist_camaras::camera::Camera;
+use crate::apps::{common_clients::exit_when_asked, incident::Incident};
 
 use super::sist_camaras_abm::ABMCameras;
 use crate::apps::app_type::AppType;
@@ -45,56 +34,36 @@ pub struct SistemaCamaras {
     cameras_tx: mpsc::Sender<Vec<u8>>,
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     exit_tx: mpsc::Sender<bool>,
-    //incs_being_managed: HashMap<u8, Vec<u8>>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
 }
 
 impl SistemaCamaras {
-    pub fn new() -> Self {
+    pub fn new(
+        cameras_tx: Sender<Vec<u8>>,
+        logger_tx: Sender<StructsToSaveInLogger>,
+        exit_tx: Sender<bool>,
+        cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+    ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
 
-        let broker_addr = get_broker_address();
-        let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-        let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
-        //let incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
-        let cameras = create_cameras();
-        let cameras_c = cameras.clone();
-
-        let mut sistema_camaras: SistemaCamaras = Self {
+        let sistema_camaras: SistemaCamaras = Self {
             cameras_tx,
             logger_tx,
             exit_tx,
-            //incs_being_managed,
             cameras,
         };
-
-        match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_info) => {
-                sleep(Duration::from_secs(2)); // Sleep to start everything 'at the same time'
-                let children = sistema_camaras.spawn_threads(
-                    mqtt_info,
-                    &cameras_c,
-                    cameras_rx,
-                    logger_rx,
-                    exit_rx,
-                );
-                join_all_threads(children);
-            }
-            Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
-        }
 
         sistema_camaras
     }
 
-    fn spawn_threads(
+    pub fn spawn_threads(
         &mut self,
-        mqtt_info: MQTTInfo,
-        cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
         cameras_rx: Receiver<Vec<u8>>,
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
+        publish_message_rx: Receiver<PublishMessage>,
+        mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
-        let (mqtt_client, rx) = mqtt_info;
         let mut children: Vec<JoinHandle<()>> = vec![];
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
@@ -104,8 +73,7 @@ impl SistemaCamaras {
         let self_clone = self.clone_ref();
 
         children.push(self.spawn_abm_cameras_thread(
-            //shareable_cameras.clone(),
-            cameras,
+            &self.cameras,
             self_clone.cameras_tx,
             self_clone.exit_tx,
         ));
@@ -114,7 +82,9 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
-        children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), rx));
+        children.push(
+            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
+        );
 
         children.push(spawn_receive_messages_thread(logger));
 
@@ -126,7 +96,6 @@ impl SistemaCamaras {
             cameras_tx: self.cameras_tx.clone(),
             logger_tx: self.logger_tx.clone(),
             exit_tx: self.exit_tx.clone(),
-            //incs_being_managed: self.incs_being_managed.clone(),
             cameras: self.cameras.clone(),
         }
     }
@@ -299,13 +268,17 @@ impl SistemaCamaras {
                         Ok(mut cams) => {
                             // Actualizo las cámaras en cuestión
                             if let Some(camera_to_update) = cams.get_mut(camera_id) {
-                                let state_has_changed = camera_to_update.remove_from_incs_being_managed(inc.get_id());
+                                let state_has_changed =
+                                    camera_to_update.remove_from_incs_being_managed(inc.get_id());
                                 println!(
                                     "  la cámara queda:\n   cam id y lista de incs: {:?}",
                                     camera_to_update.get_id_e_incs_for_debug_display()
                                 );
                                 if state_has_changed {
-                                    println!("CÁMARAS: a activo, enviando cámara: {:?}", camera_to_update);
+                                    println!(
+                                        "CÁMARAS: a activo, enviando cámara: {:?}",
+                                        camera_to_update
+                                    );
                                     self.send_camera_bytes(camera_to_update, &self.cameras_tx);
                                 }
                             }
@@ -340,7 +313,8 @@ impl SistemaCamaras {
                 for cam_id in &cameras_that_follow_inc {
                     if let Some(bordering_cam) = cams.get_mut(cam_id) {
                         // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
-                        let state_has_changed = bordering_cam.append_to_incs_being_managed(inc.get_id());
+                        let state_has_changed =
+                            bordering_cam.append_to_incs_being_managed(inc.get_id());
                         if state_has_changed {
                             println!("CÁMARAS: a saving, enviando cámara: {:?}", bordering_cam);
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
@@ -369,9 +343,9 @@ impl SistemaCamaras {
                     "Está en rango de cam: {}, cambiando su estado a activo.",
                     cam_id
                 ); // [] ver lindantes
-                // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
-                //camera.append_to_incs_being_managed(inc.id);
-                //let mut cameras_that_follow_inc = vec![*cam_id];
+                   // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
+                   //camera.append_to_incs_being_managed(inc.id);
+                   //let mut cameras_that_follow_inc = vec![*cam_id];
                 cameras_that_follow_inc.push(*cam_id);
 
                 for bordering_cam_id in camera.get_bordering_cams() {
@@ -446,34 +420,6 @@ fn spawn_receive_messages_thread(logger: Logger) -> JoinHandle<()> {
     })
 }
 
-/// Crea un MQTTClient, establece la conexión con server y devuelve el MQTTClient y el rx para recibir luego los mensajes de los topics
-/// a los que sistema_camaras se suscriba.
-fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<(MQTTClient, Receiver<PublishMessage>), Error> {
-    let client_id = "Sistema-Camaras";
-    let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
-    match mqtt_client_res {
-        Ok(mqtt_client) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(mqtt_client)
-        }
-        Err(e) => {
-            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
-            Err(e)
-        }
-    }
-}
-
-fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
-    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-    Arc::new(Mutex::new(cameras))
-}
-
-fn create_channels() -> Channels {
-    let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
-    let (exit_tx, exit_rx) = mpsc::channel::<bool>();
-    (cameras_tx, cameras_rx, exit_tx, exit_rx)
-}
-
 fn spawn_exit_when_asked_thread(
     mqtt_client_sh: Arc<Mutex<MQTTClient>>,
     exit_rx: mpsc::Receiver<bool>,
@@ -481,10 +427,4 @@ fn spawn_exit_when_asked_thread(
     thread::spawn(move || {
         exit_when_asked(mqtt_client_sh, exit_rx);
     })
-}
-
-impl Default for SistemaCamaras {
-    fn default() -> Self {
-        Self::new()
-    }
 }

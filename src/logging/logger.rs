@@ -14,9 +14,8 @@ impl Logger {
 
     pub fn write_in_file(&self, message: StructsToSaveInLogger) {
         let mut file = std::fs::OpenOptions::new()
-            .create(true)
             .append(true)
-            .open("src/log.txt")
+            .open("log.txt")
             .unwrap();
 
         match message {
@@ -27,7 +26,7 @@ impl Logger {
                 };
                 writeln!(
                     file,
-                    "{} {} un mensaje de tipo: {:?}",
+                    "{} {} un mensaje de tipo: {:?}\n",
                     client_name, operation_str, app_type
                 )
                 .unwrap();
@@ -39,29 +38,11 @@ impl Logger {
                 };
                 writeln!(
                     file,
-                    "{} {} un mensaje de tipo: {:?}",
+                    "{} {} un mensaje de tipo: {:?}\n",
                     client_name, operation_str, message_type
                 )
                 .unwrap();
             }
         }
     }
-    // pub fn write_in_file(&self, message: StructsToSaveInLogger) {
-    //     let mut file = std::fs::OpenOptions::new()
-    //         .create(true)
-    //         .append(true)
-    //         .open("src/log.txt")
-    //         .unwrap();
-
-    //     match message {
-    //         StructsToSaveInLogger::AppType(app_type) => {
-    //             //println!("Mensaje de tipo AppType recibido: {:?}", app_type);
-    //             writeln!(file, "{:?}", app_type).unwrap();
-    //         }
-    //         StructsToSaveInLogger::MessageType(message_type) => {
-    //             println!("Mensaje de tipo MessageType recibido: {:?}", message_type);
-    //             writeln!(file, "{:?}", message_type).unwrap();
-    //         }
-    //     }
-    // }
 }

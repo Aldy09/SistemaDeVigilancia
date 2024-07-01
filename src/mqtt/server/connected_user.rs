@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, VecDeque}, io::Error, net::TcpStream, sync::{Arc, Mutex}
+    collections::{HashMap, VecDeque},
+    io::Error,
+    net::TcpStream,
+    sync::{Arc, Mutex},
 };
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
@@ -7,7 +10,6 @@ type StreamType = TcpStream;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
 type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
-
 
 #[derive(Debug)]
 #[allow(dead_code)]

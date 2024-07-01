@@ -91,7 +91,10 @@ mod tests {
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);
-        assert_eq!(connack_packet.variable_header.connect_return_code, ConnectReturnCode::ConnectionAccepted);
+        assert_eq!(
+            connack_packet.variable_header.connect_return_code,
+            ConnectReturnCode::ConnectionAccepted
+        );
     }
 
     #[test]
@@ -115,6 +118,9 @@ mod tests {
         assert_eq!(connack_packet.fixed_header.message_type, 0b0010_0000);
         assert_eq!(connack_packet.fixed_header.remaining_length, 2);
         assert_eq!(connack_packet.variable_header.connect_acknowledge_flags, 1);
-        assert_eq!(connack_packet.variable_header.connect_return_code, ConnectReturnCode::ConnectionAccepted);
+        assert_eq!(
+            connack_packet.variable_header.connect_return_code,
+            ConnectReturnCode::ConnectionAccepted
+        );
     }
 }

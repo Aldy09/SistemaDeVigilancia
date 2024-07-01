@@ -176,7 +176,7 @@ impl Camera {
     // tanto self como la cámara recibida por parámetro agregan sus ids mutuamente a la lista de lindantes de la otra.
     pub fn mutually_add_if_bordering(&mut self, candidate_bordering: &mut Camera) {
         let const_border_range: f64 = 3.0; // Constante que debe ir en arch de configuración.
-        // Se fija si están en rango de lindantes.
+                                           // Se fija si están en rango de lindantes.
         let in_range = self.is_within_range_from_self(
             candidate_bordering.get_latitude(),
             candidate_bordering.get_longitude(),
@@ -213,7 +213,7 @@ impl Camera {
         let long_dist = self.longitude - longitude;
         let rad = f64::sqrt(lat_dist.powi(2) + long_dist.powi(2));
 
-        // Se modifica el range de las cámaras, ahora que son latitudes de verdad y no "3 4".        
+        // Se modifica el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
         let adjusted_range = 0.00135 + 0.0012 * range;
 
         println!(
@@ -264,13 +264,12 @@ mod test {
         // Ídem con datos "reales"
         let mut cam_5: Camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
         let mut cam_6: Camera = Camera::new(6, -34.6039, -58.3837, 1); // Aux: cámara 6.
-        
+
         cam_5.mutually_add_if_bordering(&mut cam_6);
 
         // Se han agregado mutuamente, xq sí qentraron dentro del border_range para ser consideradas lindantes
         assert!(cam_5.border_cameras.contains(&cam_6.get_id()));
         assert!(cam_6.border_cameras.contains(&cam_5.get_id()));
-
     }
 
     #[test]
@@ -293,38 +292,34 @@ mod test {
     // fn test_4_testing_camera_range() {
 
     //     let camera = Camera::new(5, -34.6040, -58.3873, 3); // Aux: cámara 5.
-        
+
     //     let (lat, lon) = (-34.6042, -58.3897);
     //     let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
-        
+
     //     assert!(is_in_range);
-        
+
     // }
 
     #[test]
     fn test_4a_una_pos_dentro_de_range_cuadras_esta_dentro_del_rango() {
-
         // Rango de 1 cuadra.
         let camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
-        
+
         let (lat, lon) = (-34.6042, -58.3897); // una cuadra a la izq de la cam 5
         let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
-        
+
         assert!(is_in_range);
         //assert!(false);
-        
     }
 
     #[test]
     fn test_4b_una_pos_mas_lejana_esta_fuera_del_rango() {
-
         // Rango de 1 cuadra.
         let camera = Camera::new(5, -34.6040, -58.3873, 1); // Aux: cámara 5.
-        
+
         let (lat, lon) = (-34.6042, -58.3902);
         let is_in_range = camera.is_within_range_from_self(lat, lon, camera.range as f64);
-        
+
         assert!(!is_in_range);
-        
     }
 }

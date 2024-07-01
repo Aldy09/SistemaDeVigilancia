@@ -178,7 +178,7 @@ impl DronCurrentInfo {
     }
 
     /// Setea la posición actual del dron.
-    pub fn set_current_position(&mut self, new_position: (f64, f64)){
+    pub fn set_current_position(&mut self, new_position: (f64, f64)) {
         self.latitude = new_position.0;
         self.longitude = new_position.1;
     }
