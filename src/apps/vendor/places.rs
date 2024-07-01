@@ -62,7 +62,7 @@ impl Place {
         );
 
         // Offset of the label, relative to the circle.
-        let offset = vec2(8., 8.);
+        let offset = vec2(-20., 30.);
 
         painter.rect_filled(
             label
