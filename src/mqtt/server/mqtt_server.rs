@@ -19,9 +19,7 @@ use std::fs::File;
 use std::io::{Error, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::{
-    Arc, Mutex,
-};
+use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
@@ -45,7 +43,7 @@ impl MQTTServer {
         }
 
         let mqtt_server = Self {
-            connected_users: Arc::new(Mutex::new(HashMap::new()))
+            connected_users: Arc::new(Mutex::new(HashMap::new())),
         };
         let listener = create_server(ip, port)?;
 
@@ -406,7 +404,7 @@ impl MQTTServer {
 
     fn clone_ref(&self) -> Self {
         Self {
-            connected_users: self.connected_users.clone()
+            connected_users: self.connected_users.clone(),
         }
     }
 

@@ -3,7 +3,6 @@ use crate::mqtt::messages::{
     connect_variable_header::VariableHeader,
 };
 
-
 #[derive(Debug)]
 pub struct ConnectMessage {
     fixed_header: FixedHeader,
@@ -17,7 +16,7 @@ impl ConnectMessage {
         will_topic: Option<String>,
         will_message: Option<String>,
         username: Option<String>,
-        password: Option<String> 
+        password: Option<String>,
     ) -> Self {
         let fixed_header = FixedHeader {
             message_type: 1 << 4,
@@ -50,7 +49,6 @@ impl ConnectMessage {
             fixed_header,
             variable_header,
             payload,
-            
         };
 
         connect_message.fixed_header.remaining_length =
@@ -108,7 +106,7 @@ impl ConnectMessage {
         // Payload
         bytes.push(self.payload.client_id.len() as u8);
         bytes.extend_from_slice(self.payload.client_id.as_bytes());
-        if let Some(will_topic) = self.payload.will_topic.clone(){
+        if let Some(will_topic) = self.payload.will_topic.clone() {
             bytes.push(will_topic.len() as u8);
             bytes.extend_from_slice(will_topic.as_bytes());
         }
@@ -258,127 +256,124 @@ impl ConnectMessage {
 }
 
 #[cfg(test)]
-    mod tests {
-    
-        use super::*;
-    
-        #[test]
-        fn test_from_bytes_parsing_fixed_header() {
-            // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-            let mut connect_message = ConnectMessage::new(
-                "test_client".to_string(),
-                Some("test/topic".to_string()),
-                Some("test message".to_string()),
-                Some("test_user".to_string()),
-                Some("test_password".to_string()),
-            );
-    
-            // Convertimos el mensaje a bytes
-            let bytes = connect_message.to_bytes();
-    
-            // Convertimos los bytes a un nuevo mensaje
-            let new_connect_message = ConnectMessage::from_bytes(&bytes);
-    
-            // Comprobamos que los mensajes son iguales
-            assert!(connect_message.fixed_header == new_connect_message.fixed_header);
-        }
-    
-        #[test]
-        fn test_from_bytes_parsing_variable_header() {
-            // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-            let mut connect_message = ConnectMessage::new(
-                "test_client".to_string(),
-                Some("test/topic".to_string()),
-                Some("test message".to_string()),
-                Some("test_user".to_string()),
-                Some("test_password".to_string()),
-            );
-    
-            let bytes = connect_message.to_bytes();
-    
-            // Convertimos los bytes a un nuevo mensaje
-            let new_connect_message = ConnectMessage::from_bytes(&bytes);
-    
-            // Comprobamos que los mensajes son iguales
-            assert_eq!(
-                connect_message.variable_header,
-                new_connect_message.variable_header
-            );
-        }
-    
-        #[test]
-        fn test_from_bytes_parsing_payload() {
-            // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-            let mut connect_message = ConnectMessage::new(
-                    "test_client".to_string(),
-                    Some("test/topic".to_string()),
-                    Some("test message".to_string()),
-                    Some("test_user".to_string()),
-                    Some("test_password".to_string()),
-                );
-    
-            // Convertimos el mensaje a bytes
-            let bytes = connect_message.to_bytes();
-    
-            // Convertimos los bytes a un nuevo mensaje
-            let new_connect_message = ConnectMessage::from_bytes(&bytes);
-    
-            // Comprobamos que los mensajes son iguales
-            assert_eq!(connect_message.payload, new_connect_message.payload);
-        }
-    
-        #[test]
-        fn test_from_bytes_parsing_payload_get_user_get_passwd() {
-            // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-            let mut connect_message = ConnectMessage::new(
-                "test_client".to_string(),
-                Some("test/topic".to_string()),
-                Some("test message".to_string()),
-                Some("test_user".to_string()),
-                Some("test_password".to_string()),
-            );
-    
-            // La función get_user obtiene el user del mensaje sin pasar a bytes
-            assert_eq!(*connect_message.get_user().unwrap(), "test_user".to_string());
-            assert_eq!(
-                *connect_message.get_passwd().unwrap(),
-                "test_password".to_string()
-            );
-    
-            // Convertimos el mensaje a bytes
-            let bytes = connect_message.to_bytes();
-    
-            // Convertimos los bytes a un nuevo mensaje
-            let new_connect_message = ConnectMessage::from_bytes(&bytes);
-    
-            // La función get_user obtiene el user del mensaje luego de convertirlo a mensaje desde bytes
-            assert_eq!(
-                new_connect_message.get_user().unwrap(),
-                "test_user"
-            );
-            assert_eq!(
-                new_connect_message.get_passwd().unwrap(),
-                "test_password"
-            );
-        }
-    
-        #[test]
-        fn test_from_bytes_works_properly_with_none_fields() {
-            // Creamos una instancia de ConnectMessage con algunos valores en None
-            let mut connect_message = ConnectMessage::new(
-                "test_client".to_string(),
-                None,
-                None,
-                Some("test_user".to_string()),
-                Some("test_password123".to_string()),
-            );
-            // Convertimos el mensaje a bytes
-            let bytes = connect_message.to_bytes();
-    
-            // Convertimos los bytes a un nuevo mensaje
-            let new_connect_message = ConnectMessage::from_bytes(&bytes);
-    
-            // Comprobamos que los mensajes son iguales
-            assert_eq!(connect_message.payload, new_connect_message.payload);
-        }
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_from_bytes_parsing_fixed_header() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = ConnectMessage::new(
+            "test_client".to_string(),
+            Some("test/topic".to_string()),
+            Some("test message".to_string()),
+            Some("test_user".to_string()),
+            Some("test_password".to_string()),
+        );
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert!(connect_message.fixed_header == new_connect_message.fixed_header);
     }
+
+    #[test]
+    fn test_from_bytes_parsing_variable_header() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = ConnectMessage::new(
+            "test_client".to_string(),
+            Some("test/topic".to_string()),
+            Some("test message".to_string()),
+            Some("test_user".to_string()),
+            Some("test_password".to_string()),
+        );
+
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert_eq!(
+            connect_message.variable_header,
+            new_connect_message.variable_header
+        );
+    }
+
+    #[test]
+    fn test_from_bytes_parsing_payload() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = ConnectMessage::new(
+            "test_client".to_string(),
+            Some("test/topic".to_string()),
+            Some("test message".to_string()),
+            Some("test_user".to_string()),
+            Some("test_password".to_string()),
+        );
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert_eq!(connect_message.payload, new_connect_message.payload);
+    }
+
+    #[test]
+    fn test_from_bytes_parsing_payload_get_user_get_passwd() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = ConnectMessage::new(
+            "test_client".to_string(),
+            Some("test/topic".to_string()),
+            Some("test message".to_string()),
+            Some("test_user".to_string()),
+            Some("test_password".to_string()),
+        );
+
+        // La función get_user obtiene el user del mensaje sin pasar a bytes
+        assert_eq!(
+            *connect_message.get_user().unwrap(),
+            "test_user".to_string()
+        );
+        assert_eq!(
+            *connect_message.get_passwd().unwrap(),
+            "test_password".to_string()
+        );
+
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // La función get_user obtiene el user del mensaje luego de convertirlo a mensaje desde bytes
+        assert_eq!(new_connect_message.get_user().unwrap(), "test_user");
+        assert_eq!(new_connect_message.get_passwd().unwrap(), "test_password");
+    }
+
+    #[test]
+    fn test_from_bytes_works_properly_with_none_fields() {
+        // Creamos una instancia de ConnectMessage con algunos valores en None
+        let mut connect_message = ConnectMessage::new(
+            "test_client".to_string(),
+            None,
+            None,
+            Some("test_user".to_string()),
+            Some("test_password123".to_string()),
+        );
+        // Convertimos el mensaje a bytes
+        let bytes = connect_message.to_bytes();
+
+        // Convertimos los bytes a un nuevo mensaje
+        let new_connect_message = ConnectMessage::from_bytes(&bytes);
+
+        // Comprobamos que los mensajes son iguales
+        assert_eq!(connect_message.payload, new_connect_message.payload);
+    }
+}

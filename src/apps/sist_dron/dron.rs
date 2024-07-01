@@ -84,7 +84,6 @@ impl Dron {
 
         self.subscribe_to_topics(Arc::clone(&mqtt_client_sh), mqtt_rx)?;
 
-
         Ok(children)
     }
 

@@ -1,4 +1,3 @@
-
 #[derive(Debug, PartialEq)]
 pub struct Payload {
     pub client_id: String,

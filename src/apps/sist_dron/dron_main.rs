@@ -1,7 +1,25 @@
-use std::{io::{Error, ErrorKind}, net::{SocketAddr, TcpStream}, sync::mpsc, thread};
+use std::{
+    io::{Error, ErrorKind},
+    net::{SocketAddr, TcpStream},
+    sync::mpsc,
+    thread,
+};
 
-use rustx::{apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, sist_dron::{dron::Dron, utils::get_id_and_broker_address}}, logging::structs_to_save_in_logger::StructsToSaveInLogger, mqtt::{client::{mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener, mqtt_client_server_connection::mqtt_connect_to_broker}, messages::publish_message::PublishMessage}};
-
+use rustx::{
+    apps::{
+        apps_mqtt_topics::AppsMqttTopics,
+        common_clients::join_all_threads,
+        sist_dron::{dron::Dron, utils::get_id_and_broker_address},
+    },
+    logging::structs_to_save_in_logger::StructsToSaveInLogger,
+    mqtt::{
+        client::{
+            mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
+            mqtt_client_server_connection::mqtt_connect_to_broker,
+        },
+        messages::publish_message::PublishMessage,
+    },
+};
 
 type Channels = (
     mpsc::Sender<StructsToSaveInLogger>,
@@ -9,8 +27,6 @@ type Channels = (
     mpsc::Sender<PublishMessage>,
     mpsc::Receiver<PublishMessage>,
 );
-
-
 
 fn create_channels() -> Channels {
     let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
@@ -35,8 +51,7 @@ pub fn establish_mqtt_broker_connection(
         Err(e) => {
             println!(
                 "Dron ID {} : Error al conectar al broker MQTT: {:?}",
-               client_id_u8,
-                e
+                client_id_u8, e
             );
             Err(e)
         }
@@ -50,7 +65,6 @@ fn main() -> Result<(), Error> {
 
     match establish_mqtt_broker_connection(id, &broker_addr) {
         Ok(stream) => {
-
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
             let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
@@ -62,18 +76,13 @@ fn main() -> Result<(), Error> {
                         mqtt_client
                             .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
                     }
-                    
+
                     let handler_1 = thread::spawn(move || {
                         let _ = mqtt_client_listener.read_from_server();
                     });
 
-
-                    let mut handlers = dron.spawn_threads(
-                        mqtt_client,
-                        publish_message_rx,
-                        logger_rx,
-                    )?;
-
+                    let mut handlers =
+                        dron.spawn_threads(mqtt_client, publish_message_rx, logger_rx)?;
 
                     handlers.push(handler_1);
                     join_all_threads(handlers);

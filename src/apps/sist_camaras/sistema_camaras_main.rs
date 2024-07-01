@@ -1,7 +1,8 @@
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpStream},
-    sync::{mpsc, Arc, Mutex}, thread::{self},
+    sync::{mpsc, Arc, Mutex},
+    thread::{self},
 };
 
 use std::io::Error;
@@ -9,13 +10,15 @@ use std::io::Error;
 use rustx::{
     apps::{
         common_clients::{get_broker_address, join_all_threads},
-        sist_camaras::{camera::Camera, manage_stored_cameras::read_cameras_from_file, sistema_camaras::SistemaCamaras},
+        sist_camaras::{
+            camera::Camera, manage_stored_cameras::read_cameras_from_file,
+            sistema_camaras::SistemaCamaras,
+        },
     },
     logging::structs_to_save_in_logger::StructsToSaveInLogger,
     mqtt::{
         client::{
-            mqtt_client::MQTTClient,
-            mqtt_client_listener::MQTTClientListener,
+            mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
         messages::publish_message::PublishMessage,
@@ -89,18 +92,19 @@ fn main() {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
-            let mut sistema_camaras = SistemaCamaras::new(
-                cameras_tx,
-                logger_tx,
-                exit_tx,
-                cameras,
-            );
+            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras);
 
             let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers = sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx, mqtt_client);
+            let mut handlers = sistema_camaras.spawn_threads(
+                cameras_rx,
+                logger_rx,
+                exit_rx,
+                publish_message_rx,
+                mqtt_client,
+            );
 
             handlers.push(handler_1);
             join_all_threads(handlers);

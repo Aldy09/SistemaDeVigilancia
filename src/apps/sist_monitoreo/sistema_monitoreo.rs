@@ -8,10 +8,13 @@ use crossbeam_channel::Sender as CrossbeamSender;
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use crate::{apps::common_clients::is_disconnected_error, logging::{
-    logger::Logger,
-    structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-}};
+use crate::{
+    apps::common_clients::is_disconnected_error,
+    logging::{
+        logger::Logger,
+        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+    },
+};
 
 use crate::mqtt::{
     client::mqtt_client::MQTTClient,
@@ -19,11 +22,7 @@ use crate::mqtt::{
 };
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{
-    app_type::AppType,
-    common_clients::exit_when_asked,
-    incident::Incident,
-};
+use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident::Incident};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
@@ -33,12 +32,14 @@ pub struct SistemaMonitoreo {
 }
 
 impl SistemaMonitoreo {
-    pub fn new(logger_tx: MpscSender<StructsToSaveInLogger>, egui_tx: CrossbeamSender<PublishMessage>) -> Self {
-        
+    pub fn new(
+        logger_tx: MpscSender<StructsToSaveInLogger>,
+        egui_tx: CrossbeamSender<PublishMessage>,
+    ) -> Self {
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             logger_tx,
-            egui_tx
+            egui_tx,
         };
 
         sistema_monitoreo
@@ -47,9 +48,10 @@ impl SistemaMonitoreo {
     pub fn spawn_threads(
         &self,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
-        publish_message_rx: MpscReceiver<PublishMessage>, egui_rx: CrossbeamReceiver<PublishMessage>, mqtt_client: MQTTClient
+        publish_message_rx: MpscReceiver<PublishMessage>,
+        egui_rx: CrossbeamReceiver<PublishMessage>,
+        mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
-        
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
@@ -58,20 +60,19 @@ impl SistemaMonitoreo {
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
-        children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx));
-
-        // Thread para hacer publish de un incidente que llega atraves de la UI
         children.push(
-            self
-                .spawn_publish_incidents_in_topic_thread(mqtt_client_incident_sh_clone.clone(), incident_rx),
+            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );
 
+        // Thread para hacer publish de un incidente que llega atraves de la UI
+        children.push(self.spawn_publish_incidents_in_topic_thread(
+            mqtt_client_incident_sh_clone.clone(),
+            incident_rx,
+        ));
 
         children.push(spawn_write_incidents_to_logger_thread(logger));
 
-        children.push(
-            self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx),
-        );
+        children.push(self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx));
 
         self.spawn_ui_thread(incident_tx, egui_rx, exit_tx);
 
@@ -131,7 +132,7 @@ impl SistemaMonitoreo {
     pub fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
-        mqtt_rx: MpscReceiver<PublishMessage>
+        mqtt_rx: MpscReceiver<PublishMessage>,
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
@@ -139,7 +140,11 @@ impl SistemaMonitoreo {
         })
     }
 
-    pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
+    pub fn subscribe_to_topics(
+        &self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        mqtt_rx: MpscReceiver<PublishMessage>,
+    ) {
         self.subscribe_to_topic(&mqtt_client, "Cam");
         self.subscribe_to_topic(&mqtt_client, "Dron");
         self.receive_messages_from_subscribed_topics(mqtt_rx);
@@ -251,6 +256,3 @@ fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
         }
     })
 }
-
-
-

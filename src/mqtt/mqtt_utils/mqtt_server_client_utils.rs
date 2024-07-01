@@ -23,12 +23,14 @@ pub fn get_fixed_header_from_stream_without_timeout(
 
     // Tomo lock y leo del stream
     if let Ok(mut s) = stream.lock() {
-        // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock    
+        // Si nadie me envía mensaje, no quiero bloquear en el read con el lock tomado, quiero soltar el lock
         // Leer
         let _res = s.read(&mut fixed_header_buf)?;
-            
     } else {
-        return Err(Error::new(ErrorKind::Other, "Error al tomar lock para leer"));
+        return Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock para leer",
+        ));
     }
 
     // He leído bytes de un fixed_header, tengo que ver de qué tipo es.

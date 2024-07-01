@@ -1,4 +1,3 @@
-
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum PacketType {
     Connect = 1,

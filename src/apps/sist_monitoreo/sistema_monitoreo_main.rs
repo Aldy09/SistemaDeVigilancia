@@ -78,8 +78,12 @@ fn main() {
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers =
-                sistema_monitoreo.spawn_threads(logger_rx, publish_message_rx, egui_rx, mqtt_client);
+            let mut handlers = sistema_monitoreo.spawn_threads(
+                logger_rx,
+                publish_message_rx,
+                egui_rx,
+                mqtt_client,
+            );
 
             handlers.push(handler_1);
             join_all_threads(handlers);

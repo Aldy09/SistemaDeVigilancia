@@ -136,7 +136,7 @@ impl UISistemaMonitoreo {
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
 
-        let mantainance_style= Style {
+        let mantainance_style = Style {
             symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
             ..Default::default()
         };
@@ -178,7 +178,11 @@ impl UISistemaMonitoreo {
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
-        println!("UI: recibida cámara: {:?}, estado: {:?}", camera, camera.get_state());
+        println!(
+            "UI: recibida cámara: {:?}, estado: {:?}",
+            camera,
+            camera.get_state()
+        );
 
         if camera.is_not_deleted() {
             let camera_id = camera.get_id();
@@ -204,11 +208,9 @@ impl UISistemaMonitoreo {
                 place_type: "Camera".to_string(),
             };
             self.places.add_place(camera_ui);
-            
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
-            
         }
         //let _ = self.repaint_tx.send(true);
     }
@@ -216,13 +218,17 @@ impl UISistemaMonitoreo {
     /// Se encarga de procesar y agregar un dron recibido al mapa.
     fn handle_drone_message(&mut self, msg: PublishMessage, _ctx: &Context) {
         if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
-            println!("UI: recibido dron: {:?}, estado: {:?}", dron, dron.get_state());
+            println!(
+                "UI: recibido dron: {:?}, estado: {:?}",
+                dron,
+                dron.get_state()
+            );
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
-            
 
-            if dron.get_state() == DronState::ManagingIncident { // Llegó a la posición del inc.
+            if dron.get_state() == DronState::ManagingIncident {
+                // Llegó a la posición del inc.
                 if let Some(inc_id) = dron.get_inc_id_to_resolve() {
                     // Busca el incidente en el vector.
                     let incident_index = self
@@ -232,12 +238,10 @@ impl UISistemaMonitoreo {
 
                     match incident_index {
                         Some(index) => {
-                            
                             // Si el incidente ya existe, agrega el dron al vector de drones del incidente.
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
-                            
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_id: inc_id,
@@ -250,17 +254,18 @@ impl UISistemaMonitoreo {
 
             //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
 
-            println!("EL vector de incidentes a resolver es: {:?}", self.incidents_to_resolve);
+            println!(
+                "EL vector de incidentes a resolver es: {:?}",
+                self.incidents_to_resolve
+            );
 
             for incident in self.incidents_to_resolve.iter() {
-                
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
-                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id){
+                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
                         incident.set_resolved();
                         self.send_incident(incident);
-                        self.places
-                            .remove_place(inc_id, "Incident".to_string());
+                        self.places.remove_place(inc_id, "Incident".to_string());
                     }
                 }
             }
@@ -316,10 +321,8 @@ impl eframe::App for UISistemaMonitoreo {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
                 if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
-                    
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
                     self.handle_drone_message(publish_message, ctx);
-                    
                 }
             }
         });
@@ -425,7 +428,7 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             }
                         });
-                    }); 
+                    });
                 });
             });
     }

@@ -1,11 +1,15 @@
 use std::{
-    io::{Error, ErrorKind, Read, Write}, net::{Shutdown, TcpStream}, sync::mpsc::Sender
+    io::{Error, ErrorKind, Read, Write},
+    net::{Shutdown, TcpStream},
+    sync::mpsc::Sender,
 };
 
-use crate::mqtt::messages::{packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage, suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode};
+use crate::mqtt::messages::{
+    packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage,
+    suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode,
+};
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 type StreamType = TcpStream;
-
 
 // Este archivo contiene funciones que utilizan para hacer read y write desde el stream
 // tanto el message_broker_server como el mqtt_client.
@@ -22,7 +26,7 @@ pub fn send_puback_to_outgoing(
     let ack = PubAckMessage::new(packet_id, 0);
     //let ack_msg_bytes = ack.to_bytes();
     //write_message_to_stream(&ack_msg_bytes, stream)?;
-    println!("   tipo publish: Enviando el ack: {:?}", ack);    
+    println!("   tipo publish: Enviando el ack: {:?}", ack);
     if publish_msgs_tx.send(Box::new(ack)).is_err() {
         //println!("Error al enviar el PublishMessage al hilo que los procesa.");
         return Err(Error::new(
@@ -54,18 +58,12 @@ pub fn send_suback_to_outgoing(
     Ok(())
 }
 
-
 // Fin tema channel
-
 
 // Inicio funciones que manejan el stream, usadas tando por mqtt server como por client.
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
 /// Puede devolver error si falla la escritura o el flush.
-pub fn write_message_to_stream(
-    msg_bytes: &[u8],
-    stream: &mut StreamType,
-) -> Result<(), Error> {
-
+pub fn write_message_to_stream(msg_bytes: &[u8], stream: &mut StreamType) -> Result<(), Error> {
     let _ = stream.write(msg_bytes)?;
     stream.flush()?;
 
@@ -86,14 +84,12 @@ pub fn get_fixed_header_from_stream(
             // He leído bytes de un fixed_header, tengo que ver de qué tipo es.
             let fixed_header = FixedHeader::from_bytes(b.to_vec());
             let fixed_header_buf = [b[0], b[1]];
-            
+
             println!("DEVOLVIENDO FIXED HEADER");
             Ok(Some((fixed_header_buf, fixed_header)))
-
-        },
-        _ => {Ok(None)},
+        }
+        _ => Ok(None),
     }
-
 }
 
 /// Una vez leídos los dos bytes del fixed header de un mensaje desde el stream,
@@ -115,12 +111,13 @@ pub fn get_whole_message_in_bytes_from_stream(
             buf.extend(b);
 
             Ok(buf)
-        },        
-        _ => Err(Error::new(ErrorKind::InvalidData, "Se leyó menos de lo esperado")) // caso None o Err.
+        }
+        _ => Err(Error::new(
+            ErrorKind::InvalidData,
+            "Se leyó menos de lo esperado",
+        )), // caso None o Err.
     }
 }
-
-
 
 /// Envía un mensaje de tipo PubAck por el stream.
 pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
@@ -136,7 +133,7 @@ pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), E
 
 /// Devuelve si el fixed header correspondía o no al tipo de DisconnectMessage.
 pub fn is_disconnect_msg(fixed_header: &FixedHeader) -> bool {
-    fixed_header.get_message_type() == PacketType::Disconnect            
+    fixed_header.get_message_type() == PacketType::Disconnect
 }
 
 /// Cerramos la conexión por el stream recibido.

@@ -1,13 +1,12 @@
-use std::net::TcpStream;
-use std::io::Error;
 use crate::mqtt::client::mqtt_client_listener::MQTTClientListener;
 use crate::mqtt::client::mqtt_client_writer::MQTTClientWritter;
+use std::io::Error;
+use std::net::TcpStream;
 
 use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::messages::subscribe_message::SubscribeMessage;
 
 type StreamType = TcpStream;
-
 
 #[derive(Debug)]
 pub struct MQTTClient {
@@ -26,14 +25,13 @@ impl MQTTClient {
         self.writer.mqtt_publish(topic, payload)
     }
 
-    pub fn mqtt_subscribe(&mut self, topics: Vec<String>,) -> Result<SubscribeMessage, Error> {
+    pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<SubscribeMessage, Error> {
         self.writer.mqtt_subscribe(topics)
     }
 
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         self.writer.mqtt_disconnect()
     }
-
 }
 
 impl Clone for MQTTClient {
@@ -43,4 +41,3 @@ impl Clone for MQTTClient {
         MQTTClient { writer, listener }
     }
 }
-

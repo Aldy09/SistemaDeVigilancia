@@ -61,7 +61,8 @@ impl SistemaCamaras {
         cameras_rx: Receiver<Vec<u8>>,
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
-        publish_message_rx: Receiver<PublishMessage>, mqtt_client: MQTTClient
+        publish_message_rx: Receiver<PublishMessage>,
+        mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
