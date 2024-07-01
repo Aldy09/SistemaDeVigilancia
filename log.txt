@@ -1,0 +1,58 @@
+Sistema Monitoreo envió un mensaje de tipo: Subscribe(SubscribeMessage { message_type: 8, reserved_flags: 2, packet_identifier: 1, topic_filters: [("Cam", 1)] })
+
+Sistema Monitoreo envió un mensaje de tipo: Subscribe(SubscribeMessage { message_type: 8, reserved_flags: 2, packet_identifier: 2, topic_filters: [("Dron", 1)] })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(1) }, payload: Payload { content: [118, 184, 239, 168, 46, 159, 128, 103, 113, 71, 251, 40, 6, 37, 22, 120, 254, 67, 57, 64, 202, 37, 169, 46] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(3) }, payload: Payload { content: [116, 160, 56, 134, 160, 37, 90, 212, 65, 103, 195, 186, 85, 55, 65, 87, 231, 106, 205, 95, 72, 235, 87, 24, 53, 100, 95, 103, 219, 185, 227, 217] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(4) }, payload: Payload { content: [61, 17, 153, 180, 235, 116, 236, 193, 40, 189, 87, 228, 187, 33, 103, 255, 19, 187, 114, 142, 227, 233, 247, 201, 184, 85, 137, 64, 204, 65, 108, 209] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(5) }, payload: Payload { content: [165, 153, 43, 145, 40, 206, 214, 150, 252, 165, 39, 141, 187, 39, 206, 124, 14, 145, 225, 226, 201, 213, 243, 113, 213, 2, 217, 225, 74, 239, 123, 44] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(6) }, payload: Payload { content: [198, 101, 94, 42, 139, 96, 96, 197, 44, 236, 123, 223, 235, 30, 12, 238, 38, 111, 195, 62, 14, 91, 160, 175] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(7) }, payload: Payload { content: [9, 45, 59, 32, 35, 131, 222, 13, 202, 254, 33, 63, 221, 52, 247, 99, 119, 227, 168, 50, 56, 167, 179, 92] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(8) }, payload: Payload { content: [234, 220, 185, 251, 161, 62, 59, 3, 175, 190, 76, 83, 169, 157, 177, 16, 133, 38, 141, 45, 193, 228, 156, 27] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(9) }, payload: Payload { content: [132, 29, 92, 119, 156, 239, 179, 110, 143, 222, 102, 74, 252, 193, 248, 128, 13, 26, 199, 246, 246, 101, 251, 2, 185, 22, 243, 73, 140, 28, 189, 31] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(10) }, payload: Payload { content: [121, 239, 168, 171, 252, 235, 39, 112, 62, 142, 98, 112, 199, 89, 180, 158, 65, 96, 224, 165, 113, 243, 44, 67] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(11) }, payload: Payload { content: [212, 102, 99, 227, 106, 208, 159, 200, 124, 30, 225, 159, 152, 158, 62, 102, 55, 71, 45, 91, 140, 215, 109, 16] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(12) }, payload: Payload { content: [162, 21, 116, 27, 223, 138, 179, 58, 144, 109, 100, 35, 250, 228, 110, 33, 2, 114, 254, 148, 191, 29, 90, 100] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(13) }, payload: Payload { content: [119, 75, 176, 140, 78, 238, 210, 146, 188, 35, 46, 189, 105, 178, 172, 156, 249, 253, 52, 41, 72, 180, 183, 203] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(1) }, payload: Payload { content: [118, 184, 239, 168, 46, 159, 128, 103, 113, 71, 251, 40, 6, 37, 22, 120, 254, 67, 57, 64, 202, 37, 169, 46] } })
+
+Sistema Camaras envió un mensaje de tipo: Subscribe(SubscribeMessage { message_type: 8, reserved_flags: 2, packet_identifier: 2, topic_filters: [("Inc", 1)] })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(3) }, payload: Payload { content: [116, 160, 56, 134, 160, 37, 90, 212, 65, 103, 195, 186, 85, 55, 65, 87, 231, 106, 205, 95, 72, 235, 87, 24, 53, 100, 95, 103, 219, 185, 227, 217] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(4) }, payload: Payload { content: [61, 17, 153, 180, 235, 116, 236, 193, 40, 189, 87, 228, 187, 33, 103, 255, 19, 187, 114, 142, 227, 233, 247, 201, 184, 85, 137, 64, 204, 65, 108, 209] } })
+
+Sistema Monitoreo recibió un mensaje de tipo: Sistema CamarasPublish (envióPublishMessage un mensaje de tipo:  { Publishfixed_header(: PublishMessageFixedHeader {  { fixed_headermessage_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(14) }, payload: Payload { content: [111, 96, 13, 98, 150, 77, 178, 129, 106, 145, 154, 122, 202, 103, 204, 115, 114, 200, 213, 131, 205, 149, 170, 218] } })
+
+: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(5) }, payload: Payload { content: [165, 153, 43, 145, 40, 206, 214, 150, 252, 165, 39, 141, 187, 39, 206, 124, 14, 145, 225, 226, 201, 213, 243, 113, 213, 2, 217, 225, 74, 239, 123, 44] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(6) }, payload: Payload { content: [198, 101, 94, 42, 139, 96, 96, 197, 44, 236, 123, 223, 235, 30, 12, 238, 38, 111, 195, 62, 14, 91, 160, 175] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(7) }, payload: Payload { content: [9, 45, 59, 32, 35, 131, 222, 13, 202, 254, 33, 63, 221, 52, 247, 99, 119, 227, 168, 50, 56, 167, 179, 92] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(8) }, payload: Payload { content: [234, 220, 185, 251, 161, 62, 59, 3, 175, 190, 76, 83, 169, 157, 177, 16, 133, 38, 141, 45, 193, 228, 156, 27] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 39 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(9) }, payload: Payload { content: [132, 29, 92, 119, 156, 239, 179, 110, 143, 222, 102, 74, 252, 193, 248, 128, 13, 26, 199, 246, 246, 101, 251, 2, 185, 22, 243, 73, 140, 28, 189, 31] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(10) }, payload: Payload { content: [121, 239, 168, 171, 252, 235, 39, 112, 62, 142, 98, 112, 199, 89, 180, 158, 65, 96, 224, 165, 113, 243, 44, 67] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(11) }, payload: Payload { content: [212, 102, 99, 227, 106, 208, 159, 200, 124, 30, 225, 159, 152, 158, 62, 102, 55, 71, 45, 91, 140, 215, 109, 16] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(12) }, payload: Payload { content: [162, 21, 116, 27, 223, 138, 179, 58, 144, 109, 100, 35, 250, 228, 110, 33, 2, 114, 254, 148, 191, 29, 90, 100] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(13) }, payload: Payload { content: [119, 75, 176, 140, 78, 238, 210, 146, 188, 35, 46, 189, 105, 178, 172, 156, 249, 253, 52, 41, 72, 180, 183, 203] } })
+
+Sistema Camaras envió un mensaje de tipo: Publish(PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 31 }, variable_header: VariableHeader { topic_name: "Cam", packet_identifier: Some(14) }, payload: Payload { content: [111, 96, 13, 98, 150, 77, 178, 129, 106, 145, 154, 122, 202, 103, 204, 115, 114, 200, 213, 131, 205, 149, 170, 218] } })
+

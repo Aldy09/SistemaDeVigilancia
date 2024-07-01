@@ -112,7 +112,7 @@ impl SistemaMonitoreo {
                 self_clone
                     .logger_tx
                     .send(StructsToSaveInLogger::AppType(
-                        "Sistema Monitoreo".to_string(),
+                        "Sistema-Monitoreo".to_string(),
                         AppType::Incident(msg),
                         OperationType::Sent,
                     ))

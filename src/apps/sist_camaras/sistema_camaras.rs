@@ -62,7 +62,7 @@ impl SistemaCamaras {
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
         publish_message_rx: Receiver<PublishMessage>,
-        mqtt_client: MQTTClient,
+        mqtt_client: MQTTClient
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
@@ -118,7 +118,7 @@ impl SistemaCamaras {
     fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
         self.logger_tx
             .send(StructsToSaveInLogger::AppType(
-                "Sistema Camaras".to_string(),
+                "Sistema-Camaras".to_string(),
                 AppType::Camera(camera.clone()),
                 OperationType::Sent,
             ))
