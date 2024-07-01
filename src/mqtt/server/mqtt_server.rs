@@ -11,30 +11,17 @@ use std::sync::{mpsc::{self, Sender}, Arc, Mutex};
 use std::path::Path;
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
-
-//type StreamType = Arc<Mutex<TcpStream>>; //TcpStream; // [] aux, mientras lo cambiamos.
 type StreamType = TcpStream;
 
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
-    //publish_msgs_tx: Sender<PublishMessage>, // rx no se puede clonar, mp"SC", pero el tx sí.
-    //publish_msgs_tx: Sender<Box<T: Message>>,
-    //publish_msgs_tx: Sender<Box<dyn Message>>,
-    //publish_msgs_tx: Sender<Arc<dyn Message>>,
-    //publish_msgs_tx: Sender<Arc<Message>>,
-    //publish_msgs_tx: Sender<Message>,
-    //publish_msgs_tx: Sender<Vec<u8>>,
-    // Aux: pub type Job = Box<dyn FnOnce() + Send + 'static>;
-    //publish_msgs_tx: Sender<Message + Send>,
-    publish_msgs_tx: Sender<Box<dyn Send>>,
-    
+    publish_msgs_tx: Sender<Box<dyn Send>>,   
 }
 
 impl MQTTServer {
     pub fn new(ip: String, port: u16) -> Result<Self, Error> {
-        //
-        //let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
         let (tx, _rx) = mpsc::channel::<Box<dyn Send>>();
 
         let mqtt_server = Self {
@@ -53,18 +40,9 @@ impl MQTTServer {
 
         let _mqtt_server_another_child = mqtt_server.clone_ref();
 
-        let outgoing_thread = std::thread::spawn(move || {
-            /*if let Err(result) = mqtt_server_another_child.handle_outgoing_messages(rx) {
-                println!("Error al manejar los mensajes salientes: {:?}", result);
-            }*/
-        });
-
         incoming_thread
             .join()
             .expect("Failed to join incoming thread");
-        outgoing_thread
-            .join()
-            .expect("Failed to join outgoing thread");
 
         Ok(mqtt_server)
     }

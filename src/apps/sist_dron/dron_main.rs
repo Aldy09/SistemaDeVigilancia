@@ -62,6 +62,11 @@ fn main() -> Result<(), Error> {
                         mqtt_client
                             .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
                     }
+                    
+                    let handler_1 = thread::spawn(move || {
+                        let _ = mqtt_client_listener.read_from_server();
+                    });
+
 
                     let mut handlers = dron.spawn_threads(
                         mqtt_client,
@@ -69,11 +74,8 @@ fn main() -> Result<(), Error> {
                         logger_rx,
                     )?;
 
-                    handlers.push(thread::spawn(move || {
-                        let _ = mqtt_client_listener.read_from_server();
-                    }));
 
-
+                    handlers.push(handler_1);
                     join_all_threads(handlers);
                 }
                 Err(_e) => {

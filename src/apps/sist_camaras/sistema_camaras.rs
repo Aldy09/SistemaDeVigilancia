@@ -14,8 +14,6 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 
-//use rustx::apps::properties::Properties;
-
 use std::io::Error;
 
 use crate::mqtt::messages::message_type::MessageType;
@@ -37,7 +35,6 @@ pub struct SistemaCamaras {
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     exit_tx: mpsc::Sender<bool>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-    mqtt_client: MQTTClient,
 }
 
 impl SistemaCamaras {
@@ -46,7 +43,6 @@ impl SistemaCamaras {
         logger_tx: Sender<StructsToSaveInLogger>,
         exit_tx: Sender<bool>,
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-        mqtt_client: MQTTClient,
     ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
 
@@ -55,7 +51,6 @@ impl SistemaCamaras {
             logger_tx,
             exit_tx,
             cameras,
-            mqtt_client,
         };
 
         sistema_camaras
@@ -66,11 +61,9 @@ impl SistemaCamaras {
         cameras_rx: Receiver<Vec<u8>>,
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
-        publish_message_rx: Receiver<PublishMessage>,
+        publish_message_rx: Receiver<PublishMessage>, mqtt_client: MQTTClient
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
-
-        let mqtt_client = self.mqtt_client.clone();
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
@@ -102,7 +95,6 @@ impl SistemaCamaras {
             cameras_tx: self.cameras_tx.clone(),
             logger_tx: self.logger_tx.clone(),
             exit_tx: self.exit_tx.clone(),
-            mqtt_client: self.mqtt_client.clone(),
             cameras: self.cameras.clone(),
         }
     }

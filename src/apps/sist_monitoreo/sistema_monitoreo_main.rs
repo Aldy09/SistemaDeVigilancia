@@ -73,15 +73,15 @@ fn main() {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
-            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, mqtt_client, egui_tx);
+            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, egui_tx);
+            let handler_1 = thread::spawn(move || {
+                let _ = mqtt_client_listener.read_from_server();
+            });
 
             let mut handlers =
-                sistema_monitoreo.spawn_threads(logger_rx, publish_message_rx, egui_rx);
+                sistema_monitoreo.spawn_threads(logger_rx, publish_message_rx, egui_rx, mqtt_client);
 
-            handlers.push(thread::spawn(move || {
-                let _ = mqtt_client_listener.read_from_server();
-            }));
-
+            handlers.push(handler_1);
             join_all_threads(handlers);
         }
         Err(e) => println!(

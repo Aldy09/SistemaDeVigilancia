@@ -94,14 +94,15 @@ fn main() {
                 logger_tx,
                 exit_tx,
                 cameras,
-                mqtt_client,
             );
-            let mut handlers = sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx);
 
-            handlers.push(thread::spawn(move || {
+            let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
-            }));
+            });
 
+            let mut handlers = sistema_camaras.spawn_threads(cameras_rx, logger_rx, exit_rx, publish_message_rx, mqtt_client);
+
+            handlers.push(handler_1);
             join_all_threads(handlers);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),

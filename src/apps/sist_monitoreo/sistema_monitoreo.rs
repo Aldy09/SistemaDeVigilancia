@@ -29,17 +29,15 @@ use crate::apps::{
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
     pub logger_tx: MpscSender<StructsToSaveInLogger>,
-    pub mqtt_client: MQTTClient,
     pub egui_tx: CrossbeamSender<PublishMessage>,
 }
 
 impl SistemaMonitoreo {
-    pub fn new(logger_tx: MpscSender<StructsToSaveInLogger>, mqtt_client: MQTTClient, egui_tx: CrossbeamSender<PublishMessage>) -> Self {
+    pub fn new(logger_tx: MpscSender<StructsToSaveInLogger>, egui_tx: CrossbeamSender<PublishMessage>) -> Self {
         
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             logger_tx,
-            mqtt_client,
             egui_tx
         };
 
@@ -49,11 +47,9 @@ impl SistemaMonitoreo {
     pub fn spawn_threads(
         &self,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
-        publish_message_rx: MpscReceiver<PublishMessage>, egui_rx: CrossbeamReceiver<PublishMessage>,
+        publish_message_rx: MpscReceiver<PublishMessage>, egui_rx: CrossbeamReceiver<PublishMessage>, mqtt_client: MQTTClient
     ) -> Vec<JoinHandle<()>> {
         
-        let mqtt_client = self.mqtt_client.clone();
-
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
@@ -127,7 +123,6 @@ impl SistemaMonitoreo {
             incidents: self.incidents.clone(),
             egui_tx: self.egui_tx.clone(),
             logger_tx: self.logger_tx.clone(),
-            mqtt_client: self.mqtt_client.clone(),
         }
     }
 

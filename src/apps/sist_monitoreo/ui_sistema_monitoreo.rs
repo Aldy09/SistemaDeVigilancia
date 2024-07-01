@@ -13,7 +13,6 @@ use crate::apps::vendor::{
 };
 use crate::apps::{places, plugins::ImagesPluginData};
 use crossbeam::channel::Receiver;
-use crossbeam_channel::{unbounded, Sender as CrossbeamSender};
 use egui::Context;
 use egui::{menu, Color32};
 use std::sync::mpsc::Sender;
@@ -205,11 +204,11 @@ impl UISistemaMonitoreo {
                 place_type: "Camera".to_string(),
             };
             self.places.add_place(camera_ui);
-            println!("REPAINT: add camera");
+            
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
-            println!("REPAINT: remove camera");
+            
         }
         //let _ = self.repaint_tx.send(true);
     }
@@ -221,10 +220,9 @@ impl UISistemaMonitoreo {
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
-            println!("REPAINT: remove dron");
+            
 
             if dron.get_state() == DronState::ManagingIncident { // Llegó a la posición del inc.
-                println!("ESTOY MANEJANDO UN INCIDENTE ASIQUE AGREGO AL VECTOR");
                 if let Some(inc_id) = dron.get_inc_id_to_resolve() {
                     // Busca el incidente en el vector.
                     let incident_index = self
@@ -234,12 +232,12 @@ impl UISistemaMonitoreo {
 
                     match incident_index {
                         Some(index) => {
-                            println!("EL INCIDENTE ESTA AGREGADO ASIQUE PUSHEO EL DRON");
+                            
                             // Si el incidente ya existe, agrega el dron al vector de drones del incidente.
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
-                            println!("EL INCIDENTE NO ESTA AGREGADO ASIQUE LO CREO Y PUSHEO EL DRON");
+                            
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_id: inc_id,
@@ -323,12 +321,7 @@ impl eframe::App for UISistemaMonitoreo {
                     self.handle_drone_message(publish_message, ctx);
                     
                 }
-                //ctx.request_repaint();
             }
-            /*if let Ok(_) = self.repaint_rx.try_recv() {
-                println!("UI: hago repaint, mi places es: {:?}", self.places);
-                ctx.request_repaint();
-            }*/
         });
 
         egui::CentralPanel::default()

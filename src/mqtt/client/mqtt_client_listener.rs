@@ -47,6 +47,7 @@ impl MQTTClientListener {
                         break;
                     }
 
+                    println!("Mqtt cliente listener: mensaje recibido.");
                     self.read_a_message(&fixed_header_info)?; // esta función lee UN mensaje.
                 }
                 Ok(None) => {}
@@ -68,6 +69,8 @@ impl MQTTClientListener {
             &mut self.stream,
             fixed_header_bytes,
         )?;
+
+        println!("el mensaje recibido es de tipo: {:?}", tipo);
 
         match tipo {
             2 => {
