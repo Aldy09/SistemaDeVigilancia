@@ -113,9 +113,10 @@ impl Places {
         self.places.push(place);
     }
 
+    /* // Parece que no se usa.
     pub fn get_places(&self) -> Vec<Place> {
         self.places.to_vec()
-    }
+    }*/
 
     /// Elimina el elemento de `id` y `place_type` indicados, del vector de places que se muestra en el mapa.
     /// Si el elemento no existía, no se hace nada.

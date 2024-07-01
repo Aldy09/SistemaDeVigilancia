@@ -136,14 +136,14 @@ impl UISistemaMonitoreo {
         // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
 
-        let mantainance_style = Style {
+        let mantainance_style= Style {
             symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
             ..Default::default()
         };
 
         let mantainance_ui = Place {
             position: places::mantenimiento(),
-            label: format!("Mantenimiento"),
+            label: "Mantenimiento".to_string(),
             symbol: '🔋',
             style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
             id: 0,
@@ -211,12 +211,14 @@ impl UISistemaMonitoreo {
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
+            println!("REPAINT: remove camera");
         }
+        //let _ = self.repaint_tx.send(true);
         //let _ = self.repaint_tx.send(true);
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
-    fn handle_drone_message(&mut self, msg: PublishMessage, _ctx: &Context) {
+    fn handle_drone_message(&mut self, msg: PublishMessage) {
         if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
             println!(
                 "UI: recibido dron: {:?}, estado: {:?}",
@@ -226,6 +228,7 @@ impl UISistemaMonitoreo {
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
+            println!("REPAINT: remove dron");
 
             if dron.get_state() == DronState::ManagingIncident {
                 // Llegó a la posición del inc.
@@ -262,10 +265,11 @@ impl UISistemaMonitoreo {
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
-                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
+                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id){
                         incident.set_resolved();
                         self.send_incident(incident);
-                        self.places.remove_place(inc_id, "Incident".to_string());
+                        self.places
+                            .remove_place(inc_id, "Incident".to_string());
                     }
                 }
             }
@@ -298,6 +302,7 @@ impl UISistemaMonitoreo {
             self.places.add_place(dron_ui);
         }
         //let _ = self.repaint_tx.send(true);
+        //let _ = self.repaint_tx.send(true);
     }
 
     pub fn get_next_incident_id(&mut self) -> u8 {
@@ -317,14 +322,22 @@ impl eframe::App for UISistemaMonitoreo {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
         });
 
+
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
                 if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
+                    
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
-                    self.handle_drone_message(publish_message, ctx);
+                    self.handle_drone_message(publish_message);
+                    
                 }
+                //ctx.request_repaint();
             }
+            /*if let Ok(_) = self.repaint_rx.try_recv() {
+                println!("UI: hago repaint, mi places es: {:?}", self.places);
+                ctx.request_repaint();
+            }*/
         });
 
         egui::CentralPanel::default()
@@ -428,7 +441,7 @@ impl eframe::App for UISistemaMonitoreo {
                                 }
                             }
                         });
-                    });
+                    }); 
                 });
             });
     }

@@ -106,7 +106,7 @@ impl MQTTServer {
 
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.disconnect_previous_client_if_already_connected(&client_id)?;
+            self.disconnect_previous_client_if_already_connected(client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
@@ -202,10 +202,13 @@ impl MQTTServer {
                     }
 
                     //msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-                    self.process_message(username, stream, &fixed_header_info)?;
-                    // esta función lee UN mensaje.
-                }
-                Ok(None) => {}
+                    self.process_message(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
+                },
+                Ok(None) => {
+                    println!("Se desconectó el cliente: {:?}.", username);
+                    // Acá se manejaría para recuperar la sesión cuando se reconecte.
+                    break
+                },
                 Err(_) => todo!(),
             }
         }

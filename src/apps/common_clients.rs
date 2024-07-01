@@ -73,6 +73,6 @@ pub fn exit_when_asked(mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bo
 }
 
 /// Devuelve true si la app de cliente debe dejar de loopear para leer de mqtt.
-pub fn is_disconnected_error() {
+pub fn is_disconnected_error(){
     println!("Cliente: No hay más PublishMessage's por leer.");
 }

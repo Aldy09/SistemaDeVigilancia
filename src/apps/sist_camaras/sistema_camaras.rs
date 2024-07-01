@@ -372,6 +372,7 @@ impl SistemaCamaras {
         &mut self,
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
+        
     ) {
         let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
 
@@ -398,7 +399,10 @@ impl SistemaCamaras {
             match res {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
-                    self_clone.receive_messages_from_subscribed_topics(rx, &mut cameras_cloned);
+                    self_clone.receive_messages_from_subscribed_topics(
+                        rx,
+                        &mut cameras_cloned,
+                    );
                 }
                 Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
             };
