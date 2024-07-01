@@ -11,10 +11,11 @@ impl StringLoggerWriter {
     }
 
     pub fn write_to_file(&self, message: String) -> Result<(), Error> {
+        
         let mut file = std::fs::OpenOptions::new().append(true).open("s_log.txt")?;
-
-        writeln!(file, "{:?}\n", message)?;
-
+        
+        writeln!(file, "{}\n", message)?;
+        
         Ok(())
     }
 }

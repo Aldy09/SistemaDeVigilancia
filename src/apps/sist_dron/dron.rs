@@ -53,6 +53,7 @@ impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>, logger: StringLogger) -> Result<Self, Error> {
         let dron = Self::new_internal(id, logger_tx, logger)?;
+        dron.logger.log(format!("Dron: Iniciado dron {:?}", id));
 
         Ok(dron)
     }
@@ -133,7 +134,7 @@ impl Dron {
                             "Cliente: Error al intentar loggear.",
                         ));
                     }
-                    self.logger.log(format!("Dron: Suscripto a topic: {:?}", topic));
+                    self.logger.log(format!("Dron: Suscripto a topic: {}", topic));
                 }
                 Err(_) => {
                     return Err(Error::new(
