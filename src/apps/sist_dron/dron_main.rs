@@ -1,7 +1,7 @@
 use std::{
     io::{Error, ErrorKind},
     net::{SocketAddr, TcpStream},
-    sync::mpsc::{self, Receiver},
+    sync::mpsc,
     thread::{self, JoinHandle},
 };
 
