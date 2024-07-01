@@ -40,7 +40,7 @@ pub struct MQTTServer {
 
 impl MQTTServer {
     pub fn new(ip: String, port: u16) -> Result<Self, Error> {
-        let file_path = "src/log.txt";
+        let file_path = "log.txt";
         if let Err(e) = clean_file(file_path) {
             println!("Error al limpiar el archivo: {:?}", e);
         }
