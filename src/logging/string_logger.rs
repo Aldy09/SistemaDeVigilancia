@@ -8,14 +8,16 @@ pub struct StringLogger {
 
 impl StringLogger {
 
-    
+    /// Extremo de envío del string logger.
+    /// Es el encargado de enviar las strings a ser loggueadas.
     pub fn new(tx: Sender<String>) -> Self {
         StringLogger {tx}
     }
 
+    // Ejemplo: logger.log(format!("Ha ocurrido un evento: {}", string_event));
+    /// Función a llamar para grabar en el log el evento pasado por parámetro.
     pub fn log(&self, event: String) {
         if self.tx.send(event).is_err() {
-            // Aux: el tx podría estar en un logger, y llamar logger.log(string) x ej.
             println!("Cliente: Error al intentar loggear.");
         }
     }

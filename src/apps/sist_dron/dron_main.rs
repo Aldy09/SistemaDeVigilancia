@@ -61,6 +61,7 @@ pub fn establish_mqtt_broker_connection(
 fn main() -> Result<(), Error> {
     let (id, broker_addr) = get_id_and_broker_address()?;
 
+    // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
     
     // Se crean y configuran ambos extremos del string logger
