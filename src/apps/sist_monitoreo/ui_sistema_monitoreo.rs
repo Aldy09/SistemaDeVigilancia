@@ -211,10 +211,7 @@ impl UISistemaMonitoreo {
         } else {
             self.places
                 .remove_place(camera.get_id(), "Camera".to_string());
-            println!("REPAINT: remove camera");
         }
-        //let _ = self.repaint_tx.send(true);
-        //let _ = self.repaint_tx.send(true);
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
@@ -228,7 +225,6 @@ impl UISistemaMonitoreo {
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
-            println!("REPAINT: remove dron");
 
             if dron.get_state() == DronState::ManagingIncident {
                 // Llegó a la posición del inc.
@@ -257,10 +253,10 @@ impl UISistemaMonitoreo {
 
             //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
 
-            println!(
+            /*println!(
                 "EL vector de incidentes a resolver es: {:?}",
                 self.incidents_to_resolve
-            );
+            );*/
 
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
@@ -332,12 +328,7 @@ impl eframe::App for UISistemaMonitoreo {
                     self.handle_drone_message(publish_message);
                     
                 }
-                //ctx.request_repaint();
-            }
-            /*if let Ok(_) = self.repaint_rx.try_recv() {
-                println!("UI: hago repaint, mi places es: {:?}", self.places);
-                ctx.request_repaint();
-            }*/
+            }            
         });
 
         egui::CentralPanel::default()

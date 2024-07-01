@@ -1,0 +1,90 @@
+"HOLA!"
+
+"FIN PRUEBA"
+
+"HOLA!"
+
+"Dron: Iniciado dron 5"
+
+"Dron: Suscripto a topic: \"Inc\""
+
+"Dron: Suscripto a topic: \"Dron\""
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(4) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(5) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(6) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(7) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(8) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(9) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(10) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(11) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(12) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(13) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(14) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(15) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }"
+
+"HOLA!"
+
+"Dron: Iniciado dron 5"
+
+"Dron: Suscripto a topic: Inc"
+
+"Dron: Suscripto a topic: Dron"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(4) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(5) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(6) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }"
+
+"Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: \"Dron\", packet_identifier: Some(7) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }"
+
+HOLA!
+
+Dron: Iniciado dron 5
+
+Dron: Suscripto a topic: Inc
+
+Dron: Suscripto a topic: Dron
+
+HOLA!
+
+Dron: Iniciado dron 5
+
+Dron: Suscripto a topic: Inc
+
+Dron: Suscripto a topic: Dron
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(4) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(5) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(6) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(7) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(8) }, payload: Payload { content: [81, 140, 52, 246, 137, 178, 91, 75, 16, 139, 203, 227, 117, 235, 114, 30, 31, 51, 65, 158, 77, 220, 100, 50, 249, 171, 238, 102, 250, 143, 42, 79, 122, 24, 131, 106, 255, 38, 118, 149, 154, 125, 102, 141, 147, 203, 115, 29] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(9) }, payload: Payload { content: [9, 100, 7, 89, 209, 185, 185, 163, 139, 23, 43, 103, 95, 250, 60, 238, 169, 156, 22, 253, 89, 181, 69, 225] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 56 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(10) }, payload: Payload { content: [13, 20, 37, 217, 65, 231, 60, 140, 218, 114, 238, 154, 100, 142, 83, 223, 2, 194, 214, 214, 201, 136, 179, 228, 50, 98, 87, 126, 70, 149, 15, 248, 227, 93, 50, 194, 94, 130, 110, 191, 20, 185, 79, 96, 251, 133, 185, 52] } }
+
+Dron: Recibo mensaje Publish: PublishMessage { fixed_header: FixedHeader { message_type: 3, flags: PublishFlags { dup: 0, qos: 1, retain: 0 }, remaining_length: 32 }, variable_header: VariableHeader { topic_name: "Dron", packet_identifier: Some(11) }, payload: Payload { content: [164, 240, 106, 24, 179, 190, 94, 28, 231, 123, 180, 203, 98, 83, 199, 202, 7, 172, 185, 127, 215, 8, 8, 9] } }
+
+Dron: Iniciado dron 5
+
+Dron: Suscripto a topic: Inc
+
+Dron: Suscripto a topic: Dron
+
