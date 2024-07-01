@@ -255,9 +255,9 @@ impl Dron {
                     Err(e) => {
                         if e.kind() == ErrorKind::InvalidData {
                             println!("Esta yendo a mantenimiento el dron");
-                            return Ok(());
+                            Ok(())
                         } else {
-                            return Err(e);
+                            Err(e)
                         }
                     },
                 }},
@@ -945,7 +945,7 @@ impl Dron {
             //Vuelve a la posicion correspondiente
             self.fly_to_mantainance(position_to_go, mqtt_client, true)?;
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn set_battery_lvl(&mut self) -> Result<(), Error> {
@@ -953,10 +953,10 @@ impl Dron {
             ci.set_battery_lvl(self.dron_properties.get_max_battery_lvl());
             Ok(())
         } else {
-            return Err(Error::new(
+             Err(Error::new(
                 ErrorKind::Other,
                 "Error al tomar lock de current info.",
-            ));
+            ))
         }
     }
 }

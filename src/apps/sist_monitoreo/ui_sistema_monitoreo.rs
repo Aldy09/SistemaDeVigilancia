@@ -143,7 +143,7 @@ impl UISistemaMonitoreo {
 
         let mantainance_ui = Place {
             position: places::mantenimiento(),
-            label: format!("Mantenimiento"),
+            label: "Mantenimiento".to_string(),
             symbol: '🔋',
             style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
             id: 0,
