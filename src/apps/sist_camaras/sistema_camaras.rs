@@ -139,7 +139,7 @@ impl SistemaCamaras {
     fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
         self.logger_tx
             .send(StructsToSaveInLogger::AppType(
-                "Sistema Camaras".to_string(),
+                "Sistema-Camaras".to_string(),
                 AppType::Camera(camera.clone()),
                 OperationType::Sent,
             ))
