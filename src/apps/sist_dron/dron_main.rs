@@ -83,7 +83,7 @@ fn main() -> Result<(), Error> {
                 Ok(mut dron) => {
                     if let Ok(ci) = &dron.get_current_info().lock() {
                         mqtt_client
-                            .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                            .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),dron.get_qos())?;
                     }
 
                     let handler_1 = thread::spawn(move || {

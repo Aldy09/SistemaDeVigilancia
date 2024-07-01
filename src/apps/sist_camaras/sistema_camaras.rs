@@ -28,6 +28,9 @@ use crate::apps::{common_clients::exit_when_asked, incident::Incident};
 
 use super::sist_camaras_abm::ABMCameras;
 use crate::apps::app_type::AppType;
+use std::fs;
+use std::io::{self, ErrorKind};
+
 
 #[derive(Debug)]
 pub struct SistemaCamaras {
@@ -35,8 +38,15 @@ pub struct SistemaCamaras {
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     exit_tx: mpsc::Sender<bool>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+    qos: u8,
 }
 
+fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
+    let contenido = fs::read_to_string(ruta_archivo)?;
+    let inicio = contenido.find("qos=").ok_or(io::Error::new(ErrorKind::NotFound, "No se encontró la etiqueta 'qos='"))?;
+    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "El valor de QoS no es un número válido"))?;
+    Ok(valor_qos)
+}
 impl SistemaCamaras {
     pub fn new(
         cameras_tx: Sender<Vec<u8>>,
@@ -45,12 +55,14 @@ impl SistemaCamaras {
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
     ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
+        let qos = leer_qos_desde_archivo("src/apps/sist_camaras/qos_sistema_camaras.properties").unwrap();
 
         let sistema_camaras: SistemaCamaras = Self {
             cameras_tx,
             logger_tx,
             exit_tx,
             cameras,
+            qos,
         };
 
         sistema_camaras
@@ -97,6 +109,7 @@ impl SistemaCamaras {
             logger_tx: self.logger_tx.clone(),
             exit_tx: self.exit_tx.clone(),
             cameras: self.cameras.clone(),
+            qos: self.qos,
         }
     }
 
@@ -183,7 +196,7 @@ impl SistemaCamaras {
     ) {
         while let Ok(cam_bytes) = rx.recv() {
             if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes);
+                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes,self.qos);
                 match res_publish {
                     Ok(publish_message) => {
                         self.logger_tx

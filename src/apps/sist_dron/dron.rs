@@ -1,9 +1,5 @@
 use std::{
-    collections::HashMap,
-    io::{Error, ErrorKind},
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, sleep, JoinHandle},
-    time::Duration,
+    collections::HashMap, fs, io::{self, Error, ErrorKind}, sync::{mpsc, Arc, Mutex}, thread::{self, sleep, JoinHandle}, time::Duration
 };
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
@@ -46,6 +42,7 @@ pub struct Dron {
 
 
     drone_distances_by_incident: DistancesType,
+    qos: u8,
 }
 
 #[allow(dead_code)]
@@ -65,6 +62,10 @@ impl Dron {
             //Actualizar batería
             let _ = self_child.decrement_and_check_battery_lvl(&mqtt_client.clone());
         })
+    }
+
+    pub fn get_qos(&self) -> u8 {
+        self.qos
     }
 
     pub fn get_current_info(&self) -> &Arc<Mutex<DronCurrentInfo>> {
@@ -97,6 +98,7 @@ impl Dron {
             logger_tx: self.logger_tx.clone(),
             logger: self.logger.clone_ref(),
             drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
+            qos: self.qos,
         }
     }
 
@@ -362,7 +364,7 @@ impl Dron {
                 if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                     if let Ok(ci) = &self.current_info.lock() {
                         mqtt_client_l
-                            .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                            .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),self.qos)?;
                     }
                 };
 
@@ -498,7 +500,7 @@ impl Dron {
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 if let Ok(ci) = &self.current_info.lock() {
                     mqtt_client_l
-                        .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                        .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),self.qos)?;
                 }
             };
         }
@@ -516,7 +518,7 @@ impl Dron {
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
-                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),self.qos)?;
             }
         };
 
@@ -552,7 +554,7 @@ impl Dron {
             if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
                 if let Ok(ci) = &self.current_info.lock() {
                     mqtt_client_l
-                        .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                        .mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),self.qos)?;
                 }
             };
         }
@@ -570,7 +572,7 @@ impl Dron {
         // Hace publish de su estado (de su current info)
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
-                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes())?;
+                mqtt_client_l.mqtt_publish(AppsMqttTopics::DronTopic.to_str(), &ci.to_bytes(),self.qos)?;
             }
         };
 
@@ -769,6 +771,13 @@ impl Dron {
         ))
     }
 
+    pub fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
+        let contenido = fs::read_to_string(ruta_archivo)?;
+        let inicio = contenido.find("qos=").ok_or(io::Error::new(ErrorKind::NotFound, "No se encontró la etiqueta 'qos='"))?;
+        let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "El valor de QoS no es un número válido"))?;
+        Ok(valor_qos)
+    }
+
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     /// Función utilizada para testear, no necesita broker address.
     pub fn new_internal(
@@ -776,6 +785,7 @@ impl Dron {
         logger_tx: MpscSender<StructsToSaveInLogger>,
         logger: StringLogger,
     ) -> Result<Self, Error> {
+        let qos = Dron::leer_qos_desde_archivo("src/apps/sist_dron/qos_dron.properties")?;
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let mut dron_properties = SistDronProperties::new(properties_file)?;
@@ -809,6 +819,7 @@ impl Dron {
             logger_tx,
             logger,
             drone_distances_by_incident,
+            qos,
         };
 
         Ok(dron)
@@ -845,9 +856,9 @@ impl Dron {
 
         if let Ok(mut ci) = self.current_info.lock() {
             //decrementa la bateria
-            let min_battery = self.dron_properties.get_min_operational_battery_lvl();
-            should_go_to_maintanence = ci.decrement_and_check_battery_lvl(min_battery); //seteamos el estado a Mantainence
-            maintanence_position = self.dron_properties.get_mantainance_position();
+            let min_battery = self.dron_properties.get_min_operational_battery_lvl(); //20
+            should_go_to_maintanence = ci.decrement_and_check_battery_lvl(min_battery); //inc=None
+            maintanence_position = self.dron_properties.get_mantainance_position();//obelisco
         } else {
             return Err(Error::new(
                 ErrorKind::Other,

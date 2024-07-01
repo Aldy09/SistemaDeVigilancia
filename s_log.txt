@@ -88,3 +88,95 @@ Dron: Suscripto a topic: Inc
 
 Dron: Suscripto a topic: Dron
 
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.8778955729165514, -0.4788521306766001), vel: 10
+
+   incrementada la posición actual: Ok((-34.60290778955729, -58.381167885213074))
+
+   llegué a destino: Ok((-34.6037, -58.3816))
+
+Fin vuelo.
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.15257831869731137, 0.9882913824695133), vel: 10
+
+   incrementada la posición actual: Ok((-34.60283525783187, -58.38720117086176))
+
+   incrementada la posición actual: Ok((-34.60285051566374, -58.38710234172351))
+
+Recargando batería al 100%.
+
+Fly_to: dir: (0.8778955729165514, 0.4788521306766001), vel: 10
+
+   incrementada la posición actual: Ok((-34.60361221044271, -58.38155211478693))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.7780654814903395, 0.628183179107182), vel: 10
+
+   incrementada la posición actual: Ok((-34.59671780654815, -58.387237181682096))
+
+   incrementada la posición actual: Ok((-34.5967956130963, -58.38717436336419))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.1525783186974693, 0.9882913824694889), vel: 10
+
+   incrementada la posición actual: Ok((-34.60286577349561, -58.38700351258527))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.7780654814900374, 0.6281831791075562), vel: 10
+
+   incrementada la posición actual: Ok((-34.596873419644446, -58.38711154504628))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.15257831869755262, 0.988291382469476), vel: 10
+
+   incrementada la posición actual: Ok((-34.60288103132748, -58.38690468344702))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.7780654814898813, 0.6281831791077498), vel: 10
+
+   incrementada la posición actual: Ok((-34.596951226192594, -58.38704872672837))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.15257831869763902, 0.9882913824694627), vel: 10
+
+   incrementada la posición actual: Ok((-34.60289628915935, -58.386805854308776))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.7780654814897215, 0.6281831791079477), vel: 10
+
+   incrementada la posición actual: Ok((-34.59702903274074, -58.386985908410466))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.15257831869772873, 0.9882913824694488), vel: 10
+
+   incrementada la posición actual: Ok((-34.602911546991216, -58.38670702517053))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.778065481489558, 0.6281831791081504), vel: 10
+
+   incrementada la posición actual: Ok((-34.59710683928889, -58.38692309009256))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.1525783186978219, 0.9882913824694344), vel: 10
+
+   incrementada la posición actual: Ok((-34.602926804823085, -58.386608196032284))
+
+Batería baja, debo ir a mantenimiento.
+
+Fly_to: dir: (-0.7780654814893906, 0.6281831791083576), vel: 10
+
+   incrementada la posición actual: Ok((-34.59718464583704, -58.38686027177465))
+

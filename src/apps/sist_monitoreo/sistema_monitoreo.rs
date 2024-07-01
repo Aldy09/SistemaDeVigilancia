@@ -23,12 +23,25 @@ use crate::mqtt::{
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident::Incident};
+use std::fs;
+use std::io::{self, ErrorKind};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     pub incidents: Arc<Mutex<Vec<Incident>>>,
     pub logger_tx: MpscSender<StructsToSaveInLogger>,
     pub egui_tx: CrossbeamSender<PublishMessage>,
+    qos: u8,
+}
+
+fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
+    let contenido = fs::read_to_string(ruta_archivo)?;
+    let inicio = contenido.find("qos=").ok_or(io::Error::new(ErrorKind::NotFound, "No se encontró la etiqueta 'qos='"))?;
+   
+    let valor_qos = contenido[inicio + 4..].trim().parse::<u8>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "El valor de QoS no es un número válido"))?;
+    println!("Valor de QoS: {}", valor_qos);
+   Ok(valor_qos)
+    
 }
 
 impl SistemaMonitoreo {
@@ -36,11 +49,15 @@ impl SistemaMonitoreo {
         logger_tx: MpscSender<StructsToSaveInLogger>,
         egui_tx: CrossbeamSender<PublishMessage>,
     ) -> Self {
+        let qos = leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties").unwrap_or(0);
+        println!("valor de QoS: {}", qos);
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())),
             logger_tx,
             egui_tx,
+            qos,
         };
+        
 
         sistema_monitoreo
     }
@@ -79,7 +96,10 @@ impl SistemaMonitoreo {
 
         children
     }
-
+    pub fn get_qos(&self) -> u8 {
+        self.qos
+    }
+    
     pub fn spawn_ui_thread(
         &self,
         incident_tx: MpscSender<Incident>,
@@ -127,6 +147,7 @@ impl SistemaMonitoreo {
             incidents: self.incidents.clone(),
             egui_tx: self.egui_tx.clone(),
             logger_tx: self.logger_tx.clone(),
+            qos: self.qos,
         }
     }
 
@@ -231,7 +252,7 @@ impl SistemaMonitoreo {
 
         // Hago el publish
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_publish = mqtt_client.mqtt_publish("Inc", &incident.to_bytes());
+            let res_publish = mqtt_client.mqtt_publish("Inc", &incident.to_bytes(),self.get_qos());
             match res_publish {
                 Ok(publish_message) => {
                     self.logger_tx
