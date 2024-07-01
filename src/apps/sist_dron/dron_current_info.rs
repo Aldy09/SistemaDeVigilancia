@@ -217,6 +217,24 @@ impl DronCurrentInfo {
         let lon_dist = destination.1 - origin.1;
         f64::sqrt(lat_dist.powi(2) + lon_dist.powi(2))
     }
+
+    /// Decrementa la batería en 5 unidades y chequea si la batería está por debajo del mínimo. Si es menor que la minima 
+    /// establece solo el estado del dron en Mantenimiento y el id del incidente a resolver en None. Para prepararse a volar a mantenimiento
+    pub fn decrement_and_check_battery_lvl(&mut self, min_battery:u8)-> bool{  
+        let mut should_charge = false;
+        self.battery_lvl -= 5;
+        if self.battery_lvl < min_battery {
+            should_charge = true;
+            self.inc_id_to_resolve = None;
+        } 
+        should_charge
+    }
+
+    pub fn set_battery_lvl(&mut self, new_lvl: u8) {
+        self.battery_lvl = new_lvl;
+    }
+
+    
 }
 
 #[cfg(test)]

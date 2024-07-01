@@ -1,15 +1,10 @@
 use std::{
-    collections::HashMap,
-    io::{Error, ErrorKind},
-    net::SocketAddr,
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, sleep, JoinHandle},
-    time::Duration,
+    cmp::min, collections::HashMap, io::{Error, ErrorKind}, net::SocketAddr, sync::{mpsc, Arc, Mutex}, thread::{self, sleep, JoinHandle}, time::Duration
 };
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use crate::mqtt::mqtt_utils::mqtt_info_type::MQTTInfo;
+use crate::mqtt::{client::mqtt_client, mqtt_utils::mqtt_info_type::MQTTInfo};
 use crate::{
     apps::{common_clients::is_disconnected_error, incident_state::IncidentState}, mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
 };
@@ -75,6 +70,16 @@ impl Dron {
 
         Ok(dron)
     }
+    pub fn spawn_for_update_battery(&self,mqtt_client: Arc<Mutex<MQTTClient>>)-> JoinHandle<()>{
+        let mut self_child = self.clone_ref();
+        thread::spawn(move || loop {
+            sleep(Duration::from_secs(5));
+            //Actualizar batería
+            self_child.decrement_and_check_battery_lvl(&mqtt_client.clone());
+            
+        })
+        
+    }
 
     pub fn spawn_threads(
         &mut self,
@@ -85,10 +90,12 @@ impl Dron {
         let logger = Logger::new(logger_rx);
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-
+    
         children.push(spawn_dron_stuff_to_logger_thread(logger));
+        children.push(self.spawn_for_update_battery(mqtt_client_sh.clone()));
 
         self.subscribe_to_topics(Arc::clone(&mqtt_client_sh), mqtt_rx)?;
+
 
         join_all_threads(children);
 
@@ -766,6 +773,60 @@ impl Dron {
             "Error al tomar lock de drone_distances_by_incident.",
         ))
     }
+
+
+    pub fn decrement_and_check_battery_lvl(&mut self,mqtt_client: &Arc<Mutex<MQTTClient>>)-> Result<(), Error>{
+        let maintanence_position ;
+        let mut should_go_to_maintanence = false;
+        
+        if let Ok(mut ci) = self.current_info.lock() { 
+            //decrementa la bateria
+            let min_battery = self.dron_properties.get_min_operational_battery_lvl();
+            should_go_to_maintanence = ci.decrement_and_check_battery_lvl(min_battery); //seteamos el estado a Mantainence
+            maintanence_position = self.dron_properties.get_mantainance_position();
+        }
+        else{
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de current info.",
+            ))
+        }
+        
+        if should_go_to_maintanence {
+            //se determina a que posicion volver despues de cargarse
+            let position_to_go;
+            if self.get_state()? == DronState::ManagingIncident{
+                position_to_go = self.get_current_position()?;
+            }else{
+                position_to_go = self.dron_properties.get_range_center_position();
+            }
+            //Vuela a mantenimiento
+            //self.set_state(DronState::Mantainance)?;
+
+            self.fly_to(maintanence_position, mqtt_client)?;
+            sleep(Duration::from_secs(3));
+            self.set_battery_lvl()?;
+
+            //Vuelve a la posicion correspondiente
+            self.fly_to(position_to_go, mqtt_client)?;
+        }
+        return Ok(())
+        
+    }
+
+    pub fn set_battery_lvl(&mut self)-> Result<(), Error>{
+        if let Ok(mut ci) = self.current_info.lock(){
+            ci.set_battery_lvl(self.dron_properties.get_max_battery_lvl());
+            Ok(())
+        }
+        else{
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de current info.",
+            ))
+        }
+        
+    }
 }
 
 fn spawn_dron_stuff_to_logger_thread(logger: Logger) -> JoinHandle<()> {
@@ -793,6 +854,7 @@ pub fn calculate_initial_position(rng_center_lat: f64, rng_center_lon: f64, id: 
 
     (lat, lon)
 }
+
 
 #[cfg(test)]
 
