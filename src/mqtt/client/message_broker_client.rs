@@ -1,11 +1,14 @@
-use std::thread;
+/// Este archivo era para mostrar con un ejemplo cómo iban a usar apps de clientes reales,
+/// las funciones de nuestra librería MQTTClient, pero quedó obsoleto.
 
-use config::{Config, File, FileFormat};
-use rustx::mqtt::client::mqtt_client::MQTTClient;
+//use std::thread;
+
+//use config::{Config, File, FileFormat};
+//use rustx::mqtt::client::mqtt_client::MQTTClient;
 
 // Este archivo representa a un cliente cualquiera. Así usará cada cliente a la librería MQTT.
 fn main() {
-    println!("Leyendo Archivo de Configuración");
+    /*println!("Leyendo Archivo de Configuración");
     let mut config = Config::default();
     config
         .merge(File::new(
@@ -25,7 +28,7 @@ fn main() {
     let client_id = "test-client";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr);
     match mqtt_client_res {
-        Ok(mut mqtt_client) => {
+        Ok((mut mqtt_client, mqtt_rx)) => {
             println!("Cliente: Conectado al broker MQTT.");
 
             // Cliente usa subscribe
@@ -58,5 +61,5 @@ fn main() {
             }
         }
         Err(e) => println!("Cliente: Error al conectar al broker MQTT: {:?}", e),
-    }
+    }*/
 }

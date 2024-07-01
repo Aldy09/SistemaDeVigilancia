@@ -18,7 +18,6 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 // Este archivo es nuestra librería MQTT para que use cada cliente que desee usar el protocolo.
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, puback_message::PubAckMessage, suback_message::SubAckMessage,
@@ -49,7 +48,6 @@ type StreamType = TcpStream;
 pub struct MQTTClient {
     stream: StreamType,
     children: Option<Vec<JoinHandle<()>>>,
-    publish_msg_to_client_rx: Option<Receiver<PublishMessage>>,
     available_packet_id: u16, // mantiene el primer packet_id disponible para ser utilizado
     //acks_by_packet_id: // read control messages:
     read_acks: Arc<Mutex<HashMap<u16, bool>>>,
@@ -61,7 +59,7 @@ impl MQTTClient {
     /// Recibe el `client_id` del cliente que llama a esta función, y la `addr` que es la dirección del
     /// servidor al que conectarse.
     /// Devuelve el struct mencionado, o bien un error en caso de que fallara el intento de conexión.
-    pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<Self, Error> {
+    pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<(Self, Receiver<PublishMessage>), Error> {
         // Inicializaciones
         // Intenta conectar al servidor MQTT
         let stream_tcp = TcpStream::connect(addr)
@@ -88,13 +86,13 @@ impl MQTTClient {
         // Leo un fixed header, deberá ser de un connect
         read_connack(&mut stream)?;
 
-        let mqtt = Self::initialize(stream)?;
+        let (mqtt, rx) = Self::initialize(stream)?;
 
-        Ok(mqtt)
+        Ok((mqtt, rx))
     }
 
     /// Realiza las inicializaciones necesarias para el funcionamiento interno del `MQTTClient`.
-    fn initialize(stream: StreamType) -> Result<Self, Error> {
+    fn initialize(stream: StreamType) -> Result<(Self, Receiver<PublishMessage>), Error> {
         // Más inicializaciones
         // El hilo outgoing tendrá el rx, y el hilo que lee del stream le mandará mensajes por el tx.
         // Para uso interno:
@@ -103,7 +101,7 @@ impl MQTTClient {
         let (to_app_client_tx, publish_msg_to_client_rx) = mpsc::channel::<PublishMessage>();
 
         let mut mqtt =
-            MQTTClient::mqtt_new(stream, publish_msg_to_client_rx);//, ack_tx.clone());
+            MQTTClient::mqtt_new(stream);//, ack_tx.clone());
 
         let mut handles = vec![];
         // Lanzo hilo para leer
@@ -127,18 +125,16 @@ impl MQTTClient {
         mqtt.children = Some(handles);
         // Fin inicializaciones.
 
-        Ok(mqtt)
+        Ok((mqtt, publish_msg_to_client_rx))
     }
 
     fn mqtt_new(
         stream: StreamType,
-        publish_msg_to_client_rx: Receiver<PublishMessage>,
         //: Sender<GenericMessage>,
     ) -> Self {
         MQTTClient {
             stream,
             children: None,
-            publish_msg_to_client_rx: Some(publish_msg_to_client_rx),
             available_packet_id: 0,
             read_acks: Arc::new(Mutex::new(HashMap::new())),
             //acks_tx,
@@ -196,33 +192,6 @@ impl MQTTClient {
         Ok(subscribe_msg)
     }
 
-    /// Devuelve un elemento leído, para que le llegue a cada cliente que use esta librería.
-    pub fn mqtt_receive_msg_from_subs_topic(
-        &self,
-        //) -> Result<PublishMessage, mpsc::RecvTimeoutError> {
-    ) -> Result<PublishMessage, Error> {
-        // Veo si tengo el rx (hijo no lo tiene)
-        if let Some(rx) = &self.publish_msg_to_client_rx {
-            // Recibo un PublishMessage por el rx, para hacérselo llegar al cliente real que usa la librería
-            // Leo
-            match rx.recv_timeout(Duration::from_micros(300)) {
-                Ok(msg) => Ok(msg),
-                // (mapeo el error, por compatibilidad de tipos)
-                Err(e) => match e {
-                    mpsc::RecvTimeoutError::Timeout => Err(Error::new(ErrorKind::TimedOut, e)),
-                    mpsc::RecvTimeoutError::Disconnected => {
-                        Err(Error::new(ErrorKind::NotConnected, e))
-                    }
-                },
-            }
-        } else {
-            Err(Error::new(
-                ErrorKind::Other,
-                "Error: no está seteado el rx.",
-            ))
-        }
-    }
-
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         let msg = DisconnectMessage::new();
@@ -278,7 +247,6 @@ impl MQTTClient {
         Ok(Self {
             stream: self.stream.try_clone()?,
             children: None,
-            publish_msg_to_client_rx: None,
             available_packet_id: self.available_packet_id,
             read_acks: self.read_acks.clone(),
             //acks_tx: self.acks_tx.clone(),
@@ -313,7 +281,10 @@ impl MQTTClient {
                     self.read_a_message(&fixed_header_info, tx)?; // esta función lee UN mensaje.              
             
                 },
-                Ok(None) => {},
+                Ok(None) => {
+                    println!("Se desconectó el server.");
+                    break
+                },
                 Err(_) => todo!(),
             }
         }

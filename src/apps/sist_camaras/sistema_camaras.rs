@@ -1,5 +1,6 @@
 type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
+use crate::apps::common_clients::is_disconnected_error;
 use crate::mqtt::messages::publish_message::PublishMessage;
 use std::collections::HashMap;
 use std::sync::{
@@ -17,6 +18,7 @@ type Channels = (
     mpsc::Receiver<bool>,
 );
 //use rustx::apps::properties::Properties;
+use crate::mqtt::mqtt_utils::mqtt_info_type::MQTTInfo;
 
 use std::io::Error;
 use std::net::SocketAddr;
@@ -67,10 +69,10 @@ impl SistemaCamaras {
         };
 
         match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_client) => {
+            Ok(mqtt_info) => {
                 sleep(Duration::from_secs(2)); // Sleep to start everything 'at the same time'
                 let children = sistema_camaras.spawn_threads(
-                    mqtt_client,
+                    mqtt_info,
                     &cameras_c,
                     cameras_rx,
                     logger_rx,
@@ -86,12 +88,13 @@ impl SistemaCamaras {
 
     fn spawn_threads(
         &mut self,
-        mqtt_client: MQTTClient,
+        mqtt_info: MQTTInfo,
         cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
         cameras_rx: Receiver<Vec<u8>>,
         logger_rx: Receiver<StructsToSaveInLogger>,
         exit_rx: Receiver<bool>,
     ) -> Vec<JoinHandle<()>> {
+        let (mqtt_client, rx) = mqtt_info;
         let mut children: Vec<JoinHandle<()>> = vec![];
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
@@ -111,7 +114,7 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
-        children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone()));
+        children.push(self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), rx));
 
         children.push(spawn_receive_messages_thread(logger));
 
@@ -133,6 +136,7 @@ impl SistemaCamaras {
         match self.cameras.lock() {
             Ok(cams) => {
                 for camera in (*cams).values() {
+                    println!("CÁMARAS: iniciando, enviando cámara: {:?}", camera);
                     self.send_camera_bytes(camera, &self.cameras_tx);
                 }
             }
@@ -301,6 +305,7 @@ impl SistemaCamaras {
                                     camera_to_update.get_id_e_incs_for_debug_display()
                                 );
                                 if state_has_changed {
+                                    println!("CÁMARAS: a activo, enviando cámara: {:?}", camera_to_update);
                                     self.send_camera_bytes(camera_to_update, &self.cameras_tx);
                                 }
                             }
@@ -337,6 +342,7 @@ impl SistemaCamaras {
                         // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
                         let state_has_changed = bordering_cam.append_to_incs_being_managed(inc.get_id());
                         if state_has_changed {
+                            println!("CÁMARAS: a saving, enviando cámara: {:?}", bordering_cam);
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
                         }
                     };
@@ -390,19 +396,18 @@ impl SistemaCamaras {
     /// Recibe mensajes de los topics a los que se ha suscrito.
     fn receive_messages_from_subscribed_topics(
         &mut self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
+        rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
+        
     ) {
         let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
+
         loop {
-            if let Ok(mqtt_client) = mqtt_client.lock() {
-                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    Ok(msg) => self.handle_received_message(msg, cameras, &mut incs_being_managed),
-                    Err(e) => {
-                        if !handle_message_receiving_error(e) {
-                            break;
-                        }
-                    }
+            match rx.recv() {
+                Ok(msg) => self.handle_received_message(msg, cameras, &mut incs_being_managed),
+                Err(_) => {
+                    is_disconnected_error();
+                    break;
                 }
             }
         }
@@ -411,6 +416,7 @@ impl SistemaCamaras {
     fn spawn_subscribe_to_topics_thread(
         &mut self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
+        rx: Receiver<PublishMessage>,
     ) -> JoinHandle<()> {
         let mut cameras_cloned = self.cameras.clone();
         let mut self_clone = self.clone_ref();
@@ -420,7 +426,7 @@ impl SistemaCamaras {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
                     self_clone.receive_messages_from_subscribed_topics(
-                        &mqtt_client.clone(),
+                        rx,
                         &mut cameras_cloned,
                     );
                 }
@@ -440,7 +446,9 @@ fn spawn_receive_messages_thread(logger: Logger) -> JoinHandle<()> {
     })
 }
 
-fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<MQTTClient, Error> {
+/// Crea un MQTTClient, establece la conexión con server y devuelve el MQTTClient y el rx para recibir luego los mensajes de los topics
+/// a los que sistema_camaras se suscriba.
+fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<(MQTTClient, Receiver<PublishMessage>), Error> {
     let client_id = "Sistema-Camaras";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
@@ -453,27 +461,6 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<MQTTClie
             Err(e)
         }
     }
-}
-
-fn handle_message_receiving_error(e: std::io::Error) -> bool {
-    match e.kind() {
-        std::io::ErrorKind::TimedOut => true,
-        std::io::ErrorKind::NotConnected => {
-            println!("Cliente: No hay más PublishMessage's por leer.");
-            false
-        }
-        _ => {
-            println!("Cliente: error al leer los publish messages recibidos.");
-            true
-        }
-    }
-    /*/*if e == RecvTimeoutError::Timeout {
-    }*/
-
-    if e == RecvTimeoutError::Disconnected {
-        println!("Cliente: No hay más PublishMessage's por leer.");
-        break;
-    }*/
 }
 
 fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {

@@ -9,10 +9,10 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver};
 
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
-use crate::logging::{
+use crate::{apps::common_clients::is_disconnected_error, logging::{
     logger::Logger,
     structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-};
+}, mqtt::mqtt_utils::mqtt_info_type::MQTTInfo};
 use crate::mqtt::{
     client::mqtt_client::MQTTClient,
     messages::{message_type::MessageType, publish_message::PublishMessage},
@@ -46,9 +46,9 @@ impl SistemaMonitoreo {
         };
 
         match establish_mqtt_broker_connection(&broker_addr) {
-            Ok(mqtt_client) => {
+            Ok(mqtt_info) => {
                 let child_threads = sistema_monitoreo.spawn_threads(
-                    mqtt_client,
+                    mqtt_info,
                     &sistema_monitoreo,
                     logger_rx,
                     publish_message_rx,
@@ -67,11 +67,13 @@ impl SistemaMonitoreo {
 
     pub fn spawn_threads(
         &self,
-        mqtt_client: MQTTClient,
+        mqtt_info: MQTTInfo,
         sistema_monitoreo: &SistemaMonitoreo,
         logger_rx: MpscReceiver<StructsToSaveInLogger>,
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
     ) -> Vec<JoinHandle<()>> {
+        let (mqtt_client, mqtt_rx) = mqtt_info;
+
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
@@ -80,7 +82,7 @@ impl SistemaMonitoreo {
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
 
-        children.push(sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone()));
+        children.push(sistema_monitoreo.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), mqtt_rx));
 
         children.push(
             sistema_monitoreo
@@ -151,10 +153,11 @@ impl SistemaMonitoreo {
     pub fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
+        mqtt_rx: MpscReceiver<PublishMessage>
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(mqtt_client);
+            self_clone.subscribe_to_topics(mqtt_client, mqtt_rx);
         })
     }
 
@@ -164,10 +167,10 @@ impl SistemaMonitoreo {
         }
     }
 
-    pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>) {
+    pub fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, mqtt_rx: MpscReceiver<PublishMessage>) {
         self.subscribe_to_topic(&mqtt_client, "Cam");
         self.subscribe_to_topic(&mqtt_client, "Dron");
-        self.receive_messages_from_subscribed_topics(&mqtt_client);
+        self.receive_messages_from_subscribed_topics(mqtt_rx);
         finalize_mqtt_client(&mqtt_client);
     }
 
@@ -190,26 +193,23 @@ impl SistemaMonitoreo {
     }
 
     // Recibe mensajes de los topics a los que se ha suscrito
-    pub fn receive_messages_from_subscribed_topics(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    pub fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
         loop {
-            if let Ok(mqtt_client) = mqtt_client.lock() {
-                match mqtt_client.mqtt_receive_msg_from_subs_topic() {
-                    //Publish message: camera o dron
-                    Ok(publish_message) => {
-                        self.logger_tx
-                            .send(StructsToSaveInLogger::MessageType(
-                                "Sistema Monitoreo".to_string(),
-                                MessageType::Publish(publish_message.clone()),
-                                OperationType::Received,
-                            ))
-                            .unwrap();
-                        self.send_publish_message_to_ui(publish_message)
-                    }
-                    Err(e) => {
-                        if !handle_message_receiving_error(e) {
-                            break;
-                        }
-                    }
+            match mqtt_rx.recv() {
+                //Publish message: camera o dron
+                Ok(publish_message) => {
+                    self.logger_tx
+                        .send(StructsToSaveInLogger::MessageType(
+                            "Sistema Monitoreo".to_string(),
+                            MessageType::Publish(publish_message.clone()),
+                            OperationType::Received,
+                        ))
+                        .unwrap();
+                    self.send_publish_message_to_ui(publish_message)
+                }
+                Err(_) => {
+                    is_disconnected_error();
+                    break;
                 }
             }
         }
@@ -283,13 +283,13 @@ fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
 
 pub fn establish_mqtt_broker_connection(
     broker_addr: &SocketAddr,
-) -> Result<MQTTClient, Box<dyn std::error::Error>> {
+) -> Result<MQTTInfo, Box<dyn std::error::Error>> {
     let client_id = "Sistema-Monitoreo";
     let mqtt_client_res = MQTTClient::mqtt_connect_to_broker(client_id, broker_addr);
     match mqtt_client_res {
-        Ok(mqtt_client) => {
+        Ok(mqtt_info) => {
             println!("Cliente: Conectado al broker MQTT.");
-            Ok(mqtt_client)
+            Ok(mqtt_info)
         }
         Err(e) => {
             println!(
@@ -299,27 +299,6 @@ pub fn establish_mqtt_broker_connection(
             Err(e.into())
         }
     }
-}
-
-pub fn handle_message_receiving_error(e: std::io::Error) -> bool {
-    match e.kind() {
-        std::io::ErrorKind::TimedOut => true,
-        std::io::ErrorKind::NotConnected => {
-            println!("Cliente: No hay más PublishMessage's por leer.");
-            false
-        }
-        _ => {
-            println!("Cliente: error al leer los publish messages recibidos.");
-            true
-        }
-    }
-    /*/*if e == RecvTimeoutError::Timeout {
-    }*/
-
-    if e == RecvTimeoutError::Disconnected {
-        println!("Cliente: No hay más PublishMessage's por leer.");
-        break;
-    }*/
 }
 
 pub fn finalize_mqtt_client(mqtt_client: &Arc<Mutex<MQTTClient>>) {
