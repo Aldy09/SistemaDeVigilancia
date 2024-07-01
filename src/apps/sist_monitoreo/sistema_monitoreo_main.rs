@@ -15,18 +15,18 @@ type Channels = (
 
 fn create_channels() -> Channels {
     let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
-    let (exit_tx, exit_rx) = mpsc::channel::<bool>();
     let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
+    let (egui_tx, egui_rx) = mpsc::channel::<PublishMessage>();
     (
         cameras_tx,
         cameras_rx,
-        exit_tx,
-        exit_rx,
         logger_tx,
         logger_rx,
         publish_message_tx,
         publish_message_rx,
+        egui_tx,
+        egui_rx,
     )
 }
 
@@ -54,15 +54,13 @@ fn main() {
     let (
         cameras_tx,
         cameras_rx,
-        exit_tx,
-        exit_rx,
         logger_tx,
         logger_rx,
         publish_message_tx,
-        publish_message_rx,
+        publish_message_rx, egui_tx, egui_rx,
     ) = create_channels();
 
-    let (publish_message_tx, publish_message_rx) = unbounded::<PublishMessage>();
+
 
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(stream) => {
@@ -70,13 +68,13 @@ fn main() {
             let mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener);
-            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, mqtt_client);
+            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, mqtt_client, egui_tx);
 
             handlers.push(thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
             }));
 
-            handlers.push(sistema_monitoreo.spawn_threads(logger_rx, publish_message_rx));
+            handlers.push(sistema_monitoreo.spawn_threads(logger_rx, publish_message_rx, egui_rx));
 
             join_all_threads(child_threads);
         }
