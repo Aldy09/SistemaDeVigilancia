@@ -1,11 +1,11 @@
 use std::{io::{Error, Write}, sync::mpsc::Receiver};
 
 #[derive(Debug)]
-pub struct Logger {
+pub struct StringLoggerWriter {
     pub logger_rx: Receiver<String>,
 }
 
-impl Logger {
+impl StringLoggerWriter {
     pub fn new(logger_rx: Receiver<String>) -> Self {
         Self { logger_rx }
     }

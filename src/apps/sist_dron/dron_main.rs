@@ -1,8 +1,8 @@
 use std::{
     io::{Error, ErrorKind},
     net::{SocketAddr, TcpStream},
-    sync::mpsc,
-    thread,
+    sync::mpsc::{self, Receiver},
+    thread::{self, JoinHandle},
 };
 
 use rustx::{
@@ -11,7 +11,7 @@ use rustx::{
         common_clients::join_all_threads,
         sist_dron::{dron::Dron, utils::get_id_and_broker_address},
     },
-    logging::structs_to_save_in_logger::StructsToSaveInLogger,
+    logging::{string_logger::StringLogger, string_logger_writer::StringLoggerWriter, structs_to_save_in_logger::StructsToSaveInLogger},
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -62,13 +62,16 @@ fn main() -> Result<(), Error> {
     let (id, broker_addr) = get_id_and_broker_address()?;
 
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
+    let (string_logger_tx, string_logger_rx) = mpsc::channel::<String>(); //
+
+    let logger = StringLogger::new(string_logger_tx); //
 
     match establish_mqtt_broker_connection(id, &broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
             let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
-            let dron_res = Dron::new(id, logger_tx);
+            let dron_res = Dron::new(id, logger_tx, logger); //
 
             match dron_res {
                 Ok(mut dron) => {
@@ -85,6 +88,9 @@ fn main() -> Result<(), Error> {
                         dron.spawn_threads(mqtt_client, publish_message_rx, logger_rx)?;
 
                     handlers.push(handler_1);
+
+                    let handle_logger = spawn_dron_stuff_to_string_logger_thread(string_logger_rx); //
+                    handlers.push(handle_logger); //
                     join_all_threads(handlers);
                 }
                 Err(_e) => {
@@ -99,4 +105,15 @@ fn main() -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+fn spawn_dron_stuff_to_string_logger_thread(logger_rx: Receiver<String>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        let logger_writer = StringLoggerWriter::new(logger_rx);
+        while let Ok(msg) = logger_writer.logger_rx.recv() {
+            if logger_writer.write_to_file(msg).is_err() {
+                println!("LoggerWriter: error al escribir al archivo de log.");
+            }
+        }
+    })
 }

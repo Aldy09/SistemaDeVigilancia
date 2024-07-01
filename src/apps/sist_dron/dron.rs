@@ -14,8 +14,7 @@ use crate::{
         sist_dron::dron_state::DronState,
     },
     logging::{
-        logger::Logger,
-        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+        logger::Logger, string_logger::StringLogger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}
     },
     mqtt::messages::message_type::MessageType,
 };
@@ -43,6 +42,8 @@ pub struct Dron {
     dron_properties: SistDronProperties,
 
     logger_tx: mpsc::Sender<StructsToSaveInLogger>,
+    logger: StringLogger,
+
 
     drone_distances_by_incident: DistancesType,
 }
@@ -50,8 +51,8 @@ pub struct Dron {
 #[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
-    pub fn new(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>) -> Result<Self, Error> {
-        let dron = Self::new_internal(id, logger_tx)?;
+    pub fn new(id: u8, logger_tx: MpscSender<StructsToSaveInLogger>, logger: StringLogger) -> Result<Self, Error> {
+        let dron = Self::new_internal(id, logger_tx, logger)?;
 
         Ok(dron)
     }
@@ -93,6 +94,7 @@ impl Dron {
             current_info: Arc::clone(&self.current_info),
             dron_properties: self.dron_properties,
             logger_tx: self.logger_tx.clone(),
+            logger: self.logger.clone_ref(),
             drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
         }
     }
@@ -131,6 +133,7 @@ impl Dron {
                             "Cliente: Error al intentar loggear.",
                         ));
                     }
+                    self.logger.log(format!("Dron: Suscripto a topic: {:?}", topic));
                 }
                 Err(_) => {
                     return Err(Error::new(
@@ -164,6 +167,7 @@ impl Dron {
                         // Aux: el tx podría estar en un logger, y llamar logger.log(string) x ej.
                         println!("Cliente: Error al intentar loggear.");
                     }
+                    self.logger.log(format!("Dron: Recibo mensaje Publish: {:?}", publish_message));
 
                     let handle_thread =
                         self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
@@ -783,6 +787,7 @@ impl Dron {
     pub fn new_internal(
         id: u8,
         logger_tx: MpscSender<StructsToSaveInLogger>,
+        logger: StringLogger,
     ) -> Result<Self, Error> {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
@@ -818,6 +823,7 @@ impl Dron {
             current_info: Arc::new(Mutex::new(current_info)),
             dron_properties,
             logger_tx,
+            logger,
             drone_distances_by_incident,
         };
 
