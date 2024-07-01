@@ -1,26 +1,49 @@
-use crate::mqtt::messages::{connack_message::ConnackMessage, connack_session_present::SessionPresent, connect_message::ConnectMessage, connect_return_code::ConnectReturnCode, disconnect_message::DisconnectMessage, puback_message::PubAckMessage, publish_message::PublishMessage, suback_message::SubAckMessage, subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode};
- // Add the missing import
+use crate::mqtt::messages::{
+    connack_message::ConnackMessage, connack_session_present::SessionPresent,
+    connect_message::ConnectMessage, connect_return_code::ConnectReturnCode,
+    disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
+    publish_message::PublishMessage, suback_message::SubAckMessage,
+    subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
+};
+// Add the missing import
+use crate::mqtt::mqtt_utils::aux_server_utils::{
+    get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
+    get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
+};
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::mqtt_utils::aux_server_utils::{get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream};
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
 use std::collections::HashMap;
-use std::io::Error;
+use std::fs::File;
+use std::io::{Error, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{mpsc::{self, Sender}, Arc, Mutex};
 use std::path::Path;
+use std::sync::{
+    mpsc::{self, Sender},
+    Arc, Mutex,
+};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
 
+fn clean_file(file_path: &str) -> Result<(), Error> {
+    let mut file = File::create(file_path)?;
+    file.write_all(b"")?; // Escribe un contenido vacío para limpiarlo
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
-    publish_msgs_tx: Sender<Box<dyn Send>>,   
+    publish_msgs_tx: Sender<Box<dyn Send>>,
 }
 
 impl MQTTServer {
     pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+        let file_path = "src/log.txt";
+        if let Err(e) = clean_file(file_path) {
+            println!("Error al limpiar el archivo: {:?}", e);
+        }
 
         let (tx, _rx) = mpsc::channel::<Box<dyn Send>>();
 
@@ -48,7 +71,8 @@ impl MQTTServer {
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
-    fn add_user(&self, stream: &StreamType, username: &str) -> Result<(), Error> { //[] Aux: Nos guardamos el stream, volver a ver esto.
+    fn add_user(&self, stream: &StreamType, username: &str) -> Result<(), Error> {
+        //[] Aux: Nos guardamos el stream, volver a ver esto.
         let user = User::new(stream.try_clone()?, username.to_string()); //[]
         if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
@@ -77,11 +101,8 @@ impl MQTTServer {
     ) -> Result<(), Error> {
         // Continúa leyendo y reconstruye el mensaje recibido completo
         println!("Recibo mensaje tipo Connect");
-        let msg_bytes = get_whole_message_in_bytes_from_stream(
-            fixed_header,
-            &mut stream,
-            fixed_header_buf,
-        )?;
+        let msg_bytes =
+            get_whole_message_in_bytes_from_stream(fixed_header, &mut stream, fixed_header_buf)?;
         let connect_msg = ConnectMessage::from_bytes(&msg_bytes);
         println!("Mensaje connect completo recibido: \n   {:?}", connect_msg);
 
@@ -165,12 +186,7 @@ impl MQTTServer {
     }
 
     /// Maneja la conexión con el cliente, recibe mensajes y los procesa.
-    fn handle_connection(
-        &self,
-        username: &str,
-        stream: &mut StreamType,
-    ) -> Result<(), Error> {
-
+    fn handle_connection(&self, username: &str, stream: &mut StreamType) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         //let (mut fixed_h_buf, mut fixed_h);
         //let ceros: &[u8; 2] = &[0; 2];
@@ -178,41 +194,29 @@ impl MQTTServer {
 
         //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
-        
+
         loop {
-            match get_fixed_header_from_stream(stream){
+            match get_fixed_header_from_stream(stream) {
                 Ok(Some((fixed_h_buf, fixed_h))) => {
-                        
                     fixed_header_info = (fixed_h_buf, fixed_h);
-                    
+
                     // Caso se recibe un disconnect
-                    if is_disconnect_msg(&fixed_header_info.1) {                
+                    if is_disconnect_msg(&fixed_header_info.1) {
                         self.remove_user(username);
                         shutdown(stream);
                         break;
                     }
-       
+
                     //msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-                    self.process_message(username, stream, &fixed_header_info)?; // esta función lee UN mensaje.
-                },
-                Ok(None) => {},
+                    self.process_message(username, stream, &fixed_header_info)?;
+                    // esta función lee UN mensaje.
+                }
+                Ok(None) => {}
                 Err(_) => todo!(),
             }
         }
         Ok(())
         // Fin probando
-
-
-
-
-
-
-
-
-
-
-
-
 
         /*// Lo que había
         let mut fixed_header_info: ([u8; 2], FixedHeader);
@@ -222,11 +226,11 @@ impl MQTTServer {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
         let (fixed_h_buf, fixed_h) =
                 get_fixed_header_from_stream(stream)?;
-                    
+
         // println!("While: leí bien.");
         fixed_header_info = (fixed_h_buf, fixed_h);
         empty = &fixed_header_info.0 == ceros;
-        
+
         let mut msg_bytes: Vec<u8>;
         while !empty {
             msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
@@ -234,22 +238,18 @@ impl MQTTServer {
                                                                                  // Leo fixed header para la siguiente iteración del while
             println!("Server esperando más mensajes.");
             let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream(stream)?;    
+                get_fixed_header_from_stream(stream)?;
             // Guardo lo leído y comparo para siguiente vuelta del while
             fixed_header_info = (fixed_h_buf, fixed_h);
-            empty = &fixed_header_info.0 == ceros;            
-            
+            empty = &fixed_header_info.0 == ceros;
+
         }
         Ok(())*/
     }
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
-    fn send_puback(
-        &self,
-        msg: &PublishMessage,
-        stream: &mut StreamType,
-    ) -> Result<(), Error> {
+    fn send_puback(&self, msg: &PublishMessage, stream: &mut StreamType) -> Result<(), Error> {
         let option_packet_id = msg.get_packet_identifier();
         let packet_id = option_packet_id.unwrap_or(0);
 
@@ -259,8 +259,6 @@ impl MQTTServer {
         println!("   tipo publish: Enviado el ack: {:?}", ack);
         Ok(())
     }
-
-    
 
     ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
     fn _add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
@@ -313,7 +311,7 @@ impl MQTTServer {
     ) -> Result<(), Error> {
         let ack = SubAckMessage::new(0, return_codes);
         let ack_msg_bytes = ack.to_bytes();
-        
+
         write_message_to_stream(&ack_msg_bytes, stream)?;
         println!("   tipo subscribe: Enviando el ack: {:?}", ack);
 
@@ -330,15 +328,11 @@ impl MQTTServer {
         stream: &mut StreamType,
         fixed_header_info: &([u8; 2], FixedHeader),
     ) -> Result<(), Error> {
-        
         let (fixed_header_bytes, fixed_header) = fixed_header_info;
 
         // Lee la segunda parte del mensaje y junto ambas partes (concatena con el fixed_header)
-        let msg_bytes = get_whole_message_in_bytes_from_stream(
-            fixed_header,
-            stream,
-            fixed_header_bytes,
-        )?;
+        let msg_bytes =
+            get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
 
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
@@ -391,7 +385,7 @@ impl MQTTServer {
     fn handle_client(&self, mut stream: StreamType) -> Result<(), Error> {
         // Probando
         println!("Mqtt cliente leyendo: esperando más mensajes.");
-        
+
         // Leo un fixed header, deberá ser de un connect
         let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream_for_conn(&mut stream)?;
 
@@ -412,7 +406,6 @@ impl MQTTServer {
             }
         };
         Ok(())
-        
     }
 
     fn clone_ref(&self) -> Self {
@@ -456,7 +449,7 @@ impl MQTTServer {
     /// lo agrega a la queue de cada suscriptor y lo envía.
     fn handle_outgoing_messages(&self, rx: Receiver<Box<dyn Message + Send>>) -> Result<(), Error> {
         /* Aux: Estaba así, cuando era un Receiver<PublishMessage>
-        while let Ok(msg_bytes) = rx.recv() {    
+        while let Ok(msg_bytes) = rx.recv() {
             self.handle_publish_message(msg)?;
         }*/
         while let Ok(msg) = rx.recv() {
@@ -468,11 +461,11 @@ impl MQTTServer {
                     }
                 },
                 /* // Aux: [] Restaba resolver cuál es el stream, acomodar para poder saber desde este hilo cuál es el stream por el que enviar.
-                4 => { 
+                4 => {
                     if let Some(pub_ack_msg) = msg.as_any().downcast_ref::<PubAckMessage>() {
                         write_message_to_stream(&pub_ack_msg.to_bytes(), stream); // se puede wrappear en algo que maneje error y alguna cosa más.
                     }
-                    
+
                 },
                 9 => {
                     if let Some(sub_ack_msg) = msg.as_any().downcast_ref::<SubAckMessage>() {
@@ -525,7 +518,7 @@ impl MQTTServer {
             for user in connected_users.values() {
                 let mut user_stream = user.get_stream()?;
                 let user_subscribed_topics = user.get_topics(); // Aux: (Esto sobra, las voy a recorrer a todas...)
-                // println!("TOPICS: {:?}",topics);
+                                                                // println!("TOPICS: {:?}",topics);
                 let hashmap_messages = user.get_hashmap_messages();
                 if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
                     for topic in user_subscribed_topics {
