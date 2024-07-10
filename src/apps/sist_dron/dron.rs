@@ -252,7 +252,7 @@ impl Dron {
         payload: Vec<u8>,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        let inc = Incident::from_bytes(payload);
+        let inc = Incident::from_bytes(payload)?;
         let inc_id = inc.get_id();
 
         match *inc.get_state() {

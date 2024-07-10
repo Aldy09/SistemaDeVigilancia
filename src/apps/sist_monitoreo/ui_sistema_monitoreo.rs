@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
+use crate::apps::incident_source::IncidentSource;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;
@@ -305,14 +306,18 @@ impl UISistemaMonitoreo {
     /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
     fn handle_incident_message(&mut self, msg: PublishMessage) {
         println!("Recibo inc desde cámaras"); // o desde 'self'.
-        let _inc = Incident::from_bytes(msg.get_payload());
-        // Aux: importante, ver.
-        // Antes de llamar a add_incident, hay que verificar que al incident no lo haya publicado
-        // el propio sistema de monitoreo. Xq en ese caso se estaría agregando dos veces el inc al hashmap y a la ui.
-        // Podríamos llamar al add_incident únicamente acá y no al crearlo (ctrl+F add_incident), pero
-        // igualmente hay que ver el tema de quién crea el inc (yo monitoreo, o cámaras) para ver qué hacer con el inc_id
-        // que puede 'pisarse' (get_next_inc_id está bien, pero podría cámaras crear otro inc con id 1 también).
-        //self.add_incident(&inc); // <-- no descomentar hasta pensar y solucionar ese tema, xq se rompe :].
+        if let Ok(inc) = Incident::from_bytes(msg.get_payload()){
+            if *inc.get_source() != IncidentSource::Manual {
+                
+                // Aux: importante, ver.
+                // Antes de llamar a add_incident, hay que verificar que al incident no lo haya publicado
+                // el propio sistema de monitoreo. Xq en ese caso se estaría agregando dos veces el inc al hashmap y a la ui.
+                // Podríamos llamar al add_incident únicamente acá y no al crearlo (ctrl+F add_incident), pero
+                // igualmente hay que ver el tema de quién crea el inc (yo monitoreo, o cámaras) para ver qué hacer con el inc_id
+                // que puede 'pisarse' (get_next_inc_id está bien, pero podría cámaras crear otro inc con id 1 también).
+                //self.add_incident(&inc); // <-- no descomentar hasta pensar y solucionar ese tema, xq se rompe :].
+            }
+        }
 
     }
 
@@ -440,6 +445,7 @@ impl eframe::App for UISistemaMonitoreo {
                                                 self.get_next_incident_id(),
                                                 latitude,
                                                 longitude,
+                                                IncidentSource::Manual,
                                             );
                                             self.add_incident(&incident);
                                             self.send_incident(incident); // lo publica

@@ -238,15 +238,16 @@ impl SistemaCamaras {
         cameras: &mut ShCamerasType,
         incs_being_managed: &mut HashMap<u8, Vec<u8>>,
     ) {
-        let incident = Incident::from_bytes(msg.get_payload());
-        self.logger_tx
-            .send(StructsToSaveInLogger::AppType(
-                "Sistema Camaras".to_string(),
-                AppType::Incident(incident.clone()),
-                OperationType::Received,
-            ))
-            .unwrap();
-        self.manage_incidents(incident, cameras, incs_being_managed);
+        if let Ok(incident) = Incident::from_bytes(msg.get_payload()){
+            self.logger_tx
+                .send(StructsToSaveInLogger::AppType(
+                    "Sistema Camaras".to_string(),
+                    AppType::Incident(incident.clone()),
+                    OperationType::Received,
+                ))
+                .unwrap();
+            self.manage_incidents(incident, cameras, incs_being_managed);
+        }
     }
 
     /// Procesa un Incidente recibido.
