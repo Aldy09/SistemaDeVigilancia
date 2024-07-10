@@ -9,7 +9,7 @@ use crossbeam_channel::Sender as CrossbeamSender;
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
-    apps::common_clients::is_disconnected_error,
+    apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::is_disconnected_error},
     logging::{
         logger::Logger,
         structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
@@ -169,13 +169,15 @@ impl SistemaMonitoreo {
         })
     }
 
+    /// Se suscribe a los topics y queda recibiendo PublishMessages de esos topics.
     pub fn subscribe_to_topics(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
     ) {
-        self.subscribe_to_topic(&mqtt_client, "Cam");
-        self.subscribe_to_topic(&mqtt_client, "Dron");
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::CameraTopic.to_str());
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
         self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 

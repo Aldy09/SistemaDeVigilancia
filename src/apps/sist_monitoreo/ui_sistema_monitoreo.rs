@@ -217,11 +217,11 @@ impl UISistemaMonitoreo {
     /// Se encarga de procesar y agregar un dron recibido al mapa.
     fn handle_drone_message(&mut self, msg: PublishMessage) {
         if let Ok(dron) = DronCurrentInfo::from_bytes(msg.get_payload()) {
-            println!(
+            /*println!(
                 "UI: recibido dron: {:?}, estado: {:?}",
                 dron,
                 dron.get_state()
-            );
+            );*/
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
             self.places.remove_place(dron_id, "Dron".to_string());
@@ -258,11 +258,13 @@ impl UISistemaMonitoreo {
                 self.incidents_to_resolve
             );*/
 
+            println!("ANTES DE ANALIZAR EL REMOVE, HASHMAP: {:?}", self.hashmap_incidents);
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
                     if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
                         incident.set_resolved();
+                        println!("DSṔ DEL REMOVE, HASHMAP: {:?}", self.hashmap_incidents);
                         self.send_incident(incident);
                         self.places.remove_place(inc_id, "Incident".to_string());
                     }
@@ -300,6 +302,49 @@ impl UISistemaMonitoreo {
         //let _ = self.repaint_tx.send(true);
     }
 
+    /// Recibe un PublishMessage de topic Inc, y procesa el incidente recibido
+    /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
+    fn handle_incident_message(&mut self, msg: PublishMessage) {
+        println!("Recibo inc desde cámaras"); //
+        let _inc = Incident::from_bytes(msg.get_payload());
+        // Aux: importante, ver.
+        // Antes de llamar a add_incident, hay que verificar que al incident no lo haya publicado
+        // el propio sistema de monitoreo. Xq en ese caso se estaría agregando dos veces el inc al hashmap y a la ui.
+        // Podríamos llamar al add_incident únicamente acá y no al crearlo (ctrl+F add_incident), pero
+        // igualmente hay que ver el tema de quién crea el inc (yo monitoreo, o cámaras) para ver qué hacer con el inc_id
+        // que puede 'pisarse' (get_next_inc_id está bien, pero podría cámaras crear otro inc con id 1 también).
+        //self.add_incident(&inc); // <-- no descomentar hasta pensar y solucionar ese tema, xq se rompe :].
+
+    }
+
+    /// Crea el Place para el incidente recibido, lo agrega a la ui para que se muestre por pantalla,
+    /// y lo agrega a un hashmap para continuar procesándolo (Aux: rever tema ids que quizás se pisen cuando camaras publiquen incs).
+    fn add_incident(&mut self, incident: &Incident) {
+        //println!("INC DESDE ADENTRO DE ADD_INCIDENT: {:?}", incident);
+        let custom_style = Style {
+            symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+            ..Default::default()
+        };
+
+        let (lat, lon) = incident.get_position();
+        let new_place_incident = Place {
+            position: Position::from_lon_lat(
+                lon, lat,
+            ),
+            label: format!("Incident {}", incident.get_id()),
+            symbol: '⚠',
+            style: custom_style,
+            id: incident.get_id(),
+            place_type: "Incident".to_string(),
+        };
+        self.places.add_place(new_place_incident);
+
+        let inc_to_store = incident.clone();
+        self.hashmap_incidents
+            .insert(incident.get_id(), inc_to_store); // Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
+        println!("DSP DE INSERTAR DESDE FUNCIÓN ADD_INCIDENT, HASHMAP: {:?}", self.hashmap_incidents);
+    }
+
     pub fn get_next_incident_id(&mut self) -> u8 {
         self.last_incident_id += 1;
         self.last_incident_id
@@ -323,6 +368,8 @@ impl eframe::App for UISistemaMonitoreo {
                     self.handle_camera_message(publish_message);
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
                     self.handle_drone_message(publish_message);
+                } else if publish_message.get_topic_name() == AppsMqttTopics::IncidentTopic.to_str() {
+                    self.handle_incident_message(publish_message);
                 }
             }
         });
@@ -397,23 +444,24 @@ impl eframe::App for UISistemaMonitoreo {
                                                 latitude,
                                                 longitude,
                                             );
-                                            let custom_style = Style {
-                                                symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
-                                                ..Default::default()
-                                            };
-                                            let new_place_incident = Place {
-                                                position: Position::from_lon_lat(
-                                                    longitude, latitude,
-                                                ),
-                                                label: format!("Incident {}", incident.get_id()),
-                                                symbol: '⚠',
-                                                style: custom_style,
-                                                id: incident.get_id(),
-                                                place_type: "Incident".to_string(),
-                                            };
-                                            self.hashmap_incidents
-                                                .insert(incident.get_id(), incident.clone());
-                                            self.places.add_place(new_place_incident);
+                                            self.add_incident(&incident);
+                                            // let custom_style = Style {
+                                            //     symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+                                            //     ..Default::default()
+                                            // };
+                                            // let new_place_incident = Place {
+                                            //     position: Position::from_lon_lat(
+                                            //         longitude, latitude,
+                                            //     ),
+                                            //     label: format!("Incident {}", incident.get_id()),
+                                            //     symbol: '⚠',
+                                            //     style: custom_style,
+                                            //     id: incident.get_id(),
+                                            //     place_type: "Incident".to_string(),
+                                            // };
+                                            // self.hashmap_incidents
+                                            //     .insert(incident.get_id(), incident.clone());
+                                            // self.places.add_place(new_place_incident);
                                             self.send_incident(incident);
                                             self.incident_dialog_open = false;
                                         }
