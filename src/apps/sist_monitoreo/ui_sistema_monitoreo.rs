@@ -258,13 +258,11 @@ impl UISistemaMonitoreo {
                 self.incidents_to_resolve
             );*/
 
-            println!("ANTES DE ANALIZAR EL REMOVE, HASHMAP: {:?}", self.hashmap_incidents);
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_id = incident.incident_id;
                     if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
                         incident.set_resolved();
-                        println!("DSṔ DEL REMOVE, HASHMAP: {:?}", self.hashmap_incidents);
                         self.send_incident(incident);
                         self.places.remove_place(inc_id, "Incident".to_string());
                     }
@@ -277,10 +275,11 @@ impl UISistemaMonitoreo {
             // Se crea el label a mostrar por pantalla, según si está o no volando.
             let dron_label;
             if let Some((dir, speed)) = dron.get_flying_info() {
+                let (dir_lat, dir_lon) = dir;
                 // El dron está volando.
                 dron_label = format!(
-                    "Dron {}\n   dir: ({:?})\n   vel: {} km/h",
-                    dron_id, dir, speed
+                    "Dron {}\n   dir: ({:.2}, {:.2})\n   vel: {} km/h",
+                    dron_id, dir_lat, dir_lon, speed
                 );
             } else {
                 dron_label = format!("Dron {}", dron_id);
@@ -305,7 +304,7 @@ impl UISistemaMonitoreo {
     /// Recibe un PublishMessage de topic Inc, y procesa el incidente recibido
     /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
     fn handle_incident_message(&mut self, msg: PublishMessage) {
-        println!("Recibo inc desde cámaras"); //
+        println!("Recibo inc desde cámaras"); // o desde 'self'.
         let _inc = Incident::from_bytes(msg.get_payload());
         // Aux: importante, ver.
         // Antes de llamar a add_incident, hay que verificar que al incident no lo haya publicado
@@ -320,7 +319,6 @@ impl UISistemaMonitoreo {
     /// Crea el Place para el incidente recibido, lo agrega a la ui para que se muestre por pantalla,
     /// y lo agrega a un hashmap para continuar procesándolo (Aux: rever tema ids que quizás se pisen cuando camaras publiquen incs).
     fn add_incident(&mut self, incident: &Incident) {
-        //println!("INC DESDE ADENTRO DE ADD_INCIDENT: {:?}", incident);
         let custom_style = Style {
             symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
             ..Default::default()
@@ -342,7 +340,6 @@ impl UISistemaMonitoreo {
         let inc_to_store = incident.clone();
         self.hashmap_incidents
             .insert(incident.get_id(), inc_to_store); // Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
-        println!("DSP DE INSERTAR DESDE FUNCIÓN ADD_INCIDENT, HASHMAP: {:?}", self.hashmap_incidents);
     }
 
     pub fn get_next_incident_id(&mut self) -> u8 {
@@ -445,24 +442,7 @@ impl eframe::App for UISistemaMonitoreo {
                                                 longitude,
                                             );
                                             self.add_incident(&incident);
-                                            // let custom_style = Style {
-                                            //     symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
-                                            //     ..Default::default()
-                                            // };
-                                            // let new_place_incident = Place {
-                                            //     position: Position::from_lon_lat(
-                                            //         longitude, latitude,
-                                            //     ),
-                                            //     label: format!("Incident {}", incident.get_id()),
-                                            //     symbol: '⚠',
-                                            //     style: custom_style,
-                                            //     id: incident.get_id(),
-                                            //     place_type: "Incident".to_string(),
-                                            // };
-                                            // self.hashmap_incidents
-                                            //     .insert(incident.get_id(), incident.clone());
-                                            // self.places.add_place(new_place_incident);
-                                            self.send_incident(incident);
+                                            self.send_incident(incident); // lo publica
                                             self.incident_dialog_open = false;
                                         }
                                     });
