@@ -3,7 +3,7 @@ use std::io::{Error, ErrorKind};
 /// Representa el origen en el que se generó el incidente:
 /// puede ser `Manual`, si fue generado manualmente desde la ui de sistema de monitoreo;
 /// o `Automated` si se generó automáticamente mediante inteligencia artificial en sistema cámaras.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum IncidentSource {
     Manual,
     Automated,

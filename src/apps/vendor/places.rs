@@ -48,7 +48,7 @@ pub struct Place {
     pub id: u8,
 
     /// Type of the place.
-    pub place_type: String,
+    pub place_type: String, // "Cámara", "Dron", "Incident"
 }
 
 impl Place {
@@ -120,7 +120,7 @@ impl Places {
 
     /// Elimina el elemento de `id` y `place_type` indicados, del vector de places que se muestra en el mapa.
     /// Si el elemento no existía, no se hace nada.
-    pub fn remove_place(&mut self, id: u8, place_type: String) {
+    pub fn remove_place(&mut self, id: u8, place_type: String) { // Incident_automated, Incident_manual
         if let Some(index) = self
             .places
             .iter()

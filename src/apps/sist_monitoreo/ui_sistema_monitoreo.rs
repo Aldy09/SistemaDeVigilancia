@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident::Incident;
 use crate::apps::incident_source::IncidentSource;
+use crate::apps::incident_info::IncidentInfo;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;
@@ -104,9 +105,10 @@ fn providers(egui_ctx: Context) -> HashMap<Provider, Box<dyn TilesManager + Send
 
 #[derive(Debug)]
 struct IncidentWithDrones {
-    incident_id: u8,
+    incident_info: IncidentInfo,
     drones: Vec<DronCurrentInfo>,
 }
+
 pub struct UISistemaMonitoreo {
     providers: HashMap<Provider, Box<dyn TilesManager + Send>>,
     selected_provider: Provider,
@@ -122,7 +124,7 @@ pub struct UISistemaMonitoreo {
     last_incident_id: u8,
     exit_tx: Sender<bool>,
     incidents_to_resolve: Vec<IncidentWithDrones>, // posicion 0  --> (inc_id_to_resolve, drones(dron1, dron2)) // posicion 1 --> (inc_id_to_resolve 2, drones(dron1, dron2))
-    hashmap_incidents: HashMap<u8, Incident>,
+    hashmap_incidents: HashMap<IncidentInfo, Incident>, // 
 }
 
 impl UISistemaMonitoreo {
@@ -234,7 +236,7 @@ impl UISistemaMonitoreo {
                     let incident_index = self
                         .incidents_to_resolve
                         .iter()
-                        .position(|incident| incident.incident_id == inc_id);
+                        .position(|incident| incident.incident_info.get_inc_id() == inc_id);
 
                     match incident_index {
                         Some(index) => {
@@ -242,9 +244,11 @@ impl UISistemaMonitoreo {
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
+                            // Aux para que compile, temporalmente:
+                            let inc_info = IncidentInfo::new(inc_id, IncidentSource::Manual);
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
-                                incident_id: inc_id,
+                                incident_info: inc_info,
                                 drones: vec![dron.clone()],
                             });
                         }
@@ -261,11 +265,17 @@ impl UISistemaMonitoreo {
 
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
-                    let inc_id = incident.incident_id;
-                    if let Some(mut incident) = self.hashmap_incidents.remove(&inc_id) {
+                    let inc_info = &incident.incident_info;
+                    if let Some(mut incident) = self.hashmap_incidents.remove(inc_info) {
                         incident.set_resolved();
                         self.send_incident(incident);
-                        self.places.remove_place(inc_id, "Incident".to_string());
+
+                        // Obtengo el source del incidente, para pasarle un place_type acorde al remove_place.
+                        let place_type = match inc_info.get_src() {
+                            IncidentSource::Manual => "Incident_manual",
+                            IncidentSource::Automated => "Incident_automated",
+                        };
+                        self.places.remove_place(inc_info.get_inc_id(), place_type.to_string());
                     }
                 }
             }
@@ -307,15 +317,9 @@ impl UISistemaMonitoreo {
     fn handle_incident_message(&mut self, msg: PublishMessage) {
         println!("Recibo inc desde cámaras"); // o desde 'self'.
         if let Ok(inc) = Incident::from_bytes(msg.get_payload()){
+            // Agregamos el incidente (add_incident) solamente si él no fue creado por sist monitoreo.
             if *inc.get_source() != IncidentSource::Manual {
-                
-                // Aux: importante, ver.
-                // Antes de llamar a add_incident, hay que verificar que al incident no lo haya publicado
-                // el propio sistema de monitoreo. Xq en ese caso se estaría agregando dos veces el inc al hashmap y a la ui.
-                // Podríamos llamar al add_incident únicamente acá y no al crearlo (ctrl+F add_incident), pero
-                // igualmente hay que ver el tema de quién crea el inc (yo monitoreo, o cámaras) para ver qué hacer con el inc_id
-                // que puede 'pisarse' (get_next_inc_id está bien, pero podría cámaras crear otro inc con id 1 también).
-                //self.add_incident(&inc); // <-- no descomentar hasta pensar y solucionar ese tema, xq se rompe :].
+                self.add_incident(&inc);
             }
         }
 
@@ -338,13 +342,14 @@ impl UISistemaMonitoreo {
             symbol: '⚠',
             style: custom_style,
             id: incident.get_id(),
-            place_type: "Incident".to_string(),
+            place_type: "Incident_manual".to_string(),
         };
         self.places.add_place(new_place_incident);
 
+        let inc_info = IncidentInfo::new(incident.get_id(), incident.get_source().clone());
         let inc_to_store = incident.clone();
         self.hashmap_incidents
-            .insert(incident.get_id(), inc_to_store); // Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
+            .insert(inc_info, inc_to_store); // Edit: viendo :). Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
     }
 
     pub fn get_next_incident_id(&mut self) -> u8 {
