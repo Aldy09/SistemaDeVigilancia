@@ -11,8 +11,7 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
     apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident,
-        sist_dron::dron_state::DronState,
+        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident, incident_info::IncidentInfo, sist_dron::dron_state::DronState
     },
     logging::{
         logger::Logger,
@@ -288,10 +287,10 @@ impl Dron {
     /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
     fn process_valid_dron(&self, received_dron: DronCurrentInfo) -> Result<(), Error> {
         // Obtengo el ID del incidente que el dron recibido está atendiendo
-        if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
+        if let Some(inc_info) = received_dron.get_inc_id_to_resolve() {
             if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
                 // Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interés.
-                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
+                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info.get_inc_id()) { // AUX TEMPORALMENTE, pero tiene que ser clave el info. [].
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
                     let self_distance = self.get_distance_to(*incident_position)?;
@@ -382,7 +381,7 @@ impl Dron {
                     "  está en rango, evaluando si desplazarme a inc {}",
                     inc_id.get_id()
                 ));
-                self.set_inc_id_to_resolve(inc_id.get_id())?; //
+                self.set_inc_id_to_resolve(inc_id.get_info())?; //
                 self.add_incident_to_hashmap(&inc_id)?;
 
                 self.set_state(DronState::RespondingToIncident, false)?;
@@ -454,7 +453,7 @@ impl Dron {
             .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
 
         if let Some(my_inc_id) = self.get_inc_id_to_resolve()? {
-            if inc.get_id() == my_inc_id {
+            if inc.get_info() == my_inc_id {
                 let event = format!(
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial.",
                     inc.get_id()
@@ -706,9 +705,9 @@ impl Dron {
     }
 
     /// Toma lock y establece el inc id a resolver.
-    fn set_inc_id_to_resolve(&self, inc_id: u8) -> Result<(), Error> {
+    fn set_inc_id_to_resolve(&self, inc_info: IncidentInfo) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
-            ci.set_inc_id_to_resolve(inc_id);
+            ci.set_inc_id_to_resolve(inc_info);
             return Ok(());
         }
         Err(Error::new(
@@ -806,7 +805,7 @@ impl Dron {
         ))
     }
 
-    fn get_inc_id_to_resolve(&self) -> Result<Option<u8>, Error> {
+    fn get_inc_id_to_resolve(&self) -> Result<Option<IncidentInfo>, Error> {
         if let Ok(ci) = self.current_info.lock() {
             return Ok(ci.get_inc_id_to_resolve());
         }

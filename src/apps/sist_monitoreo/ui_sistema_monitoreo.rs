@@ -231,12 +231,13 @@ impl UISistemaMonitoreo {
 
             if dron.get_state() == DronState::ManagingIncident {
                 // Llegó a la posición del inc.
-                if let Some(inc_id) = dron.get_inc_id_to_resolve() {
+                if let Some(inc_info) = dron.get_inc_id_to_resolve() {
                     // Busca el incidente en el vector.
                     let incident_index = self
                         .incidents_to_resolve
                         .iter()
-                        .position(|incident| incident.incident_info.get_inc_id() == inc_id);
+                        .position(|incident| incident.incident_info == inc_info);
+                        //.position(|incident| incident.incident_info.get_inc_id() == inc_id); // <--pre refactor decía esto
 
                     match incident_index {
                         Some(index) => {
@@ -245,7 +246,7 @@ impl UISistemaMonitoreo {
                         }
                         None => {
                             // Aux para que compile, temporalmente:
-                            let inc_info = IncidentInfo::new(inc_id, IncidentSource::Manual);
+                            // aux: let inc_info = IncidentInfo::new(inc_id, IncidentSource::Manual);
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_info: inc_info,
@@ -346,7 +347,7 @@ impl UISistemaMonitoreo {
         };
         self.places.add_place(new_place_incident);
 
-        let inc_info = IncidentInfo::new(incident.get_id(), incident.get_source().clone());
+        let inc_info = IncidentInfo::new(incident.get_id(), *incident.get_source());
         let inc_to_store = incident.clone();
         self.hashmap_incidents
             .insert(inc_info, inc_to_store); // Edit: viendo :). Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.

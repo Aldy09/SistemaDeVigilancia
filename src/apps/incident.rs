@@ -1,5 +1,6 @@
 use std::io::Error;
 
+use super::incident_info::IncidentInfo;
 use super::incident_state::IncidentState;
 use super::incident_source::IncidentSource;
 
@@ -51,6 +52,10 @@ impl Incident {
 
     pub fn get_id(&self) -> u8 {
         self.id
+    }
+
+    pub fn get_info(&self) -> IncidentInfo {
+        IncidentInfo::new(self.id, self.source)
     }
 
     pub fn from_bytes(msg_bytes: Vec<u8>) -> Result<Self, Error> {
