@@ -16,4 +16,4 @@ Cargo.lock
 
 log.txt
 src/log.txt
-
+*log*.txt
