@@ -3,6 +3,7 @@ type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
 use crate::apps::common_clients::is_disconnected_error;
+use crate::apps::incident_info::IncidentInfo;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
@@ -30,6 +31,8 @@ use super::sist_camaras_abm::ABMCameras;
 use crate::apps::app_type::AppType;
 use std::fs;
 use std::io::{self, ErrorKind};
+
+type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
 
 #[derive(Debug)]
 pub struct SistemaCamaras {
@@ -236,17 +239,18 @@ impl SistemaCamaras {
         &mut self,
         msg: PublishMessage,
         cameras: &mut ShCamerasType,
-        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+        incs_being_managed: &mut HashmapIncsType,
     ) {
-        let incident = Incident::from_bytes(msg.get_payload());
-        self.logger_tx
-            .send(StructsToSaveInLogger::AppType(
-                "Sistema Camaras".to_string(),
-                AppType::Incident(incident.clone()),
-                OperationType::Received,
-            ))
-            .unwrap();
-        self.manage_incidents(incident, cameras, incs_being_managed);
+        if let Ok(incident) = Incident::from_bytes(msg.get_payload()){
+            self.logger_tx
+                .send(StructsToSaveInLogger::AppType(
+                    "Sistema Camaras".to_string(),
+                    AppType::Incident(incident.clone()),
+                    OperationType::Received,
+                ))
+                .unwrap();
+            self.manage_incidents(incident, cameras, incs_being_managed);
+        }
     }
 
     /// Procesa un Incidente recibido.
@@ -254,24 +258,24 @@ impl SistemaCamaras {
         &mut self,
         incident: Incident,
         cameras: &mut ShCamerasType,
-        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+        incs_being_managed: &mut HashmapIncsType,
     ) {
         // Proceso los incidentes
-        if !incs_being_managed.contains_key(&incident.get_id()) {
-            self.procesar_incidente_por_primera_vez(cameras, incident, incs_being_managed);
+        if !incs_being_managed.contains_key(&incident.get_info()) {
+            self.process_first_time_incident(cameras, incident, incs_being_managed);
         } else {
-            self.procesar_incidente_conocido(cameras, incident, incs_being_managed);
+            self.process_known_incident(cameras, incident, incs_being_managed);
         }
     }
 
     // Aux: (condición "hasta que" del enunciado).
     /// Procesa un incidente cuando un incidente con ese mismo id ya fue recibido anteriormente.
     /// Si su estado es resuelto, vuelve el estado de la/s cámara/s que lo atendían, a ahorro de energía.
-    fn procesar_incidente_conocido(
+    fn process_known_incident(
         &self,
         cameras: &mut ShCamerasType,
         inc: Incident,
-        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+        incs_being_managed: &mut HashmapIncsType,
     ) {
         if inc.is_resolved() {
             println!(
@@ -279,7 +283,7 @@ impl SistemaCamaras {
                 inc.get_id()
             );
             // Busco la/s cámara/s que atendían este incidente
-            if let Some(cams_managing_inc) = incs_being_managed.get(&inc.get_id()) {
+            if let Some(cams_managing_inc) = incs_being_managed.get(&inc.get_info()) {
                 // sé que existe, por el if de más arriba
 
                 // Cambio el estado de las cámaras que lo manejaban, otra vez a ahorro de energía
@@ -290,10 +294,10 @@ impl SistemaCamaras {
                             // Actualizo las cámaras en cuestión
                             if let Some(camera_to_update) = cams.get_mut(camera_id) {
                                 let state_has_changed =
-                                    camera_to_update.remove_from_incs_being_managed(inc.get_id());
+                                    camera_to_update.remove_from_incs_being_managed(inc.get_info());
                                 println!(
                                     "  la cámara queda:\n   cam id y lista de incs: {:?}",
-                                    camera_to_update.get_id_e_incs_for_debug_display()
+                                    camera_to_update.get_id_and_incs_for_debug_display()
                                 );
                                 if state_has_changed {
                                     println!(
@@ -311,22 +315,22 @@ impl SistemaCamaras {
                 }
             }
             // También elimino la entrada del hashmap que busca por incidente, ya no le doy seguimiento
-            incs_being_managed.remove(&inc.get_id());
+            incs_being_managed.remove(&inc.get_info());
         }
     }
 
     /// Procesa un incidente cuando el mismo fue recibido por primera vez.
     /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
     /// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
-    fn procesar_incidente_por_primera_vez(
+    fn process_first_time_incident(
         &self,
         cameras: &mut ShCamerasType,
         inc: Incident,
-        incs_being_managed: &mut HashMap<u8, Vec<u8>>,
+        incs_being_managed: &mut HashmapIncsType,
     ) {
         match cameras.lock() {
             Ok(mut cams) => {
-                println!("Proceso el incidente {} por primera vez", inc.get_id());
+                println!("Proceso el incidente {:?} por primera vez", inc.get_info());
                 let cameras_that_follow_inc =
                     self.get_id_of_cameras_that_will_change_state_to_active(&mut cams, &inc);
 
@@ -335,7 +339,7 @@ impl SistemaCamaras {
                     if let Some(bordering_cam) = cams.get_mut(cam_id) {
                         // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
                         let state_has_changed =
-                            bordering_cam.append_to_incs_being_managed(inc.get_id());
+                            bordering_cam.append_to_incs_being_managed(inc.get_info());
                         if state_has_changed {
                             println!("CÁMARAS: a saving, enviando cámara: {:?}", bordering_cam);
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
@@ -343,13 +347,13 @@ impl SistemaCamaras {
                     };
                 }
                 // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                incs_being_managed.insert(inc.get_id(), cameras_that_follow_inc);
+                incs_being_managed.insert(inc.get_info(), cameras_that_follow_inc);
             }
             Err(_) => todo!(),
         }
     }
 
-    /// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente.
+    /// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente `inc`.
     fn get_id_of_cameras_that_will_change_state_to_active(
         &self,
         cams: &mut MutexGuard<'_, HashMap<u8, Camera>>,
@@ -363,24 +367,16 @@ impl SistemaCamaras {
                 println!(
                     "Está en rango de cam: {}, cambiando su estado a activo.",
                     cam_id
-                ); // [] ver lindantes
-                   // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para que luego puedan volver a su anterior estado
-                   //camera.append_to_incs_being_managed(inc.id);
-                   //let mut cameras_that_follow_inc = vec![*cam_id];
+                );
+
                 cameras_that_follow_inc.push(*cam_id);
 
                 for bordering_cam_id in camera.get_bordering_cams() {
-                    /*if let Some(bordering_cam) = cams.get_mut(&bordering_cam_id){ // <--- Aux: quiero esto, pero no me deja xq 2 veces mut :( (ni siquiera me deja con get sin mut).
-                        bordering_cam.append_to_incs_being_managed(inc.id); // <-- falta esta línea, que no se puede xq 2 veces mut
-                        cameras_that_follow_inc.push(*bordering_cam_id);
-                    };*/
                     cameras_that_follow_inc.push(*bordering_cam_id); // Aux: quizás haya que pensar otro diseño, xq si no puedo hacer el bloque comentado de acá arriba se complica.
                 }
-                /*// Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                incs_being_managed.insert(inc.id, cameras_that_follow_inc);*/
                 println!(
                     "  la cámara queda:\n   cam id y lista de incs: {:?}",
-                    camera.get_id_e_incs_for_debug_display()
+                    camera.get_id_and_incs_for_debug_display()
                 );
             }
         }
@@ -394,7 +390,7 @@ impl SistemaCamaras {
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
     ) {
-        let mut incs_being_managed: HashMap<u8, Vec<u8>> = HashMap::new();
+        let mut incs_being_managed: HashmapIncsType = HashMap::new();
 
         loop {
             match rx.recv() {

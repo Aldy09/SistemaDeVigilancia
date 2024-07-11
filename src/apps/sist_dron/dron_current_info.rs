@@ -1,5 +1,7 @@
 use std::io::{Error, ErrorKind};
 
+use crate::apps::incident_info::IncidentInfo;
+
 use super::dron_flying_info::DronFlyingInfo;
 use super::dron_state::DronState;
 
@@ -12,7 +14,7 @@ pub struct DronCurrentInfo {
     longitude: f64,
     battery_lvl: u8,
     state: DronState,
-    inc_id_to_resolve: Option<u8>,
+    inc_info_to_resolve: Option<IncidentInfo>,
     // Dirección y velocidad de vuelo
     flying_info: Option<DronFlyingInfo>,
 }
@@ -28,7 +30,7 @@ impl DronCurrentInfo {
             longitude,
             battery_lvl,
             state,
-            inc_id_to_resolve: None,
+            inc_info_to_resolve: None,
             flying_info: None,
         }
     }
@@ -44,12 +46,13 @@ impl DronCurrentInfo {
         //bytes.push(self.state.to_byte()[0]); // <-- así sería si fuera un enum en vez de un u8.
         bytes.extend_from_slice(&self.state.to_byte());
 
-        // El id del incidente que se está resolviendo:
-        let mut inc_id_to_send = 0;
-        if let Some(inc_id) = self.inc_id_to_resolve {
-            inc_id_to_send = inc_id;
+        // El info del incidente que se está resolviendo:
+        let mut inc_info_to_send: Vec<u8> = vec![0,0];
+        if let Some(inc_info) = &self.inc_info_to_resolve {
+            inc_info_to_send = inc_info.to_bytes();
         }
-        bytes.extend_from_slice(&inc_id_to_send.to_be_bytes());
+        bytes.extend_from_slice(&inc_info_to_send);
+        
 
         // La flying_info: dir y velocidad de vuelo
         if let Some(f) = &self.flying_info {
@@ -99,13 +102,18 @@ impl DronCurrentInfo {
         let state_res = DronState::from_byte([bytes[idx]]);
         idx += b_size;
 
+        let mut inc_info_to_resolve = None;
+        let inc_info_to_resolve_option = IncidentInfo::from_bytes([bytes[idx], bytes[idx+b_size]].to_vec())?;
+        if let Some(inc_info) = inc_info_to_resolve_option {
+            inc_info_to_resolve = Some(inc_info);
+        }
         // Leo el inc id to resolve
-        let mut inc_id_to_resolve = None;
+        /*let mut inc_id_to_resolve = None;
         let read_inc_id = u8::from_be_bytes([bytes[idx]]);
         if read_inc_id != 0 {
             inc_id_to_resolve = Some(read_inc_id);
-        }
-        idx += b_size;
+        }*/
+        idx += 2 * b_size;
 
         // Leo dir y velocidad de vuelo
         let mut flying_info = None;
@@ -125,7 +133,7 @@ impl DronCurrentInfo {
                 longitude,
                 battery_lvl,
                 state,
-                inc_id_to_resolve,
+                inc_info_to_resolve,
                 flying_info,
             }),
             Err(_) => Err(Error::new(
@@ -159,17 +167,17 @@ impl DronCurrentInfo {
     }
 
     /// Devuelve el id del incidente que el dron se encuentra actualmente resolviendo.
-    pub fn get_inc_id_to_resolve(&self) -> Option<u8> {
-        self.inc_id_to_resolve
+    pub fn get_inc_id_to_resolve(&self) -> Option<IncidentInfo> {
+        self.inc_info_to_resolve
     }
 
     /// Setea el id del incidente que el dron se encuentra actualmente resolviendo.
-    pub fn set_inc_id_to_resolve(&mut self, inc_id: u8) {
-        self.inc_id_to_resolve = Some(inc_id);
+    pub fn set_inc_id_to_resolve(&mut self, inc_info: IncidentInfo) {
+        self.inc_info_to_resolve = Some(inc_info);
     }
     /// Borra el id del incidente resuelto
     pub fn unset_inc_id_to_resolve(&mut self) {
-        self.inc_id_to_resolve = None;
+        self.inc_info_to_resolve = None;
     }
 
     /// Setea la flying_info recibida.
@@ -229,7 +237,7 @@ impl DronCurrentInfo {
         }
         if self.battery_lvl < min_battery {
             should_charge = true;
-            self.inc_id_to_resolve = None;
+            self.inc_info_to_resolve = None;
         }
         should_charge
     }
@@ -241,7 +249,7 @@ impl DronCurrentInfo {
 
 #[cfg(test)]
 mod test {
-    use crate::apps::sist_dron::{dron_current_info::DronCurrentInfo, dron_state::DronState};
+    use crate::apps::{incident_info::IncidentInfo, incident_source::IncidentSource, sist_dron::{dron_current_info::DronCurrentInfo, dron_state::DronState}};
 
     #[test]
     fn test_1a_dron_to_y_from_bytes() {
@@ -251,7 +259,7 @@ mod test {
             longitude: -58.0,
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
-            inc_id_to_resolve: None,
+            inc_info_to_resolve: None,
             flying_info: None,
         };
 
@@ -269,7 +277,7 @@ mod test {
             longitude: -58.0,
             battery_lvl: 100,
             state: DronState::ExpectingToRecvIncident,
-            inc_id_to_resolve: Some(18),
+            inc_info_to_resolve: Some(IncidentInfo::new(18, IncidentSource::Manual)),
             flying_info: None,
         };
 
