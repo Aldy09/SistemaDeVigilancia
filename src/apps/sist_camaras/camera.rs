@@ -1,4 +1,4 @@
-use crate::apps::sist_camaras::camera_state::CameraState;
+use crate::apps::{incident_info::IncidentInfo, sist_camaras::camera_state::CameraState};
 
 #[derive(Debug, PartialEq)]
 /// Struct que representa el estado de una de las cámaras del sistema central de cámaras.
@@ -19,7 +19,7 @@ pub struct Camera {
     range: u8,
     border_cameras: Vec<u8>,
     deleted: bool,
-    incs_being_managed: Vec<u8>, // ids de los incidentes a los que está prestando atención
+    incs_being_managed: Vec<IncidentInfo>, // info (id y src) de los incidentes a los que está prestando atención
 }
 
 impl Camera {
@@ -110,9 +110,9 @@ impl Camera {
     /// Agrega el inc_id a su lista de incidentes a los que le presta atención,
     /// y se cambia el estado a activo. Maneja su marcado.
     /// Devuelve si cambió su estado interno (a Activo).
-    pub fn append_to_incs_being_managed(&mut self, inc_id: u8) -> bool {
+    pub fn append_to_incs_being_managed(&mut self, inc_info: IncidentInfo) -> bool {
         let mut state_has_changed = false;
-        self.incs_being_managed.push(inc_id);
+        self.incs_being_managed.push(inc_info);
         // Si ya estaba en estado activo, la dejo como estaba (para no marcarla como modificada)
         if self.state != CameraState::Active {
             self.set_state_to(CameraState::Active);
@@ -125,10 +125,10 @@ impl Camera {
     /// y si ya no le quedan incidentes, se cambia el estado a modo ahorro de energía.
     /// Maneja su marcado.
     /// Devuelve si cambió su estado interno (a Ahorro de energía).
-    pub fn remove_from_incs_being_managed(&mut self, inc_id: u8) -> bool {
+    pub fn remove_from_incs_being_managed(&mut self, inc_info: IncidentInfo) -> bool {
         let mut state_has_changed = false;
-        if let Some(pos_de_inc_id) = self.incs_being_managed.iter().position(|&x| x == inc_id) {
-            self.incs_being_managed.remove(pos_de_inc_id);
+        if let Some(pos_de_inc_info) = self.incs_being_managed.iter().position(|&x| x == inc_info) {
+            self.incs_being_managed.remove(pos_de_inc_info);
             // Maneja su lista y se cambiarse el estado si corresponde
             if self.incs_being_managed.is_empty() {
                 self.set_state_to(CameraState::SavingMode);
@@ -139,7 +139,7 @@ impl Camera {
     }
 
     /// Función getter utilizada con propósitos de debugging.
-    pub fn get_id_e_incs_for_debug_display(&self) -> (u8, Vec<u8>) {
+    pub fn get_id_and_incs_for_debug_display(&self) -> (u8, Vec<IncidentInfo>) {
         (self.id, self.incs_being_managed.to_vec())
     }
 

@@ -1,4 +1,8 @@
+use std::io::Error;
+
+use super::incident_info::IncidentInfo;
 use super::incident_state::IncidentState;
+use super::incident_source::IncidentSource;
 
 #[derive(Debug, Clone)]
 /// Struct que representa un incidente, para ser utilizado por las aplicaciones del sistema de vigilancia (sist de monitoreo, sist central de cámaras, y app de drones).
@@ -8,15 +12,17 @@ pub struct Incident {
     latitude: f64,
     longitude: f64,
     state: IncidentState,
+    source: IncidentSource,
 }
 
 impl Incident {
-    pub fn new(id: u8, latitude: f64, longitude: f64) -> Self {
+    pub fn new(id: u8, latitude: f64, longitude: f64, source: IncidentSource) -> Self {
         Self {
             id,
             latitude,
             longitude,
             state: IncidentState::ActiveIncident,
+            source,
         }
     }
 
@@ -40,6 +46,7 @@ impl Incident {
         bytes.extend_from_slice(&self.latitude.to_le_bytes());
         bytes.extend_from_slice(&self.longitude.to_le_bytes());
         bytes.push(self.state.to_byte()[0]);
+        bytes.push(self.source.to_byte()[0]);
         bytes
     }
 
@@ -47,7 +54,11 @@ impl Incident {
         self.id
     }
 
-    pub fn from_bytes(msg_bytes: Vec<u8>) -> Self {
+    pub fn get_info(&self) -> IncidentInfo {
+        IncidentInfo::new(self.id, self.source)
+    }
+
+    pub fn from_bytes(msg_bytes: Vec<u8>) -> Result<Self, Error> {
         let id = msg_bytes[0];
         let latitude = f64::from_le_bytes([
             msg_bytes[1],
@@ -69,22 +80,27 @@ impl Incident {
             msg_bytes[15],
             msg_bytes[16],
         ]);
-        let mut state = IncidentState::ActiveIncident;
-        if let Ok(state_parsed) = IncidentState::from_byte([msg_bytes[17]]) {
-            state = state_parsed;
-        }
+        
+        let state = IncidentState::from_byte([msg_bytes[17]])?;
 
-        Self {
+        let source = IncidentSource::from_byte([msg_bytes[18]])?;
+
+        Ok(Self {
             id,
             latitude,
             longitude,
             state,
-        }
+            source,
+        })
     }
 
     /// Devuelve el estado del incidente.
     pub fn get_state(&self) -> &IncidentState {
         &self.state
+    }
+    
+    pub fn get_source(&self) -> &IncidentSource {
+        &self.source
     }
 }
 // hacer test de los metodos from_bytes y to_bytes
@@ -100,9 +116,10 @@ mod tests {
             latitude: 2.0,
             longitude: 2.0,
             state: IncidentState::ActiveIncident,
+            source: IncidentSource::Manual,
         };
         let bytes = incident.to_bytes();
-        let incident_bytes = Incident::from_bytes(bytes);
+        let incident_bytes = Incident::from_bytes(bytes).unwrap();
         assert_eq!(incident_bytes.id, incident.id);
         assert_eq!(incident_bytes.latitude, incident.latitude);
         assert_eq!(incident_bytes.longitude, incident.longitude);

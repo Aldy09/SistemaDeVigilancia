@@ -13,3 +13,5 @@ pub mod sist_dron;
 pub mod sist_monitoreo;
 pub mod vendor;
 pub mod windows;
+pub mod incident_source;
+pub mod incident_info;

@@ -11,8 +11,7 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
     apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident,
-        sist_dron::dron_state::DronState,
+        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident, incident_info::IncidentInfo, sist_dron::dron_state::DronState
     },
     logging::{
         logger::Logger,
@@ -31,7 +30,7 @@ use super::{
     sist_dron_properties::SistDronProperties,
 };
 
-type DistancesType = Arc<Mutex<HashMap<u8, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_id, ( (inc_pos),(dron_id, distance_to_incident)) )
+type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -252,7 +251,7 @@ impl Dron {
         payload: Vec<u8>,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        let inc = Incident::from_bytes(payload);
+        let inc = Incident::from_bytes(payload)?;
         let inc_id = inc.get_id();
 
         match *inc.get_state() {
@@ -288,10 +287,10 @@ impl Dron {
     /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
     fn process_valid_dron(&self, received_dron: DronCurrentInfo) -> Result<(), Error> {
         // Obtengo el ID del incidente que el dron recibido está atendiendo
-        if let Some(inc_id) = received_dron.get_inc_id_to_resolve() {
+        if let Some(inc_info) = received_dron.get_inc_id_to_resolve() {
             if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
                 // Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interés.
-                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_id) {
+                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info) {
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
                     let self_distance = self.get_distance_to(*incident_position)?;
@@ -320,7 +319,7 @@ impl Dron {
         thread::sleep(Duration::from_millis(3500)); // Aux Probando
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             if let Some((_incident_position, candidate_drones)) =
-                distances.get_mut(&incident.get_id())
+                distances.get_mut(&incident.get_info())
             {
                 // Ordenar por el valor f64 de la tupla, de menor a mayor
                 candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -382,7 +381,7 @@ impl Dron {
                     "  está en rango, evaluando si desplazarme a inc {}",
                     inc_id.get_id()
                 ));
-                self.set_inc_id_to_resolve(inc_id.get_id())?; //
+                self.set_inc_id_to_resolve(inc_id.get_info())?; //
                 self.add_incident_to_hashmap(&inc_id)?;
 
                 self.set_state(DronState::RespondingToIncident, false)?;
@@ -454,7 +453,7 @@ impl Dron {
             .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
 
         if let Some(my_inc_id) = self.get_inc_id_to_resolve()? {
-            if inc.get_id() == my_inc_id {
+            if inc.get_info() == my_inc_id {
                 let event = format!(
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial.",
                     inc.get_id()
@@ -706,9 +705,9 @@ impl Dron {
     }
 
     /// Toma lock y establece el inc id a resolver.
-    fn set_inc_id_to_resolve(&self, inc_id: u8) -> Result<(), Error> {
+    fn set_inc_id_to_resolve(&self, inc_info: IncidentInfo) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
-            ci.set_inc_id_to_resolve(inc_id);
+            ci.set_inc_id_to_resolve(inc_info);
             return Ok(());
         }
         Err(Error::new(
@@ -806,7 +805,7 @@ impl Dron {
         ))
     }
 
-    fn get_inc_id_to_resolve(&self) -> Result<Option<u8>, Error> {
+    fn get_inc_id_to_resolve(&self) -> Result<Option<IncidentInfo>, Error> {
         if let Ok(ci) = self.current_info.lock() {
             return Ok(ci.get_inc_id_to_resolve());
         }
@@ -911,9 +910,9 @@ impl Dron {
         Ok(dron)
     }
 
-    fn add_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
+    fn add_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.insert(inc_id.get_id(), (inc_id.get_position(), Vec::new()));
+            distances.insert(inc.get_info(), (inc.get_position(), Vec::new()));
             return Ok(());
         }
         Err(Error::new(
@@ -922,9 +921,9 @@ impl Dron {
         ))
     }
 
-    fn remove_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
+    fn remove_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.remove(&inc_id.get_id());
+            distances.remove(&inc.get_info());
             return Ok(());
         }
         Err(Error::new(
@@ -957,12 +956,12 @@ impl Dron {
             self.logger
                 .log("Batería baja, debo ir a mantenimiento.".to_string());
             // Se determina a qué posición volver después de cargarse
-            let position_to_go;
+            let (position_to_go, state_to_set)=
             if self.get_state()? == DronState::ManagingIncident {
-                position_to_go = self.get_current_position()?;
+                (self.get_current_position()?, DronState::ManagingIncident)
             } else {
-                position_to_go = self.dron_properties.get_range_center_position();
-            }
+                (self.dron_properties.get_range_center_position(), DronState::ExpectingToRecvIncident)
+            };
             // Vuela a mantenimiento
             self.set_state(DronState::Mantainance, true)?;
 
@@ -974,6 +973,8 @@ impl Dron {
 
             // Vuelve a la posición correspondiente
             self.fly_to_mantainance(position_to_go, mqtt_client, true)?;
+            self.set_state(state_to_set, true)?;
+            
         }
         Ok(())
     }
