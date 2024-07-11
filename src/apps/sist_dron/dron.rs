@@ -10,9 +10,6 @@ use std::{
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
-    apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident, incident_info::IncidentInfo, sist_dron::dron_state::DronState
-    },
     logging::{
         logger::Logger,
         string_logger::StringLogger,
@@ -20,8 +17,12 @@ use crate::{
     },
     mqtt::messages::message_type::MessageType,
 };
+use crate::apps::{
+        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, sist_dron::dron_state::DronState
+    };
+use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState};
 use crate::{
-    apps::{common_clients::is_disconnected_error, incident_state::IncidentState},
+    apps::common_clients::is_disconnected_error,
     mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
 };
 

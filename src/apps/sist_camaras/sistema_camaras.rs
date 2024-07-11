@@ -3,7 +3,7 @@ type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
 use crate::apps::common_clients::is_disconnected_error;
-use crate::apps::incident_info::IncidentInfo;
+use crate::apps::incident_data::incident_info::IncidentInfo;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
@@ -25,7 +25,7 @@ use crate::logging::{
 };
 
 use crate::apps::sist_camaras::camera::Camera;
-use crate::apps::{common_clients::exit_when_asked, incident::Incident};
+use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
 
 use super::sist_camaras_abm::ABMCameras;
 use crate::apps::app_type::AppType;

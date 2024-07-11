@@ -22,7 +22,7 @@ use crate::mqtt::{
 };
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident::Incident};
+use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
 use std::io::{self, ErrorKind};
 

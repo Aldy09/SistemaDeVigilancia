@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
-use crate::apps::incident::Incident;
-use crate::apps::incident_source::IncidentSource;
-use crate::apps::incident_info::IncidentInfo;
+use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;

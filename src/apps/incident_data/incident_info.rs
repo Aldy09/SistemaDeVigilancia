@@ -44,9 +44,8 @@ impl IncidentInfo {
 
 #[cfg(test)]
 mod test {
-    use crate::apps::incident_source::IncidentSource;
+    use super::{IncidentInfo, IncidentSource};
 
-    use super::IncidentInfo;
 
     #[test]
     fn test_1_incident_info_to_and_from_bytes_works() {
