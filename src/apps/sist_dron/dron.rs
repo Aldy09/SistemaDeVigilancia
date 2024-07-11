@@ -30,7 +30,7 @@ use super::{
     sist_dron_properties::SistDronProperties,
 };
 
-type DistancesType = Arc<Mutex<HashMap<u8, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_id, ( (inc_pos),(dron_id, distance_to_incident)) )
+type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
 /// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
@@ -290,7 +290,7 @@ impl Dron {
         if let Some(inc_info) = received_dron.get_inc_id_to_resolve() {
             if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
                 // Si el incidente ya está en el hashmap, agrego la menor distancia al incidente entre los dos drones. Si no, lo ignoro porque la rama "topic inc" no lo marco como de interés.
-                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info.get_inc_id()) { // AUX TEMPORALMENTE, pero tiene que ser clave el info. [].
+                if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info) {
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
                     let self_distance = self.get_distance_to(*incident_position)?;
@@ -319,7 +319,7 @@ impl Dron {
         thread::sleep(Duration::from_millis(3500)); // Aux Probando
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             if let Some((_incident_position, candidate_drones)) =
-                distances.get_mut(&incident.get_id())
+                distances.get_mut(&incident.get_info())
             {
                 // Ordenar por el valor f64 de la tupla, de menor a mayor
                 candidate_drones.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -910,9 +910,9 @@ impl Dron {
         Ok(dron)
     }
 
-    fn add_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
+    fn add_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.insert(inc_id.get_id(), (inc_id.get_position(), Vec::new()));
+            distances.insert(inc.get_info(), (inc.get_position(), Vec::new()));
             return Ok(());
         }
         Err(Error::new(
@@ -921,9 +921,9 @@ impl Dron {
         ))
     }
 
-    fn remove_incident_to_hashmap(&self, inc_id: &Incident) -> Result<(), Error> {
+    fn remove_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.remove(&inc_id.get_id());
+            distances.remove(&inc.get_info());
             return Ok(());
         }
         Err(Error::new(
