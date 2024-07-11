@@ -9,7 +9,7 @@ use rustx::{
     apps::{
         apps_mqtt_topics::AppsMqttTopics,
         common_clients::join_all_threads,
-        sist_dron::{dron::Dron, utils::get_id_and_broker_address},
+        sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
     },
     logging::{
         string_logger::StringLogger, string_logger_writer::StringLoggerWriter,
@@ -62,7 +62,7 @@ pub fn establish_mqtt_broker_connection(
 }
 
 fn main() -> Result<(), Error> {
-    let (id, broker_addr) = get_id_and_broker_address()?;
+    let (id, lat, long, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
 
     // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
