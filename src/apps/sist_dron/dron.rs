@@ -957,12 +957,12 @@ impl Dron {
             self.logger
                 .log("Batería baja, debo ir a mantenimiento.".to_string());
             // Se determina a qué posición volver después de cargarse
-            let position_to_go;
-            if self.get_state()? == DronState::ManagingIncident {
-                position_to_go = self.get_current_position()?;
+            let position_to_go = if self.get_state()? == DronState::ManagingIncident{
+                self.get_current_position()?
             } else {
-                position_to_go = self.dron_properties.get_range_center_position();
-            }
+                self.dron_properties.get_range_center_position()
+            };
+
             // Vuela a mantenimiento
             self.set_state(DronState::Mantainance, true)?;
 
