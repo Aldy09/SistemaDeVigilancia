@@ -17,7 +17,7 @@ impl StringLoggerWriter {
 
     /// Escribe el mensaje recibido al archivo de log.
     pub fn write_to_file(&self, message: String) -> Result<(), Error> {
-        let mut file = std::fs::OpenOptions::new().append(true).open("s_log.txt")?;
+        let mut file = std::fs::OpenOptions::new().create(true).append(true).open("s_log.txt")?;
 
         writeln!(file, "{}\n", message)?;
 

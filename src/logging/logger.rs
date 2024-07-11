@@ -23,6 +23,7 @@ impl Logger {
         };
 
         let mut file = std::fs::OpenOptions::new()
+            .create(true)
             .append(true)
             .open(file_name)
             .unwrap();

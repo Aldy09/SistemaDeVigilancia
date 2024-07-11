@@ -37,6 +37,8 @@ fn create_channels() -> Channels {
     (logger_tx, logger_rx, publish_message_tx, publish_message_rx)
 }
 
+// Aux: esta función solo hace prints y returns de ok y err, es reemplazable por un "?".
+//      Ídem en sist cámaras y monitoreo.
 /// Crea el client_id a partir de sus datos. Obtiene la broker_addr del server a la que conectarse, a partir de
 /// los argumentos ingresados al llamar al main. Y llama al connect de mqtt.
 pub fn establish_mqtt_broker_connection(
@@ -77,7 +79,7 @@ fn main() -> Result<(), Error> {
     match establish_mqtt_broker_connection(id, &broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
-                MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
+                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
 
             let dron_res = Dron::new(id, lat, lon, logger_tx, logger); //

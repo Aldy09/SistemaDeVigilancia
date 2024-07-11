@@ -73,7 +73,7 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStrea
     }
 }
 
-fn main() {
+fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
     let (
         cameras_tx,
@@ -90,7 +90,7 @@ fn main() {
     match establish_mqtt_broker_connection(&broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
-                MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
+                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
             let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras);
 
@@ -111,4 +111,6 @@ fn main() {
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
+
+    Ok(())
 }
