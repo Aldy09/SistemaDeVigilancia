@@ -67,6 +67,7 @@ impl SistDronProperties {
             return Err(Error::new(ErrorKind::Other, "Falta propiedad sist dron."));
         }
 
+        //
         let range_center_lat: f64;
         if let Some(prop) = global_properties.get("range_center_lat") {
             range_center_lat = prop
