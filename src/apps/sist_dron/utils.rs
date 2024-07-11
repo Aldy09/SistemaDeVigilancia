@@ -10,7 +10,7 @@ use std::{
 /// el id del dron, y la IP y el puerto del servidor al que el cliente se va a conectar.
 fn load_id_lat_long_ip_and_port() -> Result<(u8, f64, f64, String, u16), Error> {
     let argv = std::env::args().collect::<Vec<String>>();
-    if argv.len() != 4 {
+    if argv.len() != 6 {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             "Cantidad de argumentos inválida. Debe ingresar el ID, latitud, longitud, dirección IP y el puerto del servidor.",
@@ -27,8 +27,8 @@ fn load_id_lat_long_ip_and_port() -> Result<(u8, f64, f64, String, u16), Error> 
         .parse::<f64>()
         .map_err(|_| Error::new(ErrorKind::InvalidInput, "La longitud proporcionada no es válida"))?;
     
-    let ip = &argv[2];
-    let port = argv[3].parse::<u16>().map_err(|_| {
+    let ip = &argv[4];
+    let port = argv[5].parse::<u16>().map_err(|_| {
         Error::new(
             ErrorKind::InvalidInput,
             "El puerto proporcionado no es válido",

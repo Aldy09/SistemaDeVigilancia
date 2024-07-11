@@ -18,7 +18,7 @@ En terminales diferentes:
 - cargo run --bin message_broker_server puerto_servidor 
 - cargo run --bin sistema_monitoreo_main ip_servidor puerto_servidor
 - cargo run --bin sistema_camaras_main ip_servidor puerto_servidor
-- cargo run --bin dron_main id_dron ip_servidor puerto_servidor
+- cargo run --bin dron_main id_dron lat_inicial lon_inicial ip_servidor puerto_servidor
 
 ## Cómo testear
 - cargo test

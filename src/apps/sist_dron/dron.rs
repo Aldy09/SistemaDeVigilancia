@@ -1022,11 +1022,6 @@ mod test {
 
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
-        /*let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
-        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
-
-        let dron = Dron::new_internal(1, logger_tx, logger).unwrap();*/
         let dron = create_dron_4();
 
         assert_eq!(dron.get_id().unwrap(), 4);
