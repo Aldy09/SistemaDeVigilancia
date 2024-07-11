@@ -9,7 +9,7 @@ use crate::mqtt::messages::puback_message::PubAckMessage;
 use crate::mqtt::messages::suback_message::SubAckMessage;
 
 use crate::mqtt::messages::publish_message::PublishMessage;
-use crate::mqtt::mqtt_utils::aux_server_utils::{
+use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, is_disconnect_msg,
     send_puback, shutdown,
 };

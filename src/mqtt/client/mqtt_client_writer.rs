@@ -6,7 +6,7 @@ use crate::mqtt::messages::disconnect_message::DisconnectMessage;
 use crate::mqtt::messages::subscribe_message::SubscribeMessage;
 use crate::mqtt::{
     messages::{publish_flags::PublishFlags, publish_message::PublishMessage},
-    mqtt_utils::aux_server_utils::write_message_to_stream,
+    mqtt_utils::utils::write_message_to_stream,
 };
 
 use std::net::Shutdown;

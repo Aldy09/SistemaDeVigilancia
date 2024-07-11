@@ -1,12 +1,10 @@
 use std::{
     io::{Error, ErrorKind, Read, Write},
     net::{Shutdown, TcpStream},
-    sync::mpsc::Sender,
 };
 
 use crate::mqtt::messages::{
     packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage,
-    suback_message::SubAckMessage, subscribe_return_code::SubscribeReturnCode,
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 type StreamType = TcpStream;
@@ -14,6 +12,7 @@ type StreamType = TcpStream;
 // Este archivo contiene funciones que utilizan para hacer read y write desde el stream
 // tanto el message_broker_server como el mqtt_client.
 
+/*
 // Inicio tema channel
 /// Envía un mensaje de tipo PubAck al hilo outgoing, para que él lo envíe a cliente.
 pub fn send_puback_to_outgoing(
@@ -59,6 +58,7 @@ pub fn send_suback_to_outgoing(
 }
 
 // Fin tema channel
+*/
 
 // Inicio funciones que manejan el stream, usadas tando por mqtt server como por client.
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
