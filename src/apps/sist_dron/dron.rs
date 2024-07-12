@@ -224,9 +224,11 @@ impl Dron {
         msg: PublishMessage,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        match msg.get_topic().as_str() {
-            "Inc" => self.process_valid_inc(msg.get_payload(), mqtt_client),
-            "Dron" => {
+        let topic = msg.get_topic();
+        let enum_topic = AppsMqttTopics::from_str(topic.as_str())?;
+        match enum_topic {
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), mqtt_client),
+            AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.get_id()? != received_ci.get_id();
                 let recvd_dron_is_not_flying = received_ci.get_state() != DronState::Flying;

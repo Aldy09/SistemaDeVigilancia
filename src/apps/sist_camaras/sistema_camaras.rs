@@ -2,6 +2,7 @@ type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
+use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::common_clients::is_disconnected_error;
 use crate::apps::incident_data::incident_info::IncidentInfo;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
@@ -231,7 +232,7 @@ impl SistemaCamaras {
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
-            self_clone.publish_to_topic(mqtt_client_sh, "Cam", cameras_rx);
+            self_clone.publish_to_topic(mqtt_client_sh, AppsMqttTopics::CameraTopic.to_str(), cameras_rx);
         })
     }
 
@@ -410,8 +411,9 @@ impl SistemaCamaras {
     ) -> JoinHandle<()> {
         let mut cameras_cloned = self.cameras.clone();
         let mut self_clone = self.clone_ref();
+        let topic = AppsMqttTopics::IncidentTopic.to_str();
         thread::spawn(move || {
-            let res = self_clone.subscribe_to_topics(mqtt_client.clone(), vec!["Inc".to_string()]);
+            let res = self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]);
             match res {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
