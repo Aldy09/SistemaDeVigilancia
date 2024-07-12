@@ -32,9 +32,6 @@ crossbeam-channel = "0.5.1"
 
 
 
-[[bin]]
-name = "message_broker_client"
-path = "src/mqtt/client/message_broker_client.rs"
 
 [[bin]]
 name = "message_broker_server"
