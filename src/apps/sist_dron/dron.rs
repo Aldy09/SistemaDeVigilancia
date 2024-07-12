@@ -55,10 +55,12 @@ impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(
         id: u8,
+        lat: f64,
+        lon: f64,
         logger_tx: MpscSender<StructsToSaveInLogger>,
         logger: StringLogger,
     ) -> Result<Self, Error> {
-        let dron = Self::new_internal(id, logger_tx, logger)?;
+        let dron = Self::new_internal(id, lat, lon, logger_tx, logger)?;
         dron.logger.log(format!("Dron: Iniciado dron {:?}", id));
 
         Ok(dron)
@@ -864,6 +866,8 @@ impl Dron {
     /// Función utilizada para testear, no necesita broker address.
     pub fn new_internal(
         id: u8,
+        initial_lat: f64,
+        initial_lon: f64,
         logger_tx: MpscSender<StructsToSaveInLogger>,
         logger: StringLogger,
     ) -> Result<Self, Error> {
@@ -873,30 +877,21 @@ impl Dron {
         let mut dron_properties = SistDronProperties::new(properties_file)?;
         let drone_distances_by_incident = Arc::new(Mutex::new(HashMap::new()));
 
-        // Inicia desde el range_center, por lo cual tiene estado 1 (activo); y con batería al 100%.
-        // Aux, #ToDo, hacer una función para que la posición rance_center sea distinta para cada dron
-        // aux: ej que tomen la get_range_center_position como base, y se ubiquen (ej en grilla) con + self id*factor (o (incident_position, candidate_dron) por el estilo).
-        let (rng_center_lat, rng_center_lon) = dron_properties.get_range_center_position();
-        //Posicion inicial del dron
-        let (lat_inicial, lon_inicial) =
-            calculate_initial_position(rng_center_lat, rng_center_lon, id);
-        dron_properties.set_range_center_position(lat_inicial, lon_inicial);
+        // Inicia desde el range_center, por lo cual tiene estado activo; y con batería al 100%.
+        // Posicion inicial del dron
+        dron_properties.set_range_center_position(initial_lat, initial_lon);
 
         let current_info = DronCurrentInfo::new(
             id,
-            /*
-            rng_center_lat,
-            rng_center_lon,
-            */
-            lat_inicial,
-            lon_inicial,
+            initial_lat,
+            initial_lon,
             100,
             DronState::ExpectingToRecvIncident,
         );
 
         logger.log(format!(
             "Dron {} creado en posición (lat, lon): {}, {}.",
-            id, rng_center_lat, rng_center_lon
+            id, initial_lat, initial_lon
         ));
         let dron = Dron {
             current_info: Arc::new(Mutex::new(current_info)),
@@ -1002,24 +997,6 @@ fn spawn_dron_stuff_to_logger_thread(logger: Logger) -> JoinHandle<()> {
     })
 }
 
-/// Calcula la posición inicial del dron, basada en el id del dron.
-/// Funciona para cualquier número de drones.
-/// Una distancia de aproximadamente 4 cuadras entre cada dron.
-pub fn calculate_initial_position(rng_center_lat: f64, rng_center_lon: f64, id: u8) -> (f64, f64) {
-    // Asume que cada fila puede tener hasta 3 drones
-    let drones_por_fila = 3;
-
-    // Calcula la fila y la columna basándose en el id, asumiendo que id comienza en 1
-    let row = (id - 1) / drones_por_fila;
-    let col = (id - 1) % drones_por_fila;
-
-    // Calcula la nueva latitud y longitud basada en la fila y columna
-    let lat = rng_center_lat + row as f64 * 0.00618; // Ajusta estos valores según la distancia deseada
-    let lon = rng_center_lon + col as f64 * 0.00618;
-
-    (lat, lon)
-}
-
 #[cfg(test)]
 
 mod test {
@@ -1031,26 +1008,23 @@ mod test {
 
     use super::Dron;
 
-    use super::calculate_initial_position;
-
-    fn create_dron_1() -> Dron {
+    fn create_dron_4() -> Dron {
         let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
         let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
         let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
 
-        Dron::new_internal(1, logger_tx, logger).unwrap()
+        // Dron 4 inicia en: -34.60282, -58.38730
+        let lat = -34.60282;
+        let lon = -58.38730;
+
+        Dron::new_internal(4, lat, lon, logger_tx, logger).unwrap()
     }
 
     #[test]
     fn test_1_dron_se_inicia_con_id_y_estado_correctos() {
-        /*let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
-        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+        let dron = create_dron_4();
 
-        let dron = Dron::new_internal(1, logger_tx, logger).unwrap();*/
-        let dron = create_dron_1();
-
-        assert_eq!(dron.get_id().unwrap(), 1);
+        assert_eq!(dron.get_id().unwrap(), 4);
         assert_eq!(
             dron.get_state().unwrap(),
             DronState::ExpectingToRecvIncident
@@ -1059,7 +1033,7 @@ mod test {
 
     #[test]
     fn test_2_dron_se_inicia_con_posicion_correcta() {
-        let dron = create_dron_1();
+        let dron = create_dron_4();
 
         // El dron inicia desde esta posición.
         assert_eq!(
@@ -1070,7 +1044,7 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        let dron = create_dron_1();
+        let dron = create_dron_4();
 
         // Dados destino y origen
         let origin = (0.0, 0.0); // desde el (0,0)
@@ -1089,7 +1063,7 @@ mod test {
 
     #[test]
     fn test_3b_calculate_direction_da_la_direccion_esperada() {
-        let dron = create_dron_1();
+        let dron = create_dron_4();
 
         // Dados destino y origen
         let origin = dron.get_current_position().unwrap(); // desde (incident_position, candidate_dron) que no es el (0,0)
@@ -1104,82 +1078,5 @@ mod test {
         // En "hip" cantidad de pasos, se llega a la posición de destino
         assert_eq!(origin.0 + dir.0 * hip, destination.0);
         assert_eq!(origin.1 + dir.1 * hip, destination.1);
-    }
-
-    #[test]
-    fn test_4_calcula_correctamente_posiciones_inciales() {
-        let rng_center_lat = 10.0;
-        let rng_center_lon = 20.0;
-
-        // Test para el primer dron
-        let id1 = 1;
-        let expected_position1 = (10.0, 20.0); // Asume que el primer dron inicia en el centro de rango
-        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, id1);
-        assert_eq!(position1, expected_position1);
-
-        // Test para un dron en la segunda columna de la primera fila
-        let id3 = 2;
-        let expected_position3 = (10.0, 20.00618); // Asume ajuste de columna sin cambio en fila
-        let position3 = calculate_initial_position(rng_center_lat, rng_center_lon, id3);
-        assert_eq!(position3, expected_position3);
-
-        // Test para un dron en la segunda fila
-        let id2 = 4;
-        let expected_position2 = (10.00618, 20.0); // Asume ajuste de fila sin cambio en columna
-        let position2 = calculate_initial_position(rng_center_lat, rng_center_lon, id2);
-        assert_eq!(position2, expected_position2);
-    }
-
-    #[test]
-    fn test_4a_drones_1_2_3_same_latitude() {
-        let rng_center_lat = 10.0;
-        let rng_center_lon = 20.0;
-
-        // Calcula las posiciones para los drones 1, 2 y 3
-        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, 1);
-        let position2 = calculate_initial_position(rng_center_lat, rng_center_lon, 2);
-        let position3 = calculate_initial_position(rng_center_lat, rng_center_lon, 3);
-
-        // Verifica que los drones 1, 2 y 3 estén en la misma latitud
-        assert_eq!(position1.0, position2.0);
-        assert_eq!(position2.0, position3.0);
-    }
-
-    #[test]
-    fn test_4b_drones_1_4_7_same_longitude() {
-        let rng_center_lat = 10.0;
-        let rng_center_lon = 20.0;
-
-        // Calcula las posiciones para los drones 1, 4 y 7
-        let position1 = calculate_initial_position(rng_center_lat, rng_center_lon, 1);
-        let position4 = calculate_initial_position(rng_center_lat, rng_center_lon, 4);
-        let position7 = calculate_initial_position(rng_center_lat, rng_center_lon, 7);
-
-        // Verifica que los drones 1, 4 y 7 estén en la misma longitud
-        assert_eq!(position1.1, position4.1);
-        assert_eq!(position4.1, position7.1);
-    }
-
-    #[test]
-    fn test_drones_8_9_10_same_longitude_distance() {
-        let rng_center_lat = 10.0;
-        let rng_center_lon = 20.0;
-
-        // Calcula las posiciones para los drones 8, 9 y 10
-        let position8 = calculate_initial_position(rng_center_lat, rng_center_lon, 7);
-        let position9 = calculate_initial_position(rng_center_lat, rng_center_lon, 8);
-        let position10 = calculate_initial_position(rng_center_lat, rng_center_lon, 9);
-
-        // Extrae las longitudes
-        let lon8 = position8.1;
-        let lon9 = position9.1;
-        let lon10 = position10.1;
-
-        // Calcula las diferencias de longitud
-        let diff_8_9 = (lon9 - lon8).abs();
-        let diff_9_10 = (lon10 - lon9).abs();
-
-        // Verifica que las diferencias de longitud sean iguales
-        assert_eq!(diff_8_9, diff_9_10);
     }
 }
