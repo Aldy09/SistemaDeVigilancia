@@ -391,16 +391,8 @@ impl Dron {
 
                 self.set_state(DronState::RespondingToIncident, false)?;
 
-                // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
-                if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                    if let Ok(ci) = &self.current_info.lock() {
-                        mqtt_client_l.mqtt_publish(
-                            AppsMqttTopics::DronTopic.to_str(),
-                            &ci.to_bytes(),
-                            self.qos,
-                        )?;
-                    }
-                };
+                // Publica su estado (su current info) para que otros drones vean la condición b, y monitoreo lo muestre en mapa
+                self.publish_current_info(mqtt_client)?;
 
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
@@ -548,16 +540,8 @@ impl Dron {
                 self.get_current_position()
             ));
 
-            // Hace publish de su estado (de su current info)
-            if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                if let Ok(ci) = &self.current_info.lock() {
-                    mqtt_client_l.mqtt_publish(
-                        AppsMqttTopics::DronTopic.to_str(),
-                        &ci.to_bytes(),
-                        self.qos,
-                    )?;
-                }
-            };
+            // Publica
+            self.publish_current_info(mqtt_client)?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -573,16 +557,8 @@ impl Dron {
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, true)?;
 
-        // Hace publish de su estado (de su current info)
-        if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            if let Ok(ci) = &self.current_info.lock() {
-                mqtt_client_l.mqtt_publish(
-                    AppsMqttTopics::DronTopic.to_str(),
-                    &ci.to_bytes(),
-                    self.qos,
-                )?;
-            }
-        };
+        // Publica
+        self.publish_current_info(mqtt_client)?;
 
         println!("Fin vuelo."); // se podría borrar
         self.logger.log("Fin vuelo.".to_string());
@@ -619,16 +595,8 @@ impl Dron {
                 self.get_current_position()
             ));
 
-            // Hace publish de su estado (de su current info)
-            if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                if let Ok(ci) = &self.current_info.lock() {
-                    mqtt_client_l.mqtt_publish(
-                        AppsMqttTopics::DronTopic.to_str(),
-                        &ci.to_bytes(),
-                        self.qos,
-                    )?;
-                }
-            };
+            // Publica
+            self.publish_current_info(mqtt_client)?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -644,7 +612,18 @@ impl Dron {
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, false)?;
 
-        // Hace publish de su estado (de su current info)
+        // Publica
+        self.publish_current_info(mqtt_client)?;
+
+        println!("Fin vuelo."); // se podría borrar
+        self.logger.log("Fin vuelo.".to_string());
+
+        Ok(())
+    }
+
+    /// Hace publish de su current info.
+    /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
+    fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(
@@ -654,10 +633,6 @@ impl Dron {
                 )?;
             }
         };
-
-        println!("Fin vuelo."); // se podría borrar
-        self.logger.log("Fin vuelo.".to_string());
-
         Ok(())
     }
 
