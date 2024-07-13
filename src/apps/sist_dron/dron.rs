@@ -623,7 +623,7 @@ impl Dron {
 
     /// Hace publish de su current info.
     /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
-    fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(

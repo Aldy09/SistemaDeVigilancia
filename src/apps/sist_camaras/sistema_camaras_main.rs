@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    net::{SocketAddr, TcpStream},
     sync::{mpsc, Arc, Mutex},
     thread::{self},
 };
@@ -58,6 +57,9 @@ fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
     Arc::new(Mutex::new(cameras))
 }
 
+/*
+// Aux: Esta función no es necesaria, tiene un match y solo devuelve Ok y Err, y afuera se vuelve a hacer el match.
+// Se puede hacer el match afuera directamente entonces.
 fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStream, Error> {
     let client_id = "Sistema-Camaras";
     let handshake_result = mqtt_connect_to_broker(client_id, broker_addr);
@@ -71,7 +73,7 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStrea
             Err(e)
         }
     }
-}
+}*/
 
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
@@ -87,11 +89,14 @@ fn main() -> Result<(), Error>{
     ) = create_channels();
     let cameras = create_cameras();
 
-    match establish_mqtt_broker_connection(&broker_addr) {
+    let client_id = "Sistema-Camaras";
+    match mqtt_connect_to_broker(client_id, &broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
+            println!("Cliente: Conectado al broker MQTT.");
+
             let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras);
 
             let handler_1 = thread::spawn(move || {
