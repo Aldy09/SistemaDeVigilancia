@@ -94,7 +94,7 @@ impl MQTTClientListener {
     fn handle_publish(&mut self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
         let msg = PublishMessage::from_bytes(msg_bytes)?;
-        let _ = send_puback(&msg, &mut self.stream);
+        send_puback(&msg, &mut self.stream)?;
         match self.client_tx.send(msg) {
             Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
             Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),

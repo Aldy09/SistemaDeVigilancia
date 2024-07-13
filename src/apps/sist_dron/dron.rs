@@ -225,7 +225,7 @@ impl Dron {
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let topic = msg.get_topic();
-        let enum_topic = AppsMqttTopics::from_str(topic.as_str())?;
+        let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
         match enum_topic {
             AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), mqtt_client),
             AppsMqttTopics::DronTopic => {

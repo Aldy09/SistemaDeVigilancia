@@ -15,8 +15,8 @@ impl AppsMqttTopics {
             AppsMqttTopics::CameraTopic => "Cam",
         }
     }
-    
-    pub fn from_str(str: &str) -> Result<Self, Error> {
+
+    pub fn topic_from_str(str: &str) -> Result<Self, Error> {
         match str {
             "Inc" => Ok(AppsMqttTopics::IncidentTopic),
             "Dron" => Ok(AppsMqttTopics::DronTopic),
