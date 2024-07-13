@@ -9,7 +9,7 @@ use crate::mqtt::messages::puback_message::PubAckMessage;
 use crate::mqtt::messages::suback_message::SubAckMessage;
 
 use crate::mqtt::messages::publish_message::PublishMessage;
-use crate::mqtt::mqtt_utils::aux_server_utils::{
+use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, is_disconnect_msg,
     send_puback, shutdown,
 };
@@ -94,7 +94,7 @@ impl MQTTClientListener {
     fn handle_publish(&mut self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
         let msg = PublishMessage::from_bytes(msg_bytes)?;
-        let _ = send_puback(&msg, &mut self.stream);
+        send_puback(&msg, &mut self.stream)?;
         match self.client_tx.send(msg) {
             Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
             Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),

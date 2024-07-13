@@ -1,4 +1,4 @@
-use crate::apps::{incident_info::IncidentInfo, sist_camaras::camera_state::CameraState};
+use crate::apps::{incident_data::incident_info::IncidentInfo, sist_camaras::camera_state::CameraState};
 
 #[derive(Debug, PartialEq)]
 /// Struct que representa el estado de una de las cámaras del sistema central de cámaras.

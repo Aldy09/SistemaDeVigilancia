@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 
-use crate::apps::incident_info::IncidentInfo;
+use crate::apps::incident_data::incident_info::IncidentInfo;
 
 use super::dron_flying_info::DronFlyingInfo;
 use super::dron_state::DronState;
@@ -249,7 +249,8 @@ impl DronCurrentInfo {
 
 #[cfg(test)]
 mod test {
-    use crate::apps::{incident_info::IncidentInfo, incident_source::IncidentSource, sist_dron::{dron_current_info::DronCurrentInfo, dron_state::DronState}};
+    use crate::apps::sist_dron::{dron_current_info::DronCurrentInfo, dron_state::DronState};
+    use crate::apps::incident_data::{incident_info::IncidentInfo, incident_source::IncidentSource};
 
     #[test]
     fn test_1a_dron_to_y_from_bytes() {

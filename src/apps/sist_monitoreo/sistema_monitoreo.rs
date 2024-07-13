@@ -22,7 +22,7 @@ use crate::mqtt::{
 };
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident::Incident};
+use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
 use std::io::{self, ErrorKind};
 
@@ -261,7 +261,7 @@ impl SistemaMonitoreo {
 
         // Hago el publish
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_publish = mqtt_client.mqtt_publish("Inc", &incident.to_bytes(), self.get_qos());
+            let res_publish = mqtt_client.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &incident.to_bytes(), self.get_qos());
             match res_publish {
                 Ok(publish_message) => {
                     self.logger_tx

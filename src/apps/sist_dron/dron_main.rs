@@ -1,6 +1,5 @@
 use std::{
-    io::{Error, ErrorKind},
-    net::{SocketAddr, TcpStream},
+    io::Error,
     sync::mpsc,
     thread::{self, JoinHandle},
 };
@@ -37,30 +36,6 @@ fn create_channels() -> Channels {
     (logger_tx, logger_rx, publish_message_tx, publish_message_rx)
 }
 
-/// Crea el client_id a partir de sus datos. Obtiene la broker_addr del server a la que conectarse, a partir de
-/// los argumentos ingresados al llamar al main. Y llama al connect de mqtt.
-pub fn establish_mqtt_broker_connection(
-    client_id_u8: u8,
-    broker_addr: &SocketAddr,
-) -> Result<TcpStream, Error> {
-    let client_id = format!("dron-{}", client_id_u8);
-    let handshake_result = mqtt_connect_to_broker(client_id.as_str(), broker_addr);
-    match handshake_result {
-        Ok(stream) => {
-            println!("Cliente: Conectado al broker MQTT.");
-
-            Ok(stream)
-        }
-        Err(e) => {
-            println!(
-                "Dron ID {} : Error al conectar al broker MQTT: {:?}",
-                client_id_u8, e
-            );
-            Err(e)
-        }
-    }
-}
-
 fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
 
@@ -74,43 +49,44 @@ fn main() -> Result<(), Error> {
     let handle_logger = spawn_dron_stuff_to_string_logger_thread(logger_writer); //
 
     // Se inicializa la conexión mqtt y el dron
-    match establish_mqtt_broker_connection(id, &broker_addr) {
+    let client_id = format!("dron-{}", id);
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
         Ok(stream) => {
             let mut mqtt_client_listener =
-                MQTTClientListener::new(stream.try_clone().unwrap(), publish_message_tx);
+                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
+            println!("Cliente: Conectado al broker MQTT.");
 
-            let dron_res = Dron::new(id, lat, lon, logger_tx, logger); //
+            let mut dron = Dron::new(id, lat, lon, logger_tx, logger)?; //
 
-            match dron_res {
-                Ok(mut dron) => {
-                    if let Ok(ci) = &dron.get_current_info().lock() {
-                        mqtt_client.mqtt_publish(
-                            AppsMqttTopics::DronTopic.to_str(),
-                            &ci.to_bytes(),
-                            dron.get_qos(),
-                        )?;
-                    }
+            //match dron_res {
+                //Ok(mut dron) => {
+            //let mqtt_client_ref = Arc::new(Mutex::new(mqtt_client)); // Aux: quise agregar esto para llamar a
+            //dron.publish_current_info(&Arc::clone(&mqtt_client_ref)); // aux: a esta función, pero es meterse en líos de borrow.
+            if let Ok(ci) = &dron.get_current_info().lock() { // Aux: dejo esto como estaba. Capaz qe se haga internamente? Ver [].
+                mqtt_client.mqtt_publish(
+                    AppsMqttTopics::DronTopic.to_str(),
+                    &ci.to_bytes(),
+                    dron.get_qos(),
+                )?;
+            };
 
-                    let handler_1 = thread::spawn(move || {
-                        let _ = mqtt_client_listener.read_from_server();
-                    });
+            let handler_1 = thread::spawn(move || { // []
+                let _ = mqtt_client_listener.read_from_server();
+            });
 
-                    let mut handlers =
-                        dron.spawn_threads(mqtt_client, publish_message_rx, logger_rx)?;
+            let mut handlers =
+                dron.spawn_threads(mqtt_client, publish_message_rx, logger_rx)?;
 
-                    handlers.push(handler_1);
+            handlers.push(handler_1);
 
-                    join_all_threads(handlers);
-                }
-                Err(_e) => {
-                    return Err(Error::new(ErrorKind::Other, "Error al inicializar el dron"));
-                }
-            }
+            join_all_threads(handlers);
+                //}
+            //}
         }
         Err(e) => println!(
-            "Error al establecer la conexión con el broker MQTT: {:?}",
-            e
+            "Dron ID {} : Error al conectar al broker MQTT: {:?}",
+            id, e
         ),
     }
 

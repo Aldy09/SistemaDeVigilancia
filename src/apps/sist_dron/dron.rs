@@ -10,9 +10,6 @@ use std::{
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
-    apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, incident::Incident, incident_info::IncidentInfo, sist_dron::dron_state::DronState
-    },
     logging::{
         logger::Logger,
         string_logger::StringLogger,
@@ -20,8 +17,12 @@ use crate::{
     },
     mqtt::messages::message_type::MessageType,
 };
+use crate::apps::{
+        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, sist_dron::dron_state::DronState
+    };
+use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState};
 use crate::{
-    apps::{common_clients::is_disconnected_error, incident_state::IncidentState},
+    apps::common_clients::is_disconnected_error,
     mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
 };
 
@@ -223,9 +224,11 @@ impl Dron {
         msg: PublishMessage,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        match msg.get_topic().as_str() {
-            "Inc" => self.process_valid_inc(msg.get_payload(), mqtt_client),
-            "Dron" => {
+        let topic = msg.get_topic();
+        let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
+        match enum_topic {
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), mqtt_client),
+            AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.get_id()? != received_ci.get_id();
                 let recvd_dron_is_not_flying = received_ci.get_state() != DronState::Flying;
@@ -388,16 +391,8 @@ impl Dron {
 
                 self.set_state(DronState::RespondingToIncident, false)?;
 
-                // Hace publish de su estado (de su current info) _ le servirá a otros drones para ver la condición b, y monitoreo para mostrarlo en mapa
-                if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                    if let Ok(ci) = &self.current_info.lock() {
-                        mqtt_client_l.mqtt_publish(
-                            AppsMqttTopics::DronTopic.to_str(),
-                            &ci.to_bytes(),
-                            self.qos,
-                        )?;
-                    }
-                };
+                // Publica su estado (su current info) para que otros drones vean la condición b, y monitoreo lo muestre en mapa
+                self.publish_current_info(mqtt_client)?;
 
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
@@ -545,16 +540,8 @@ impl Dron {
                 self.get_current_position()
             ));
 
-            // Hace publish de su estado (de su current info)
-            if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                if let Ok(ci) = &self.current_info.lock() {
-                    mqtt_client_l.mqtt_publish(
-                        AppsMqttTopics::DronTopic.to_str(),
-                        &ci.to_bytes(),
-                        self.qos,
-                    )?;
-                }
-            };
+            // Publica
+            self.publish_current_info(mqtt_client)?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -570,16 +557,8 @@ impl Dron {
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, true)?;
 
-        // Hace publish de su estado (de su current info)
-        if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-            if let Ok(ci) = &self.current_info.lock() {
-                mqtt_client_l.mqtt_publish(
-                    AppsMqttTopics::DronTopic.to_str(),
-                    &ci.to_bytes(),
-                    self.qos,
-                )?;
-            }
-        };
+        // Publica
+        self.publish_current_info(mqtt_client)?;
 
         println!("Fin vuelo."); // se podría borrar
         self.logger.log("Fin vuelo.".to_string());
@@ -616,16 +595,8 @@ impl Dron {
                 self.get_current_position()
             ));
 
-            // Hace publish de su estado (de su current info)
-            if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
-                if let Ok(ci) = &self.current_info.lock() {
-                    mqtt_client_l.mqtt_publish(
-                        AppsMqttTopics::DronTopic.to_str(),
-                        &ci.to_bytes(),
-                        self.qos,
-                    )?;
-                }
-            };
+            // Publica
+            self.publish_current_info(mqtt_client)?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -641,7 +612,18 @@ impl Dron {
         // Llegue a destino entonces debo cambiar a estado --> Manejando Incidente
         self.set_state(DronState::ManagingIncident, false)?;
 
-        // Hace publish de su estado (de su current info)
+        // Publica
+        self.publish_current_info(mqtt_client)?;
+
+        println!("Fin vuelo."); // se podría borrar
+        self.logger.log("Fin vuelo.".to_string());
+
+        Ok(())
+    }
+
+    /// Hace publish de su current info.
+    /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
+    pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(
@@ -651,10 +633,6 @@ impl Dron {
                 )?;
             }
         };
-
-        println!("Fin vuelo."); // se podría borrar
-        self.logger.log("Fin vuelo.".to_string());
-
         Ok(())
     }
 

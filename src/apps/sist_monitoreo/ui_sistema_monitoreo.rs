@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
-use crate::apps::incident::Incident;
-use crate::apps::incident_source::IncidentSource;
-use crate::apps::incident_info::IncidentInfo;
+use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
+use crate::apps::place_type::PlaceType;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;
@@ -150,7 +149,7 @@ impl UISistemaMonitoreo {
             symbol: '🔋',
             style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
             id: 0,
-            place_type: "Mantenimiento".to_string(),
+            place_type: PlaceType::Mantainance,
         };
 
         let mut places = Places::new();
@@ -174,7 +173,9 @@ impl UISistemaMonitoreo {
             hashmap_incidents: HashMap::new(),
         }
     }
-    fn send_incident(&self, incident: Incident) {
+    
+    /// Envía internamente a otro hilo el `incident` recibido, para publicarlo por mqtt.
+    fn send_incident_for_publish(&self, incident: Incident) {
         println!("Enviando incidente: {:?}", incident);
         let _ = self.publish_incident_tx.send(incident);
     }
@@ -191,7 +192,7 @@ impl UISistemaMonitoreo {
             let camera_id = camera.get_id();
             let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
             // Si existía, la elimino del mapa, para volver a dibujarla (xq puede tener cambiado el estado)
-            self.places.remove_place(camera_id, "Camera".to_string());
+            self.places.remove_place(camera_id, PlaceType::Camera);
 
             // Se le pone un color dependiendo de su estado
             let style = match camera.get_state() {
@@ -208,12 +209,12 @@ impl UISistemaMonitoreo {
                 symbol: '📷',
                 style, //ESTE ES DEL LABEL, NO DEL ICONO
                 id: camera_id,
-                place_type: "Camera".to_string(),
+                place_type: PlaceType::Camera,
             };
             self.places.add_place(camera_ui);
         } else {
             self.places
-                .remove_place(camera.get_id(), "Camera".to_string());
+                .remove_place(camera.get_id(), PlaceType::Camera);
         }
     }
 
@@ -227,7 +228,7 @@ impl UISistemaMonitoreo {
             );*/
             // Si ya existía el dron, se lo elimina, porque que me llegue nuevamente significa que se está moviendo.
             let dron_id = dron.get_id();
-            self.places.remove_place(dron_id, "Dron".to_string());
+            self.places.remove_place(dron_id, PlaceType::Dron);
 
             if dron.get_state() == DronState::ManagingIncident {
                 // Llegó a la posición del inc.
@@ -269,14 +270,12 @@ impl UISistemaMonitoreo {
                     let inc_info = &incident.incident_info;
                     if let Some(mut incident) = self.hashmap_incidents.remove(inc_info) {
                         incident.set_resolved();
-                        self.send_incident(incident);
-
-                        // Obtengo el source del incidente, para pasarle un place_type acorde al remove_place.
-                        let place_type = match inc_info.get_src() {
-                            IncidentSource::Manual => "Incident_manual",
-                            IncidentSource::Automated => "Incident_automated",
-                        };
-                        self.places.remove_place(inc_info.get_inc_id(), place_type.to_string());
+                        // Obtengo el source del incidente, para pasarle un place_type acorde al remove_place
+                        // y lo remuevo de la lista de places a mostrar en el mapa.
+                        let place_type = PlaceType::from_inc_source(incident.get_source());                        
+                        self.places.remove_place(inc_info.get_inc_id(), place_type);
+                        
+                        self.send_incident_for_publish(incident);
                     }
                 }
             }
@@ -304,7 +303,7 @@ impl UISistemaMonitoreo {
                 symbol: '🚁',
                 style: Style::default(),
                 id: dron.get_id(),
-                place_type: "Dron".to_string(), // Para luego buscarlo en el places.
+                place_type: PlaceType::Dron, // Para luego buscarlo en el places.
             };
 
             self.places.add_place(dron_ui);
@@ -334,6 +333,8 @@ impl UISistemaMonitoreo {
             ..Default::default()
         };
 
+        let place_type = PlaceType::from_inc_source(incident.get_source());
+
         let (lat, lon) = incident.get_position();
         let new_place_incident = Place {
             position: Position::from_lon_lat(
@@ -343,7 +344,7 @@ impl UISistemaMonitoreo {
             symbol: '⚠',
             style: custom_style,
             id: incident.get_id(),
-            place_type: "Incident_manual".to_string(),
+            place_type,
         };
         self.places.add_place(new_place_incident);
 
@@ -454,7 +455,7 @@ impl eframe::App for UISistemaMonitoreo {
                                                 IncidentSource::Manual,
                                             );
                                             self.add_incident(&incident);
-                                            self.send_incident(incident); // lo publica
+                                            self.send_incident_for_publish(incident); // lo publica
                                             self.incident_dialog_open = false;
                                         }
                                     });

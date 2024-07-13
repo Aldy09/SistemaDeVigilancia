@@ -8,12 +8,12 @@ pub fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
 
     for line in contents.lines() {
         let parts: Vec<&str> = line.split(':').collect();
-        if parts.len() == 5 {
+        if parts.len() == 4 {
             // Lee los atributos a cargar a la nueva cámara
             let id: u8 = parts[0].trim().parse().expect("Id no válido");
             let latitude = parts[1].trim().parse().expect("Latitud no válida");
             let longitude = parts[2].trim().parse().expect("Longitud no válida");
-            let range = parts[3].trim().parse().expect("Rango no válido");
+            let range = parts[3].trim().parse().expect("Rango no válido"); // []
 
             let mut new_camera = Camera::new(id, latitude, longitude, range);
 

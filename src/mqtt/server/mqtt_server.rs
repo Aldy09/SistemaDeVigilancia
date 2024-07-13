@@ -7,7 +7,7 @@ use crate::mqtt::messages::{
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
 // Add the missing import
-use crate::mqtt::mqtt_utils::aux_server_utils::{
+use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
