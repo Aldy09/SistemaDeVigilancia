@@ -1,5 +1,7 @@
 use egui::{vec2, Align2, Color32, FontId, Painter, Response, Stroke};
 
+use crate::apps::place_type::PlaceType;
+
 use super::{Plugin, Position};
 
 /// Visual style of the place.
@@ -48,7 +50,7 @@ pub struct Place {
     pub id: u8,
 
     /// Type of the place.
-    pub place_type: String, // "Cámara", "Dron", "Incident"
+    pub place_type: PlaceType, // Cámara, Dron, Incident manual o automated, Mantenimiento } es un enum.
 }
 
 impl Place {
@@ -98,7 +100,13 @@ impl Place {
 }
 
 /// [`Plugin`] which draws list of places on the map.
-///
+/// Posee los elementos que serán mostrados en el mapa.
+/// Por ejemplo cámaras, drones, incidentes, y un place para mantenimiento.
+/// Cada elemento (`Place`) que se agrega al vector de Places, contiene entre otros campos un id (numérico) y un place_type (enum).
+/// Ambos campos en conjunto, identifican a un elemento unívocamente; de esta forma, al momento de eliminar un place del vector,
+/// se llama a `remove_place` con tanto el id como el place_type del elemento a eliminar.
+/// El caso de los incidentes, en el que el mismo puede provenir de cualquiera de sus dos orígenes (Manual para monitoreo
+/// y Automated para ai con cámaras), se maneja teniendo dos variantes diferentes del enum place_type para dichos orígenes.
 #[derive(Debug, Clone)]
 pub struct Places {
     places: Vec<Place>,
@@ -113,22 +121,15 @@ impl Places {
         self.places.push(place);
     }
 
-    /* // Parece que no se usa.
-    pub fn get_places(&self) -> Vec<Place> {
-        self.places.to_vec()
-    }*/
-
     /// Elimina el elemento de `id` y `place_type` indicados, del vector de places que se muestra en el mapa.
-    /// Si el elemento no existía, no se hace nada.
-    pub fn remove_place(&mut self, id: u8, place_type: String) { // Incident_automated, Incident_manual
+    /// Si el elemento no existía, no se considera error, simplemente no se hace nada.
+    pub fn remove_place(&mut self, id: u8, place_type: PlaceType) {
         if let Some(index) = self
             .places
             .iter()
             .position(|p| p.id == id && p.place_type == place_type)
         {
             self.places.remove(index);
-        } else {
-            //println!("No se encontró un lugar con el id {}", id);
         }
     }
 }
