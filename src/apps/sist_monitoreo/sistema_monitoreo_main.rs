@@ -5,6 +5,7 @@ use std::{
 };
 
 use crossbeam_channel::unbounded;
+use rustx::logging::string_logger::StringLogger;
 use rustx::{
     apps::{
         common_clients::{get_broker_address, join_all_threads},
@@ -43,14 +44,22 @@ fn create_channels() -> Channels {
     )
 }
 
+fn get_formatted_app_id() -> String {
+    String::from("Sistema-Monitoreo")
+}
+
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
 
+    // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx, egui_tx, egui_rx) =
         create_channels();
 
-    let client_id = "Sistema-Monitoreo";
-    match mqtt_connect_to_broker(client_id, &broker_addr){
+    // Se crean y configuran ambos extremos del string logger
+    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
+
+    let client_id = get_formatted_app_id();
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
@@ -74,6 +83,11 @@ fn main() -> Result<(), Error>{
         Err(e) => println!(
             "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",e
         ),
+    }
+
+    // Se espera al hijo para el logger writer
+    if handle_logger.join().is_err() {
+        println!("Error al esperar al hijo para string logger writer.")
     }
 
     Ok(())

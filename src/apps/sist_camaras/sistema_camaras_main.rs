@@ -14,7 +14,7 @@ use rustx::{
             sistema_camaras::SistemaCamaras,
         },
     },
-    logging::structs_to_save_in_logger::StructsToSaveInLogger,
+    logging::{string_logger::StringLogger, structs_to_save_in_logger::StructsToSaveInLogger},
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -75,6 +75,10 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStrea
     }
 }*/
 
+fn get_formatted_app_id() -> String {
+    String::from("Sistema-Camaras")
+}
+
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
     // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
@@ -90,8 +94,11 @@ fn main() -> Result<(), Error>{
     ) = create_channels();
     let cameras = create_cameras();
 
-    let client_id = "Sistema-Camaras";
-    match mqtt_connect_to_broker(client_id, &broker_addr) {
+    // Se crean y configuran ambos extremos del string logger
+    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
+
+    let client_id = get_formatted_app_id();
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
@@ -116,6 +123,11 @@ fn main() -> Result<(), Error>{
             join_all_threads(handlers);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
+    }
+
+    // Se espera al hijo para el logger writer
+    if handle_logger.join().is_err() {
+        println!("Error al esperar al hijo para string logger writer.")
     }
 
     Ok(())
