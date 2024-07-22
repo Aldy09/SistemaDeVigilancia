@@ -1,34 +1,27 @@
 use std::{
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
+    io::{self, ErrorKind}, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
 };
 
-use crossbeam_channel::Receiver as CrossbeamReceiver;
-use crossbeam_channel::Sender as CrossbeamSender;
-
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
+use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 
 use crate::{
     apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::is_disconnected_error},
-    logging::{
-        logger::Logger, string_logger::StringLogger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}
-    },
+    logging::string_logger::StringLogger,
 };
 
 use crate::mqtt::{
     client::mqtt_client::MQTTClient,
-    messages::{message_type::MessageType, publish_message::PublishMessage},
+    messages::publish_message::PublishMessage,
 };
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{app_type::AppType, common_clients::exit_when_asked, incident_data::incident::Incident};
+use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
-use std::io::{self, ErrorKind};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     incidents: Arc<Mutex<Vec<Incident>>>,
-    logger_tx: MpscSender<StructsToSaveInLogger>,
     egui_tx: CrossbeamSender<PublishMessage>,
     qos: u8,
     logger: StringLogger,
@@ -53,7 +46,6 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 
 impl SistemaMonitoreo {
     pub fn new(
-        logger_tx: MpscSender<StructsToSaveInLogger>,
         egui_tx: CrossbeamSender<PublishMessage>,
         logger: StringLogger,
     ) -> Self {
@@ -62,8 +54,7 @@ impl SistemaMonitoreo {
                 .unwrap_or(0);
         println!("valor de QoS: {}", qos);
         let sistema_monitoreo: SistemaMonitoreo = Self {
-            incidents: Arc::new(Mutex::new(Vec::new())),
-            logger_tx,
+            incidents: Arc::new(Mutex::new(Vec::new())), // []
             egui_tx,
             qos,
             logger,
@@ -74,7 +65,6 @@ impl SistemaMonitoreo {
 
     pub fn spawn_threads(
         &self,
-        logger_rx: MpscReceiver<StructsToSaveInLogger>,
         publish_message_rx: MpscReceiver<PublishMessage>,
         egui_rx: CrossbeamReceiver<PublishMessage>,
         mqtt_client: MQTTClient,
@@ -82,7 +72,6 @@ impl SistemaMonitoreo {
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
-        let old_logger = Logger::new(logger_rx);
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
@@ -96,9 +85,6 @@ impl SistemaMonitoreo {
             mqtt_client_incident_sh_clone.clone(),
             incident_rx,
         ));
-
-        // AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
-        children.push(spawn_write_incidents_to_logger_thread(old_logger));
 
         children.push(self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx));
 
@@ -139,17 +125,7 @@ impl SistemaMonitoreo {
         thread::spawn(move || loop {
             while let Ok(inc) = rx.recv() {
                 let msg_clone = inc.clone();
-                // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
-                self_clone
-                    .logger_tx
-                    .send(StructsToSaveInLogger::AppType(
-                        "Sistema-Monitoreo".to_string(),
-                        AppType::Incident(inc.clone()),
-                        OperationType::Sent,
-                    ))
-                    .unwrap();
-                
-                self_clone.logger.log(format!("Sistema-Monitoreo: envió incidente: {:?}", inc));
+                self_clone.logger.log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
                 self_clone.publish_incident(msg_clone, &mqtt_client);
             }
         })
@@ -159,7 +135,6 @@ impl SistemaMonitoreo {
         Self {
             incidents: self.incidents.clone(),
             egui_tx: self.egui_tx.clone(),
-            logger_tx: self.logger_tx.clone(),
             qos: self.qos,
             logger: self.logger.clone_ref(),
         }
@@ -192,17 +167,8 @@ impl SistemaMonitoreo {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
-                Ok(subscribe_message) => {
-                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
-                    self.logger_tx
-                    .send(StructsToSaveInLogger::MessageType(
-                        "Sistema Monitoreo".to_string(),
-                        MessageType::Subscribe(subscribe_message),
-                        OperationType::Sent,
-                    ))
-                    .unwrap();
-
-                    //self.logger.log(format!("Sistema-Monitoreo: envió incidente: {:?}", subscribe_message)); // descomentar cuando se borre el send de arriba. [].
+                Ok(_) => {
+                    self.logger.log(format!("Sistema-Monitoreo: subscripto a topic {:?}", topic));
                 }
                 Err(e) => {
                     println!("Cliente: Error al hacer un subscribe a topic: {:?}", e);
@@ -217,16 +183,7 @@ impl SistemaMonitoreo {
         loop {
             match mqtt_rx.recv() {
                 //Publish message: camera o dron
-                Ok(publish_message) => {
-                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
-                    self.logger_tx
-                    .send(StructsToSaveInLogger::MessageType(
-                        "Sistema Monitoreo".to_string(),
-                        MessageType::Publish(publish_message.clone()),
-                        OperationType::Received,
-                    ))
-                    .unwrap();
-                    
+                Ok(publish_message) => {                    
                     self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_message));
                     self.send_publish_message_to_ui(publish_message)
                 }
@@ -263,17 +220,8 @@ impl SistemaMonitoreo {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             let res_publish = mqtt_client.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &incident.to_bytes(), self.get_qos());
             match res_publish {
-                Ok(publish_message) => {
-                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
-                    self.logger_tx
-                    .send(StructsToSaveInLogger::MessageType(
-                        "Sistema Monitoreo".to_string(),
-                        MessageType::Publish(publish_message.clone()),
-                        OperationType::Sent,
-                    ))
-                    .unwrap();
-                    
-                    self.logger.log(format!("Sistema-Monitoreo: envió mensaje: {:?}", publish_message));
+                Ok(publish_message) => {                    
+                    self.logger.log(format!("Sistema-Monitoreo: envío mensaje: {:?}", publish_message));
             }
                 Err(e) => {
                     println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
@@ -281,13 +229,4 @@ impl SistemaMonitoreo {
             };
         }
     }
-}
-
-// AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
-fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        while let Ok(msg) = logger.logger_rx.recv() {
-            logger.write_in_file(msg);
-        }
-    })
 }

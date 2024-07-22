@@ -11,7 +11,6 @@ use rustx::{
         common_clients::{get_broker_address, join_all_threads},
         sist_monitoreo::sistema_monitoreo::SistemaMonitoreo,
     },
-    logging::structs_to_save_in_logger::StructsToSaveInLogger,
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -22,8 +21,6 @@ use rustx::{
 };
 
 type Channels = (
-    mpsc::Sender<StructsToSaveInLogger>,
-    mpsc::Receiver<StructsToSaveInLogger>,
     mpsc::Sender<PublishMessage>,
     mpsc::Receiver<PublishMessage>,
     crossbeam_channel::Sender<PublishMessage>,
@@ -31,12 +28,9 @@ type Channels = (
 );
 
 fn create_channels() -> Channels {
-    let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
     let (egui_tx, egui_rx) = unbounded::<PublishMessage>();
     (
-        logger_tx,
-        logger_rx,
         publish_message_tx,
         publish_message_rx,
         egui_tx,
@@ -52,7 +46,7 @@ fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
 
     // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
-    let (logger_tx, logger_rx, publish_message_tx, publish_message_rx, egui_tx, egui_rx) =
+    let (publish_message_tx, publish_message_rx, egui_tx, egui_rx) =
         create_channels();
 
     // Se crean y configuran ambos extremos del string logger
@@ -64,14 +58,13 @@ fn main() -> Result<(), Error>{
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
-            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, egui_tx, logger);
+            let sistema_monitoreo = SistemaMonitoreo::new(egui_tx, logger);
             println!("Cliente: Conectado al broker MQTT.");
             let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
             });
 
             let mut handlers = sistema_monitoreo.spawn_threads(
-                logger_rx,
                 publish_message_rx,
                 egui_rx,
                 mqtt_client,

@@ -2,29 +2,20 @@ type ShareableCamType = Camera;
 type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
+use crate::apps::sist_camaras::{camera::Camera, sist_camaras_abm::ABMCameras};
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
-use crate::apps::common_clients::is_disconnected_error;
-use crate::apps::incident_data::incident_info::IncidentInfo;
+use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, incident_data::{incident::Incident, incident_info::IncidentInfo}};
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
-pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
-
 use std::collections::HashMap;
-use std::sync::{
+use std::{sync::{
     mpsc::{self, Sender},
     Arc, Mutex, MutexGuard,
-};
-use std::thread::{self, JoinHandle};
+}, thread::{self, JoinHandle}};
 
-use std::io::Error;
-
-use crate::apps::sist_camaras::camera::Camera;
-use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
-
-use super::sist_camaras_abm::ABMCameras;
+use std::io::{self, Error, ErrorKind};
 use std::fs;
-use std::io::{self, ErrorKind};
 
 type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
 
