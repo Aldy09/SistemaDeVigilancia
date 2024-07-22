@@ -1,7 +1,7 @@
 use std::{
     io::Error,
     sync::mpsc,
-    thread::{self, JoinHandle},
+    thread,
 };
 
 use rustx::{
@@ -11,7 +11,7 @@ use rustx::{
         sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
     },
     logging::{
-        string_logger::StringLogger, string_logger_writer::StringLoggerWriter,
+        string_logger::StringLogger,
         structs_to_save_in_logger::StructsToSaveInLogger,
     },
     mqtt::{
@@ -36,6 +36,10 @@ fn create_channels() -> Channels {
     (logger_tx, logger_rx, publish_message_tx, publish_message_rx)
 }
 
+fn get_formatted_app_id(id: u8) -> String {
+    format!("dron-{}", id)
+}
+
 fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
 
@@ -43,13 +47,10 @@ fn main() -> Result<(), Error> {
     let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
 
     // Se crean y configuran ambos extremos del string logger
-    let (string_logger_tx, string_logger_rx) = mpsc::channel::<String>();
-    let logger = StringLogger::new(string_logger_tx);
-    let logger_writer = StringLoggerWriter::new(string_logger_rx);
-    let handle_logger = spawn_dron_stuff_to_string_logger_thread(logger_writer); //
+    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
     // Se inicializa la conexión mqtt y el dron
-    let client_id = format!("dron-{}", id);
+    let client_id = get_formatted_app_id(id);
     match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
         Ok(stream) => {
             let mut mqtt_client_listener =
@@ -96,16 +97,4 @@ fn main() -> Result<(), Error> {
     }
 
     Ok(())
-}
-
-fn spawn_dron_stuff_to_string_logger_thread(
-    string_logger_writer: StringLoggerWriter,
-) -> JoinHandle<()> {
-    thread::spawn(move || {
-        while let Ok(msg) = string_logger_writer.logger_rx.recv() {
-            if string_logger_writer.write_to_file(msg).is_err() {
-                println!("LoggerWriter: error al escribir al archivo de log.");
-            }
-        }
-    })
 }

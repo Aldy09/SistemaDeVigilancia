@@ -77,6 +77,7 @@ fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStrea
 
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
+    // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (
         cameras_tx,
         cameras_rx,
