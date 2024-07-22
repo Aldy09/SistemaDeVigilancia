@@ -5,6 +5,7 @@ use std::sync::mpsc::Receiver;
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::common_clients::is_disconnected_error;
 use crate::apps::incident_data::incident_info::IncidentInfo;
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 pub type MQTTInfo = (MQTTClient, Receiver<PublishMessage>);
@@ -42,6 +43,7 @@ pub struct SistemaCamaras {
     exit_tx: mpsc::Sender<bool>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
     qos: u8,
+    logger: StringLogger,
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -64,6 +66,7 @@ impl SistemaCamaras {
         logger_tx: Sender<StructsToSaveInLogger>,
         exit_tx: Sender<bool>,
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
+        logger: StringLogger
     ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
         let qos =
@@ -75,6 +78,7 @@ impl SistemaCamaras {
             exit_tx,
             cameras,
             qos,
+            logger
         };
 
         sistema_camaras
@@ -92,7 +96,7 @@ impl SistemaCamaras {
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
-        let logger = Logger::new(logger_rx);
+        let old_logger = Logger::new(logger_rx);
 
         let self_clone = self.clone_ref();
 
@@ -110,7 +114,8 @@ impl SistemaCamaras {
             self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );
 
-        children.push(spawn_receive_messages_thread(logger));
+        // AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
+        children.push(spawn_receive_messages_thread(old_logger));
 
         children
     }
@@ -122,6 +127,7 @@ impl SistemaCamaras {
             exit_tx: self.exit_tx.clone(),
             cameras: self.cameras.clone(),
             qos: self.qos,
+            logger: self.logger.clone_ref(),
         }
     }
 
@@ -141,6 +147,7 @@ impl SistemaCamaras {
     /// Envía la cámara recibida, por el channel, para que quien la reciba por rx haga el publish.
     /// Además logguea la operación.
     fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
+        // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
         self.logger_tx
             .send(StructsToSaveInLogger::AppType(
                 "Sistema-Camaras".to_string(),
@@ -148,8 +155,11 @@ impl SistemaCamaras {
                 OperationType::Sent,
             ))
             .unwrap();
+        
+        self.logger.log(format!("Sistema-Camaras: envió cámara: {:?}", camera));
         if camera_tx.send(camera.to_bytes()).is_err() {
             println!("Error al enviar cámara por tx desde hilo abm.");
+            self.logger.log(format!("Sistema-Camaras: error al enviar cámara por tx desde hilo abm."));
         }
     }
 
@@ -183,6 +193,7 @@ impl SistemaCamaras {
             let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
             match res_subscribe {
                 Ok(subscribe_message) => {
+                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                     self.logger_tx
                         .send(StructsToSaveInLogger::MessageType(
                             "Sistema Camaras".to_string(),
@@ -190,9 +201,12 @@ impl SistemaCamaras {
                             OperationType::Sent,
                         ))
                         .unwrap();
+
+                    self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", subscribe_message)); // descomentar cuando se borre el send de arriba. [].
                 }
                 Err(e) => {
                     println!("Sistema-Camara: Error al subscribirse {:?}", e);
+                    self.logger.log(format!("Sistema-Camaras: Error al subscribirse: {:?}", e));
                     return Err(e);
                 }
             };
@@ -211,6 +225,7 @@ impl SistemaCamaras {
                 let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
                 match res_publish {
                     Ok(publish_message) => {
+                        // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                         self.logger_tx
                             .send(StructsToSaveInLogger::MessageType(
                                 "Sistema Camaras".to_string(),
@@ -218,8 +233,13 @@ impl SistemaCamaras {
                                 OperationType::Sent,
                             ))
                             .unwrap();
+                        self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", publish_message)); // descomentar cuando se borre el send de arriba. [].
                     }
-                    Err(e) => println!("Sistema-Camara: Error al hacer el publish {:?}", e),
+                    Err(e) => {
+                        println!("Sistema-Camara: Error al hacer el publish {:?}", e);
+                        self.logger.log(format!("Sistema-Camaras: Error al hacer el publish {:?}", e));
+                    },
+
                 };
             }
         }
@@ -243,13 +263,16 @@ impl SistemaCamaras {
         incs_being_managed: &mut HashmapIncsType,
     ) {
         if let Ok(incident) = Incident::from_bytes(msg.get_payload()){
+            // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
             self.logger_tx
-                .send(StructsToSaveInLogger::AppType(
-                    "Sistema Camaras".to_string(),
-                    AppType::Incident(incident.clone()),
-                    OperationType::Received,
-                ))
-                .unwrap();
+            .send(StructsToSaveInLogger::AppType(
+                "Sistema Camaras".to_string(),
+                AppType::Incident(incident.clone()),
+                OperationType::Received,
+            ))
+            .unwrap();
+            
+            self.logger.log(format!("Sistema-Camaras: recibió incidente: {:?}", incident));
             self.manage_incidents(incident, cameras, incs_being_managed);
         }
     }
@@ -426,6 +449,8 @@ impl SistemaCamaras {
     }
 }
 
+
+// AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
 fn spawn_receive_messages_thread(logger: Logger) -> JoinHandle<()> {
     thread::spawn(move || loop {
         while let Ok(msg) = logger.logger_rx.recv() {

@@ -105,7 +105,7 @@ fn main() -> Result<(), Error>{
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras);
+            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras, logger);
 
             let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
