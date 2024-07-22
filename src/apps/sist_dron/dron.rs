@@ -67,7 +67,7 @@ impl Dron {
         Ok(dron)
     }
 
-    pub fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()> {
+    fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()> {
         let mut self_child = self.clone_ref();
         thread::spawn(move || loop {
             sleep(Duration::from_secs(5));
@@ -102,7 +102,7 @@ impl Dron {
         Ok(children)
     }
 
-    pub fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Self {
         Self {
             current_info: Arc::clone(&self.current_info),
             dron_properties: self.dron_properties,
@@ -127,7 +127,7 @@ impl Dron {
     }
 
     /// Se suscribe al topic recibido.
-    pub fn subscribe_to_topic(
+    fn subscribe_to_topic(
         &self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
         topic: &str,
@@ -166,7 +166,7 @@ impl Dron {
 
     /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron.
     /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
-    pub fn receive_messages_from_subscribed_topics(
+    fn receive_messages_from_subscribed_topics(
         &mut self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
@@ -623,7 +623,7 @@ impl Dron {
 
     /// Hace publish de su current info.
     /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
-    pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(
@@ -825,7 +825,7 @@ impl Dron {
         ))
     }
 
-    pub fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
+    fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
         let contenido = fs::read_to_string(ruta_archivo)?;
         let inicio = contenido.find("qos=").ok_or(io::Error::new(
             ErrorKind::NotFound,
@@ -842,7 +842,7 @@ impl Dron {
 
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     /// Función utilizada para testear, no necesita broker address.
-    pub fn new_internal(
+    fn new_internal(
         id: u8,
         initial_lat: f64,
         initial_lon: f64,
@@ -905,7 +905,7 @@ impl Dron {
         ))
     }
 
-    pub fn decrement_and_check_battery_lvl(
+    fn decrement_and_check_battery_lvl(
         &mut self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
@@ -952,7 +952,7 @@ impl Dron {
         Ok(())
     }
 
-    pub fn set_battery_lvl(&mut self) -> Result<(), Error> {
+    fn set_battery_lvl(&mut self) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
             ci.set_battery_lvl(self.dron_properties.get_max_battery_lvl());
             Ok(())

@@ -115,7 +115,7 @@ impl SistemaCamaras {
         children
     }
 
-    pub fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Self {
         Self {
             cameras_tx: self.cameras_tx.clone(),
             logger_tx: self.logger_tx.clone(),

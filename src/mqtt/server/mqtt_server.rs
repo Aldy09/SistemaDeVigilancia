@@ -117,7 +117,10 @@ impl MQTTServer {
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
                 self.add_user(&stream, username)?;
-                self.handle_connection(username, &mut stream)?;
+                //self.handle_connection(username, &mut stream)?;
+                if self.handle_connection(username, &mut stream).is_err() {
+                    println!("DEBUG:   SE HA SALIDO DE LA FUNCIÓN, SE DEJA DE LEER PARA EL CLIENTE: {}.", username);
+                }
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -413,7 +416,7 @@ impl MQTTServer {
     }
 
     /// Maneja las conexiones entrantes, acepta las conexiones y crea un hilo para manejar cada una.
-    pub fn handle_incoming_connections(&self, listener: TcpListener) -> Result<(), Error> {
+    fn handle_incoming_connections(&self, listener: TcpListener) -> Result<(), Error> {
         println!("Servidor iniciado. Esperando conexiones.");
         let mut handles = vec![];
 
@@ -523,7 +526,9 @@ impl MQTTServer {
                         if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
                             while let Some(msg) = messages_topic_queue.pop_front() {
                                 let msg_bytes = msg.to_bytes();
+                                println!("DEBUG: A PUNTO DE HACER EL WRITE:");
                                 write_message_to_stream(&msg_bytes, &mut user_stream)?;
+                                println!("DEBUG:    WRITE EXITOSO.");
                             }
                         }
                     }

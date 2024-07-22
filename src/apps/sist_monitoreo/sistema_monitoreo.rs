@@ -28,9 +28,9 @@ use std::io::{self, ErrorKind};
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
-    pub incidents: Arc<Mutex<Vec<Incident>>>,
-    pub logger_tx: MpscSender<StructsToSaveInLogger>,
-    pub egui_tx: CrossbeamSender<PublishMessage>,
+    incidents: Arc<Mutex<Vec<Incident>>>,
+    logger_tx: MpscSender<StructsToSaveInLogger>,
+    egui_tx: CrossbeamSender<PublishMessage>,
     qos: u8,
 }
 
@@ -107,7 +107,7 @@ impl SistemaMonitoreo {
         self.qos
     }
 
-    pub fn spawn_ui_thread(
+    fn spawn_ui_thread(
         &self,
         incident_tx: MpscSender<Incident>,
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
@@ -127,7 +127,7 @@ impl SistemaMonitoreo {
         );
     }
 
-    pub fn spawn_publish_incidents_in_topic_thread(
+    fn spawn_publish_incidents_in_topic_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: MpscReceiver<Incident>,
@@ -149,7 +149,7 @@ impl SistemaMonitoreo {
         })
     }
 
-    pub fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Self {
         Self {
             incidents: self.incidents.clone(),
             egui_tx: self.egui_tx.clone(),
@@ -158,7 +158,7 @@ impl SistemaMonitoreo {
         }
     }
 
-    pub fn spawn_subscribe_to_topics_thread(
+    fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
@@ -170,7 +170,7 @@ impl SistemaMonitoreo {
     }
 
     /// Se suscribe a los topics y queda recibiendo PublishMessages de esos topics.
-    pub fn subscribe_to_topics(
+    fn subscribe_to_topics(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
@@ -181,7 +181,7 @@ impl SistemaMonitoreo {
         self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 
-    pub fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
+    fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
@@ -200,7 +200,7 @@ impl SistemaMonitoreo {
     }
 
     // Recibe mensajes de los topics a los que se ha suscrito
-    pub fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
+    fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
         loop {
             match mqtt_rx.recv() {
                 //Publish message: camera o dron
@@ -222,7 +222,7 @@ impl SistemaMonitoreo {
         }
     }
 
-    pub fn send_publish_message_to_ui(&self, msg: PublishMessage) {
+    fn send_publish_message_to_ui(&self, msg: PublishMessage) {
         let res_send = self.egui_tx.send(msg);
         match res_send {
             Ok(_) => println!("Cliente: Enviado mensaje a la UI"),
@@ -230,21 +230,24 @@ impl SistemaMonitoreo {
         }
     }
 
-    pub fn add_incident(&mut self, incident: Incident) {
-        self.incidents.lock().unwrap().push(incident);
-    }
+    // //
+    // pub fn add_incident(&mut self, incident: Incident) {
+    //     self.incidents.lock().unwrap().push(incident);
+    // }
 
-    pub fn get_incidents(&mut self) -> Arc<Mutex<Vec<Incident>>> {
-        self.incidents.clone()
-    }
+    // //
+    // pub fn get_incidents(&mut self) -> Arc<Mutex<Vec<Incident>>> {
+    //     self.incidents.clone()
+    // }
 
-    pub fn generate_new_incident_id(&self) -> u8 {
-        let mut new_inc_id: u8 = 0;
-        if let Ok(incidents) = self.incidents.lock() {
-            new_inc_id = (incidents.len() + 1) as u8;
-        }
-        new_inc_id
-    }
+    // //
+    // pub fn generate_new_incident_id(&self) -> u8 {
+    //     let mut new_inc_id: u8 = 0;
+    //     if let Ok(incidents) = self.incidents.lock() {
+    //         new_inc_id = (incidents.len() + 1) as u8;
+    //     }
+    //     new_inc_id
+    // }
 
     fn spawn_exit_thread(
         &self,
@@ -256,7 +259,7 @@ impl SistemaMonitoreo {
         })
     }
 
-    pub fn publish_incident(&self, incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) {
+    fn publish_incident(&self, incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) {
         println!("Sistema-Monitoreo: Publicando incidente.");
 
         // Hago el publish

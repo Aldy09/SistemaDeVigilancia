@@ -88,7 +88,7 @@ impl SubAckMessage {
             idx += size_of_u16;
 
             // Terminé de leer, agrego el elemento leído al vector de topics
-            let elemento = SubscribeReturnCode::from_u16(ret_code)?;
+            let elemento = SubscribeReturnCode::from_bytes(ret_code)?;
             ret_codes.push(elemento);
             // Avanzo la rem_len_leida para saber cuándo termino de leer todos los elementos
             rem_len_leida += 2;

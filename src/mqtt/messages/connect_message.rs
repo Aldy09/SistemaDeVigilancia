@@ -164,7 +164,7 @@ impl ConnectMessage {
     }
 
     /// Parsea los bytes correspondientes al payload, a un struct payload con sus campos.
-    pub fn process_payload(flags: &ConnectFlags, bytes_payload: &[u8]) -> Payload {
+    fn process_payload(flags: &ConnectFlags, bytes_payload: &[u8]) -> Payload {
         let mut payload_start_index: usize = 0;
 
         // Extraer el client_id
