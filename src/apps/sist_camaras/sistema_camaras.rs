@@ -159,7 +159,7 @@ impl SistemaCamaras {
         self.logger.log(format!("Sistema-Camaras: envió cámara: {:?}", camera));
         if camera_tx.send(camera.to_bytes()).is_err() {
             println!("Error al enviar cámara por tx desde hilo abm.");
-            self.logger.log(format!("Sistema-Camaras: error al enviar cámara por tx desde hilo abm."));
+            self.logger.log("Sistema-Camaras: error al enviar cámara por tx desde hilo abm.".to_string());
         }
     }
 
@@ -176,10 +176,11 @@ impl SistemaCamaras {
         // Lanza el hilo para el abm
         let cameras_cloned = cameras.clone();
         let logger_tx_cloned = self.logger_tx.clone();
+        let logger_for_child = self.logger.clone_ref();
         thread::spawn(move || {
             // Ejecuta el menú del abm
             let mut abm_cameras =
-                ABMCameras::new(cameras_cloned, logger_tx_cloned, cameras_tx, exit_tx);
+                ABMCameras::new(cameras_cloned, logger_tx_cloned, cameras_tx, exit_tx, logger_for_child);
             abm_cameras.run();
         })
     }
@@ -201,8 +202,8 @@ impl SistemaCamaras {
                             OperationType::Sent,
                         ))
                         .unwrap();
-
-                    self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", subscribe_message)); // descomentar cuando se borre el send de arriba. [].
+                    
+                    //self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", subscribe_message)); // descomentar cuando se borre el send de arriba. [].
                 }
                 Err(e) => {
                     println!("Sistema-Camara: Error al subscribirse {:?}", e);
@@ -233,7 +234,7 @@ impl SistemaCamaras {
                                 OperationType::Sent,
                             ))
                             .unwrap();
-                        self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", publish_message)); // descomentar cuando se borre el send de arriba. [].
+                        //self.logger.log(format!("Sistema-Camaras: envió mensaje:"));// {:?}", publish_message)); // descomentar cuando se borre el send de arriba. [].
                     }
                     Err(e) => {
                         println!("Sistema-Camara: Error al hacer el publish {:?}", e);
