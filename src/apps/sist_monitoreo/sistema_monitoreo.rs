@@ -11,8 +11,7 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 use crate::{
     apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::is_disconnected_error},
     logging::{
-        logger::Logger,
-        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
+        logger::Logger, string_logger::StringLogger, structs_to_save_in_logger::{OperationType, StructsToSaveInLogger}
     },
 };
 
@@ -32,6 +31,7 @@ pub struct SistemaMonitoreo {
     logger_tx: MpscSender<StructsToSaveInLogger>,
     egui_tx: CrossbeamSender<PublishMessage>,
     qos: u8,
+    logger: StringLogger,
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -55,6 +55,7 @@ impl SistemaMonitoreo {
     pub fn new(
         logger_tx: MpscSender<StructsToSaveInLogger>,
         egui_tx: CrossbeamSender<PublishMessage>,
+        logger: StringLogger,
     ) -> Self {
         let qos =
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
@@ -65,6 +66,7 @@ impl SistemaMonitoreo {
             logger_tx,
             egui_tx,
             qos,
+            logger,
         };
 
         sistema_monitoreo
@@ -80,7 +82,7 @@ impl SistemaMonitoreo {
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
         let (exit_tx, exit_rx) = mpsc::channel::<bool>();
 
-        let logger = Logger::new(logger_rx);
+        let old_logger = Logger::new(logger_rx);
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
@@ -95,7 +97,8 @@ impl SistemaMonitoreo {
             incident_rx,
         ));
 
-        children.push(spawn_write_incidents_to_logger_thread(logger));
+        // AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
+        children.push(spawn_write_incidents_to_logger_thread(old_logger));
 
         children.push(self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx));
 
@@ -134,16 +137,19 @@ impl SistemaMonitoreo {
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || loop {
-            while let Ok(msg) = rx.recv() {
-                let msg_clone = msg.clone();
+            while let Ok(inc) = rx.recv() {
+                let msg_clone = inc.clone();
+                // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                 self_clone
                     .logger_tx
                     .send(StructsToSaveInLogger::AppType(
                         "Sistema-Monitoreo".to_string(),
-                        AppType::Incident(msg),
+                        AppType::Incident(inc.clone()),
                         OperationType::Sent,
                     ))
                     .unwrap();
+                
+                self_clone.logger.log(format!("Sistema-Monitoreo: envió incidente: {:?}", inc));
                 self_clone.publish_incident(msg_clone, &mqtt_client);
             }
         })
@@ -155,6 +161,7 @@ impl SistemaMonitoreo {
             egui_tx: self.egui_tx.clone(),
             logger_tx: self.logger_tx.clone(),
             qos: self.qos,
+            logger: self.logger.clone_ref(),
         }
     }
 
@@ -186,15 +193,21 @@ impl SistemaMonitoreo {
             let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
                 Ok(subscribe_message) => {
+                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(
-                            "Sistema Monitoreo".to_string(),
-                            MessageType::Subscribe(subscribe_message),
-                            OperationType::Sent,
-                        ))
-                        .unwrap();
+                    .send(StructsToSaveInLogger::MessageType(
+                        "Sistema Monitoreo".to_string(),
+                        MessageType::Subscribe(subscribe_message),
+                        OperationType::Sent,
+                    ))
+                    .unwrap();
+
+                    //self.logger.log(format!("Sistema-Monitoreo: envió incidente: {:?}", subscribe_message)); // descomentar cuando se borre el send de arriba. [].
                 }
-                Err(e) => println!("Cliente: Error al hacer un subscribe a topic: {:?}", e),
+                Err(e) => {
+                    println!("Cliente: Error al hacer un subscribe a topic: {:?}", e);
+                    self.logger.log(format!("Error al hacer un subscribe al topic: {:?}", e));
+                },
             }
         }
     }
@@ -205,13 +218,16 @@ impl SistemaMonitoreo {
             match mqtt_rx.recv() {
                 //Publish message: camera o dron
                 Ok(publish_message) => {
+                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(
-                            "Sistema Monitoreo".to_string(),
-                            MessageType::Publish(publish_message.clone()),
-                            OperationType::Received,
-                        ))
-                        .unwrap();
+                    .send(StructsToSaveInLogger::MessageType(
+                        "Sistema Monitoreo".to_string(),
+                        MessageType::Publish(publish_message.clone()),
+                        OperationType::Received,
+                    ))
+                    .unwrap();
+                    
+                    self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_message));
                     self.send_publish_message_to_ui(publish_message)
                 }
                 Err(_) => {
@@ -230,7 +246,7 @@ impl SistemaMonitoreo {
         }
     }
 
-    // //
+    // // Funciones no usadas
     // pub fn add_incident(&mut self, incident: Incident) {
     //     self.incidents.lock().unwrap().push(incident);
     // }
@@ -267,14 +283,17 @@ impl SistemaMonitoreo {
             let res_publish = mqtt_client.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &incident.to_bytes(), self.get_qos());
             match res_publish {
                 Ok(publish_message) => {
+                    // AUX: esta línea de logger_tx, se puede reemplazar por el logger.log de abajo (que no usa structs). []
                     self.logger_tx
-                        .send(StructsToSaveInLogger::MessageType(
-                            "Sistema Monitoreo".to_string(),
-                            MessageType::Publish(publish_message),
-                            OperationType::Sent,
-                        ))
-                        .unwrap();
-                }
+                    .send(StructsToSaveInLogger::MessageType(
+                        "Sistema Monitoreo".to_string(),
+                        MessageType::Publish(publish_message.clone()),
+                        OperationType::Sent,
+                    ))
+                    .unwrap();
+                    
+                    self.logger.log(format!("Sistema-Monitoreo: envió mensaje: {:?}", publish_message));
+            }
                 Err(e) => {
                     println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
                 }
@@ -283,6 +302,7 @@ impl SistemaMonitoreo {
     }
 }
 
+// AUX: Esta función se está reemplazando por el StringLogger. Una vez terminado el refactor, borrar esta función. [].
 fn spawn_write_incidents_to_logger_thread(logger: Logger) -> JoinHandle<()> {
     thread::spawn(move || loop {
         while let Ok(msg) = logger.logger_rx.recv() {

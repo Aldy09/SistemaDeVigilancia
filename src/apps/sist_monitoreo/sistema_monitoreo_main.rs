@@ -64,7 +64,7 @@ fn main() -> Result<(), Error>{
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
-            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, egui_tx);
+            let sistema_monitoreo = SistemaMonitoreo::new(logger_tx, egui_tx, logger);
             println!("Cliente: Conectado al broker MQTT.");
             let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
