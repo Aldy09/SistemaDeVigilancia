@@ -246,25 +246,6 @@ impl SistemaMonitoreo {
         }
     }
 
-    // // Funciones no usadas
-    // pub fn add_incident(&mut self, incident: Incident) {
-    //     self.incidents.lock().unwrap().push(incident);
-    // }
-
-    // //
-    // pub fn get_incidents(&mut self) -> Arc<Mutex<Vec<Incident>>> {
-    //     self.incidents.clone()
-    // }
-
-    // //
-    // pub fn generate_new_incident_id(&self) -> u8 {
-    //     let mut new_inc_id: u8 = 0;
-    //     if let Ok(incidents) = self.incidents.lock() {
-    //         new_inc_id = (incidents.len() + 1) as u8;
-    //     }
-    //     new_inc_id
-    // }
-
     fn spawn_exit_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
