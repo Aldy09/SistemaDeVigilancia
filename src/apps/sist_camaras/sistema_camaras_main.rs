@@ -14,7 +14,7 @@ use rustx::{
             sistema_camaras::SistemaCamaras,
         },
     },
-    logging::{string_logger::StringLogger, structs_to_save_in_logger::StructsToSaveInLogger},
+    logging::string_logger::StringLogger,
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -29,8 +29,6 @@ type Channels = (
     mpsc::Receiver<Vec<u8>>,
     mpsc::Sender<bool>,
     mpsc::Receiver<bool>,
-    mpsc::Sender<StructsToSaveInLogger>,
-    mpsc::Receiver<StructsToSaveInLogger>,
     mpsc::Sender<PublishMessage>,
     mpsc::Receiver<PublishMessage>,
 );
@@ -38,15 +36,12 @@ type Channels = (
 fn create_channels() -> Channels {
     let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
     let (exit_tx, exit_rx) = mpsc::channel::<bool>();
-    let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
     (
         cameras_tx,
         cameras_rx,
         exit_tx,
         exit_rx,
-        logger_tx,
-        logger_rx,
         publish_message_tx,
         publish_message_rx,
     )
@@ -81,14 +76,11 @@ fn get_formatted_app_id() -> String {
 
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
-    // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
     let (
         cameras_tx,
         cameras_rx,
         exit_tx,
         exit_rx,
-        logger_tx,
-        logger_rx,
         publish_message_tx,
         publish_message_rx,
     ) = create_channels();
@@ -105,7 +97,7 @@ fn main() -> Result<(), Error>{
             let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, logger_tx, exit_tx, cameras, logger);
+            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
 
             let handler_1 = thread::spawn(move || {
                 let _ = mqtt_client_listener.read_from_server();
@@ -113,7 +105,6 @@ fn main() -> Result<(), Error>{
 
             let mut handlers = sistema_camaras.spawn_threads(
                 cameras_rx,
-                logger_rx,
                 exit_rx,
                 publish_message_rx,
                 mqtt_client,

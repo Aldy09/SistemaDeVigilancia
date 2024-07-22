@@ -931,23 +931,19 @@ impl Dron {
 
 mod test {
     use std::sync::mpsc;
-
     use crate::apps::sist_dron::dron_state::DronState;
     use crate::logging::string_logger::StringLogger;
-    use crate::logging::structs_to_save_in_logger::StructsToSaveInLogger;
-
     use super::Dron;
 
     fn create_dron_4() -> Dron {
         let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
-        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+        let logger = StringLogger::new(str_logger_tx); // para testing alcanza con crearlo así.
 
         // Dron 4 inicia en: -34.60282, -58.38730
         let lat = -34.60282;
         let lon = -58.38730;
 
-        Dron::new_internal(4, lat, lon, logger_tx, logger).unwrap()
+        Dron::new_internal(4, lat, lon, logger).unwrap()
     }
 
     #[test]
