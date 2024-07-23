@@ -11,7 +11,7 @@ pub enum SubscribeReturnCode {
 impl SubscribeReturnCode {
     /// Recibe un número u16 y 'lo convierte' a (devuelve) la variante del enum correspondiente.
     /// Utillizado al leer el `ret_code` desde bytes.
-    pub fn from_u16(ret_code: u16) -> Result<SubscribeReturnCode, Error> {
+    pub fn from_bytes(ret_code: u16) -> Result<SubscribeReturnCode, Error> {
         match ret_code {
             0x00 => Ok(SubscribeReturnCode::QoS0),
             0x01 => Ok(SubscribeReturnCode::QoS1),

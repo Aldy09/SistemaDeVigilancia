@@ -2,36 +2,35 @@ use std::{
     collections::HashMap,
     io::{stdin, stdout, Write},
     sync::{
-        mpsc::{self, Sender},
+        mpsc::Sender,
         Arc, Mutex,
     },
 };
 
-use crate::apps::app_type::AppType;
-use crate::logging::structs_to_save_in_logger::{OperationType, StructsToSaveInLogger};
+use crate::logging::string_logger::StringLogger;
 
 use super::camera::Camera;
 
 pub struct ABMCameras {
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-    logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     camera_tx: Sender<Vec<u8>>,
     exit_tx: Sender<bool>,
+    logger: StringLogger,
 }
 
 impl ABMCameras {
     /// Crea un struct `ABMCameras`.
     pub fn new(
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-        logger_tx: mpsc::Sender<StructsToSaveInLogger>,
         camera_tx: Sender<Vec<u8>>,
         exit_tx: Sender<bool>,
+        logger: StringLogger,
     ) -> Self {
         ABMCameras {
             cameras,
-            logger_tx,
             camera_tx,
             exit_tx,
+            logger,
         }
     }
 
@@ -122,14 +121,7 @@ impl ABMCameras {
                 for camera in cams.values_mut() {
                     camera.mutually_add_if_bordering(&mut new_camera.clone());
                 }
-                //Envia la camara al log.txt
-                self.logger_tx
-                    .send(StructsToSaveInLogger::AppType(
-                        "Sistema Camaras".to_string(),
-                        AppType::Camera(new_camera.clone()),
-                        OperationType::Sent,
-                    ))
-                    .unwrap();
+                self.logger.log(format!("Sistema-Camaras: envió cámara: {:?}", new_camera));
                 // Envía la nueva cámara por tx, para ser publicada por el otro hilo
                 if self.camera_tx.send(new_camera.to_bytes()).is_err() {
                     println!("Error al enviar cámara por tx desde hilo abm.");
@@ -213,21 +205,30 @@ mod test {
         sync::{mpsc, Arc, Mutex},
     };
 
-    use crate::apps::sist_camaras::camera::Camera;
+    use crate::{apps::sist_camaras::camera::Camera, logging::string_logger::StringLogger};
 
     use super::ABMCameras;
 
-    #[test]
-    fn test_1_abm_alta_de_camara_la_agrega_a_cameras() {
-        // Tres tx irrelevantes, para pasar al new de abm
+    fn create_abm() -> ABMCameras {
+        // Unos tx irrelevantes, para pasar al new de abm
         // (es necesario conservar las variables de rx en el test de todas formas, para que no se cierre el channel antes del assert)
-        let (logger_tx, _logger_rx) = mpsc::channel();
         let (camera_tx, _camera_rx) = mpsc::channel();
         let (exit_tx, _exit_rx) = mpsc::channel();
 
         // Se crea el abm con su cameras
         let cameras = Arc::new(Mutex::new(HashMap::new()));
-        let mut abm = ABMCameras::new(cameras.clone(), logger_tx, camera_tx, exit_tx);
+        // Se crea el logger
+        //let (logger, logger_handle) = StringLogger::create_logger(String::from("Sistema-Cámaras")); // se usa con esto
+        let (string_logger_tx, _string_logger_rx) = mpsc::channel(); // pero para testing, con esto.
+        let logger_for_testing = StringLogger::new(string_logger_tx);
+        
+        ABMCameras::new(cameras.clone(), camera_tx, exit_tx, logger_for_testing)
+    }
+
+    #[test]
+    fn test_1_abm_alta_de_camara_la_agrega_a_cameras() {
+        
+        let mut abm = create_abm();
 
         // Se agrega la cámara
         let new_camera_id = 1;
@@ -236,7 +237,7 @@ mod test {
 
         // Se busca la cámara recién agregada
         let mut is_new_cam_stored = false;
-        if let Ok(cams) = cameras.lock() {
+        if let Ok(cams) = abm.cameras.lock() {
             is_new_cam_stored = cams.contains_key(&new_camera_id);
         }
         // La cámara nueva se ha agregado a cameras
@@ -245,15 +246,8 @@ mod test {
 
     #[test]
     fn test_2_abm_baja_de_camara_la_elimina_de_cameras() {
-        // Tres tx irrelevantes, para pasar al new de abm
-        // (es necesario conservar las variables de rx en el test de todas formas, para que no se cierre el channel antes del assert)
-        let (logger_tx, _logger_rx) = mpsc::channel();
-        let (camera_tx, _camera_rx) = mpsc::channel();
-        let (exit_tx, _exit_rx) = mpsc::channel();
-
-        // Se crea el abm con su cameras
-        let cameras = Arc::new(Mutex::new(HashMap::new()));
-        let mut abm = ABMCameras::new(cameras.clone(), logger_tx, camera_tx, exit_tx);
+        
+        let mut abm = create_abm();
 
         // Se agrega la cámara
         let camera_to_remove_id = 1;
@@ -265,7 +259,7 @@ mod test {
 
         // Se busca la cámara recién eliminada
         let mut is_cam_to_remove_stored = false;
-        if let Ok(cams) = cameras.lock() {
+        if let Ok(cams) = abm.cameras.lock() {
             is_cam_to_remove_stored = cams.contains_key(&camera_to_remove_id);
         }
         // La cámara nueva se ha agregado a cameras

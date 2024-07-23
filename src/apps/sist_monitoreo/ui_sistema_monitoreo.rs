@@ -354,7 +354,7 @@ impl UISistemaMonitoreo {
             .insert(inc_info, inc_to_store); // Edit: viendo :). Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
     }
 
-    pub fn get_next_incident_id(&mut self) -> u8 {
+    fn get_next_incident_id(&mut self) -> u8 {
         self.last_incident_id += 1;
         self.last_incident_id
     }

@@ -1,7 +1,7 @@
 use std::{
     io::Error,
     sync::mpsc,
-    thread::{self, JoinHandle},
+    thread,
 };
 
 use rustx::{
@@ -10,10 +10,7 @@ use rustx::{
         common_clients::join_all_threads,
         sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
     },
-    logging::{
-        string_logger::StringLogger, string_logger_writer::StringLoggerWriter,
-        structs_to_save_in_logger::StructsToSaveInLogger,
-    },
+    logging::string_logger::StringLogger,
     mqtt::{
         client::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
@@ -24,32 +21,29 @@ use rustx::{
 };
 
 type Channels = (
-    mpsc::Sender<StructsToSaveInLogger>,
-    mpsc::Receiver<StructsToSaveInLogger>,
     mpsc::Sender<PublishMessage>,
     mpsc::Receiver<PublishMessage>,
 );
 
 fn create_channels() -> Channels {
-    let (logger_tx, logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
-    (logger_tx, logger_rx, publish_message_tx, publish_message_rx)
+    (publish_message_tx, publish_message_rx)
+}
+
+fn get_formatted_app_id(id: u8) -> String {
+    format!("dron-{}", id)
 }
 
 fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
 
-    // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
-    let (logger_tx, logger_rx, publish_message_tx, publish_message_rx) = create_channels();
+    let (publish_message_tx, publish_message_rx) = create_channels();
 
     // Se crean y configuran ambos extremos del string logger
-    let (string_logger_tx, string_logger_rx) = mpsc::channel::<String>();
-    let logger = StringLogger::new(string_logger_tx);
-    let logger_writer = StringLoggerWriter::new(string_logger_rx);
-    let handle_logger = spawn_dron_stuff_to_string_logger_thread(logger_writer); //
+    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
     // Se inicializa la conexión mqtt y el dron
-    let client_id = format!("dron-{}", id);
+    let client_id = get_formatted_app_id(id);
     match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
         Ok(stream) => {
             let mut mqtt_client_listener =
@@ -57,7 +51,7 @@ fn main() -> Result<(), Error> {
             let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
             println!("Cliente: Conectado al broker MQTT.");
 
-            let mut dron = Dron::new(id, lat, lon, logger_tx, logger)?; //
+            let mut dron = Dron::new(id, lat, lon, logger)?; //
 
             //match dron_res {
                 //Ok(mut dron) => {
@@ -76,7 +70,7 @@ fn main() -> Result<(), Error> {
             });
 
             let mut handlers =
-                dron.spawn_threads(mqtt_client, publish_message_rx, logger_rx)?;
+                dron.spawn_threads(mqtt_client, publish_message_rx)?;
 
             handlers.push(handler_1);
 
@@ -96,16 +90,4 @@ fn main() -> Result<(), Error> {
     }
 
     Ok(())
-}
-
-fn spawn_dron_stuff_to_string_logger_thread(
-    string_logger_writer: StringLoggerWriter,
-) -> JoinHandle<()> {
-    thread::spawn(move || {
-        while let Ok(msg) = string_logger_writer.logger_rx.recv() {
-            if string_logger_writer.write_to_file(msg).is_err() {
-                println!("LoggerWriter: error al escribir al archivo de log.");
-            }
-        }
-    })
 }

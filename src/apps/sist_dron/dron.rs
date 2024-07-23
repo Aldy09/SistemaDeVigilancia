@@ -2,21 +2,14 @@ use std::{
     collections::HashMap,
     fs,
     io::{self, Error, ErrorKind},
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
     thread::{self, sleep, JoinHandle},
     time::Duration,
 };
 
-use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
+use std::sync::mpsc::Receiver as MpscReceiver;
 
-use crate::{
-    logging::{
-        logger::Logger,
-        string_logger::StringLogger,
-        structs_to_save_in_logger::{OperationType, StructsToSaveInLogger},
-    },
-    mqtt::messages::message_type::MessageType,
-};
+use crate::logging::string_logger::StringLogger;
 use crate::apps::{
         apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, sist_dron::dron_state::DronState
     };
@@ -44,7 +37,6 @@ pub struct Dron {
     // Constantes cargadas desde un arch de configuración
     dron_properties: SistDronProperties,
 
-    logger_tx: mpsc::Sender<StructsToSaveInLogger>,
     logger: StringLogger,
 
     drone_distances_by_incident: DistancesType,
@@ -58,16 +50,15 @@ impl Dron {
         id: u8,
         lat: f64,
         lon: f64,
-        logger_tx: MpscSender<StructsToSaveInLogger>,
         logger: StringLogger,
     ) -> Result<Self, Error> {
-        let dron = Self::new_internal(id, lat, lon, logger_tx, logger)?;
+        let dron = Self::new_internal(id, lat, lon, logger)?;
         dron.logger.log(format!("Dron: Iniciado dron {:?}", id));
 
         Ok(dron)
     }
 
-    pub fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()> {
+    fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()> {
         let mut self_child = self.clone_ref();
         thread::spawn(move || loop {
             sleep(Duration::from_secs(5));
@@ -88,13 +79,11 @@ impl Dron {
         &mut self,
         mqtt_client: MQTTClient,
         mqtt_rx: MpscReceiver<PublishMessage>,
-        logger_rx: MpscReceiver<StructsToSaveInLogger>,
     ) -> Result<Vec<JoinHandle<()>>, Error> {
-        let logger = Logger::new(logger_rx);
+
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
-        children.push(spawn_dron_stuff_to_logger_thread(logger));
         children.push(self.spawn_for_update_battery(mqtt_client_sh.clone()));
 
         self.subscribe_to_topics(Arc::clone(&mqtt_client_sh), mqtt_rx)?;
@@ -102,11 +91,10 @@ impl Dron {
         Ok(children)
     }
 
-    pub fn clone_ref(&self) -> Self {
+    fn clone_ref(&self) -> Self {
         Self {
             current_info: Arc::clone(&self.current_info),
             dron_properties: self.dron_properties,
-            logger_tx: self.logger_tx.clone(),
             logger: self.logger.clone_ref(),
             drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
             qos: self.qos,
@@ -127,7 +115,7 @@ impl Dron {
     }
 
     /// Se suscribe al topic recibido.
-    pub fn subscribe_to_topic(
+    fn subscribe_to_topic(
         &self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
         topic: &str,
@@ -135,21 +123,7 @@ impl Dron {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
             match res_sub {
-                Ok(subscribe_message) => {
-                    // Inicio: lo de abajo puede reemplazarse por el nuevo logger.log(...).
-                    let struct_event = StructsToSaveInLogger::MessageType(
-                        "Dron".to_string(),
-                        MessageType::Subscribe(subscribe_message),
-                        OperationType::Sent,
-                    );
-                    if self.logger_tx.send(struct_event).is_err() {
-                        return Err(Error::new(
-                            std::io::ErrorKind::Other,
-                            "Cliente: Error al intentar loggear.",
-                        ));
-                    }
-                    // Fin: lo de arriba puede ser reemplazado por la línea de abajo.
-
+                Ok(_) => {
                     self.logger
                         .log(format!("Dron: Suscripto a topic: {}", topic));
                 }
@@ -166,7 +140,8 @@ impl Dron {
 
     /// Recibe mensajes de los topics a los que se ha suscrito: inc y dron.
     /// (aux sist monitoreo actualiza el estado del incidente y hace publish a inc; dron hace publish a dron)
-    pub fn receive_messages_from_subscribed_topics(
+    /// Lanza un hilo por cada mensaje recibido, para procesarlo, y espera a sus hijos.
+    fn receive_messages_from_subscribed_topics(
         &mut self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
@@ -176,17 +151,6 @@ impl Dron {
             match mqtt_rx.recv() {
                 //Publish message: Incidente o dron
                 Ok(publish_message) => {
-                    // Inicio: esto se deja por compatibilidad hacia atrás, pero puede ser reemplazado por el logger.log;
-                    let struct_event = StructsToSaveInLogger::MessageType(
-                        "Dron".to_string(),
-                        MessageType::Publish(publish_message.clone()),
-                        OperationType::Received,
-                    );
-                    if self.logger_tx.send(struct_event).is_err() {
-                        println!("Cliente: Error al intentar loggear.");
-                    }
-                    // Fin: lo de arriba puede reemplazarse por la línea de abajo.
-
                     self.logger.log(format!(
                         "Dron: Recibo mensaje Publish: {:?}",
                         publish_message
@@ -623,7 +587,7 @@ impl Dron {
 
     /// Hace publish de su current info.
     /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
-    pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(
@@ -825,7 +789,7 @@ impl Dron {
         ))
     }
 
-    pub fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
+    fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
         let contenido = fs::read_to_string(ruta_archivo)?;
         let inicio = contenido.find("qos=").ok_or(io::Error::new(
             ErrorKind::NotFound,
@@ -842,11 +806,10 @@ impl Dron {
 
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     /// Función utilizada para testear, no necesita broker address.
-    pub fn new_internal(
+    fn new_internal(
         id: u8,
         initial_lat: f64,
         initial_lon: f64,
-        logger_tx: MpscSender<StructsToSaveInLogger>,
         logger: StringLogger,
     ) -> Result<Self, Error> {
         let qos = Dron::leer_qos_desde_archivo("src/apps/sist_dron/qos_dron.properties")?;
@@ -874,7 +837,6 @@ impl Dron {
         let dron = Dron {
             current_info: Arc::new(Mutex::new(current_info)),
             dron_properties,
-            logger_tx,
             logger,
             drone_distances_by_incident,
             qos,
@@ -905,7 +867,7 @@ impl Dron {
         ))
     }
 
-    pub fn decrement_and_check_battery_lvl(
+    fn decrement_and_check_battery_lvl(
         &mut self,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
@@ -952,7 +914,7 @@ impl Dron {
         Ok(())
     }
 
-    pub fn set_battery_lvl(&mut self) -> Result<(), Error> {
+    fn set_battery_lvl(&mut self) -> Result<(), Error> {
         if let Ok(mut ci) = self.current_info.lock() {
             ci.set_battery_lvl(self.dron_properties.get_max_battery_lvl());
             Ok(())
@@ -965,37 +927,23 @@ impl Dron {
     }
 }
 
-// Esta función podría eliminarse, porque el Logger está siendo reemplazado por el nuevo StringLogger.
-// Se conserva temporalmente, por compatibilidad hacia atrás.
-fn spawn_dron_stuff_to_logger_thread(logger: Logger) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        while let Ok(msg) = logger.logger_rx.recv() {
-            logger.write_in_file(msg);
-        }
-    })
-}
-
 #[cfg(test)]
 
 mod test {
     use std::sync::mpsc;
-
     use crate::apps::sist_dron::dron_state::DronState;
     use crate::logging::string_logger::StringLogger;
-    use crate::logging::structs_to_save_in_logger::StructsToSaveInLogger;
-
     use super::Dron;
 
     fn create_dron_4() -> Dron {
         let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();
-        let logger = StringLogger::new(str_logger_tx); // en el futuro se borrará la línea de abajo
-        let (logger_tx, _logger_rx) = mpsc::channel::<StructsToSaveInLogger>();
+        let logger = StringLogger::new(str_logger_tx); // para testing alcanza con crearlo así.
 
         // Dron 4 inicia en: -34.60282, -58.38730
         let lat = -34.60282;
         let lon = -58.38730;
 
-        Dron::new_internal(4, lat, lon, logger_tx, logger).unwrap()
+        Dron::new_internal(4, lat, lon, logger).unwrap()
     }
 
     #[test]
