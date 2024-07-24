@@ -9,14 +9,18 @@ use std::{
 type StreamType = TcpStream;
 use crate::mqtt::messages::publish_message::PublishMessage;
 
+use super::user_state::UserState;
+
 type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
 
+/// Representa a un usuario (cliente) conectado al MQTTServer, del lado del servidor.
 #[derive(Debug)]
 #[allow(dead_code)]
 
 pub struct User {
     stream: StreamType,
     username: String,
+    state: UserState,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
@@ -26,6 +30,7 @@ impl User {
         User {
             stream,
             username,
+            state: UserState::Active,
             topics: Vec::new(),
             messages: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -39,6 +44,10 @@ impl User {
         self.username.to_string()
     }
 
+    pub fn is_not_disconnected(&self) -> bool {
+        self.state != UserState::TemporallyDisconnected
+    }
+
     pub fn get_topics(&self) -> &Vec<String> {
         &self.topics
     }
@@ -50,6 +59,10 @@ impl User {
     // Setters
     pub fn set_stream(&mut self, stream: StreamType) {
         self.stream = stream;
+    }
+    
+    pub fn set_state(&mut self, state: UserState) {
+        self.state = state;
     }
 
     pub fn set_username(&mut self, username: String) {
@@ -74,5 +87,5 @@ impl User {
                 //.or_insert_with(VecDeque::new)
                 .push_back(message);
         }
-    }
+    }    
 }

@@ -12,6 +12,7 @@ use crate::mqtt::mqtt_utils::utils::{
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
+use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
 use std::collections::HashMap;
@@ -82,6 +83,28 @@ impl MQTTServer {
             users.remove(username);
             println!("Username removido de la lista del server: {:?}", username);
             // debug
+        }
+    }
+
+    /// Cambia el estado del usuario del server con username `username` a TemporallyDisconnected,
+    /// para que no se le envíen mensajes si se encuentra en dicho estado y de esa forma evitar errores en writes.
+    fn set_user_as_temporally_disconnected(&self, username: &str) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            if let Some(user ) = users.get_mut(username){
+                user.set_state(UserState::TemporallyDisconnected);
+            }
+            println!("Username seteado como temporalmente desconectado: {:?}", username);
+        }
+    }
+
+    /// Cambia el estado del usuario del server con username `username` a Active,
+    /// para volver a marcarlo como activo luego de una desconexión, y que se le vuelva a enviar mensajes.
+    fn set_user_as_active_again(&self, username: &str) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            if let Some(user ) = users.get_mut(username){
+                user.set_state(UserState::Active);
+            }
+            println!("Username seteado como activo, volvió a conectarse: {:?}", username);
         }
     }
 
@@ -210,6 +233,7 @@ impl MQTTServer {
                 }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
+                    self.set_user_as_temporally_disconnected(username);
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }
@@ -516,19 +540,21 @@ impl MQTTServer {
         // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
         if let Ok(connected_users) = self.connected_users.lock() {
             for user in connected_users.values() {
-                let mut user_stream = user.get_stream()?;
-                let user_subscribed_topics = user.get_topics(); // Aux: (Esto sobra, las voy a recorrer a todas...)
-                                                                // println!("TOPICS: {:?}",topics);
-                let hashmap_messages = user.get_hashmap_messages();
-                if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
-                    for topic in user_subscribed_topics {
-                        // trae 1 cola de un topic y escribe los mensajes en el stream
-                        if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
-                            while let Some(msg) = messages_topic_queue.pop_front() {
-                                let msg_bytes = msg.to_bytes();
-                                println!("DEBUG: A PUNTO DE HACER EL WRITE:");
-                                write_message_to_stream(&msg_bytes, &mut user_stream)?;
-                                println!("DEBUG:    WRITE EXITOSO.");
+                if user.is_not_disconnected() {
+                    let mut user_stream = user.get_stream()?;
+                    let user_subscribed_topics = user.get_topics(); // Aux: (Esto sobra, las voy a recorrer a todas...)
+                                                                    // println!("TOPICS: {:?}",topics);
+                    let hashmap_messages = user.get_hashmap_messages();
+                    if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
+                        for topic in user_subscribed_topics {
+                            // trae 1 cola de un topic y escribe los mensajes en el stream
+                            if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
+                                while let Some(msg) = messages_topic_queue.pop_front() {
+                                    let msg_bytes = msg.to_bytes();
+                                    println!("DEBUG: A PUNTO DE HACER EL WRITE:");
+                                    write_message_to_stream(&msg_bytes, &mut user_stream)?;
+                                    println!("DEBUG:    WRITE EXITOSO.");
+                                }
                             }
                         }
                     }
