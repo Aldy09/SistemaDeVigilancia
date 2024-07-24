@@ -1,5 +1,3 @@
-type ShareableCamType = Camera;
-type ShCamerasType = Arc<Mutex<HashMap<u8, ShareableCamType>>>;
 use std::sync::mpsc::Receiver;
 
 use crate::apps::sist_camaras::{camera::Camera, sist_camaras_abm::ABMCameras};
@@ -16,6 +14,10 @@ use std::{sync::{
 
 use std::io::{self, Error, ErrorKind};
 use std::fs;
+
+use super::automatic_incident_detector::AutomaticIncidentDetector;
+
+use super::shareable_cameras_type::ShCamerasType;
 
 type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
 
@@ -82,6 +84,7 @@ impl SistemaCamaras {
             self_clone.cameras_tx,
             self_clone.exit_tx,
         ));
+        //children.push(self.spawn_ai_incident_analyzer_thread(un tx)); // aux: le puedo pasar un tx y que me mande inc y yo publico en mqtt. []
         children.push(self.spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
         children.push(spawn_exit_when_asked_thread(
             mqtt_client_sh.clone(),
@@ -203,6 +206,18 @@ impl SistemaCamaras {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
             self_clone.publish_to_topic(mqtt_client_sh, AppsMqttTopics::CameraTopic.to_str(), cameras_rx);
+        })
+    }
+
+    /// Pone en ejecución el módulo de detección automática de incidentes.
+    fn _spawn_ai_incident_analyzer_thread(
+        &self,
+        tx: mpsc::Sender<Incident>
+    ) -> JoinHandle<()> {
+        let cameras_ref = Arc::clone(&self.cameras);
+        thread::spawn(move || {
+            let ai_inc_detector = AutomaticIncidentDetector::new(cameras_ref, tx);
+            ai_inc_detector.run();
         })
     }
 
