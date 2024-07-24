@@ -97,15 +97,34 @@ impl MQTTServer {
         }
     }
 
-    /// Cambia el estado del usuario del server con username `username` a Active,
-    /// para volver a marcarlo como activo luego de una desconexión, y que se le vuelva a enviar mensajes.
-    fn set_user_as_active_again(&self, username: &str) {
-        if let Ok(mut users) = self.connected_users.lock() {
-            if let Some(user ) = users.get_mut(username){
-                user.set_state(UserState::Active);
+    /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
+    /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
+    /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
+    fn manage_possible_reconnecting_or_duplicate_user(
+        &self,
+        client_id: &str,
+    ) -> Result<(), Error> {
+        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+            //if let Some(client) = connected_users_locked.remove(client_id) {
+            if let Some(client) = connected_users_locked.get_mut(client_id) {
+                match client.get_state() {
+                    UserState::Active => {
+                        // disconnect_previous_client_if_already_connected:
+                        let msg = DisconnectMessage::new();
+                        let mut stream = client.get_stream()?; //
+
+                        write_message_to_stream(&msg.to_bytes(), &mut stream)?;
+                    },
+                    UserState::TemporallyDisconnected => {
+                        // Vuelve a setearle estado activo, para que se le hagan los writes.
+                        client.set_state(UserState::Active);
+                        // Y acá iría la lógica para enviarle lo que pasó mientras no estuvo en línea.
+                    },
+                }
             }
-            println!("Username seteado como activo, volvió a conectarse: {:?}", username);
         }
+
+        Ok(())
     }
 
     /// Procesa el mensaje de conexión recibido, autentica
@@ -129,7 +148,7 @@ impl MQTTServer {
 
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.disconnect_previous_client_if_already_connected(client_id)?;
+            self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
@@ -561,23 +580,6 @@ impl MQTTServer {
                 }
             }
         }
-        Ok(())
-    }
-
-    /// Busca al client_id en el hashmap de conectados, si ya estaba conectado, le manda disconnect.
-    fn disconnect_previous_client_if_already_connected(
-        &self,
-        client_id: &str,
-    ) -> Result<(), Error> {
-        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-            if let Some(client) = connected_users_locked.remove(client_id) {
-                let msg = DisconnectMessage::new();
-                let mut stream = client.get_stream()?; //
-
-                write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-            }
-        }
-
         Ok(())
     }
 }

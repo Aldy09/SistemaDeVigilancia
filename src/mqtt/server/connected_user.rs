@@ -43,9 +43,13 @@ impl User {
     pub fn get_username(&self) -> String {
         self.username.to_string()
     }
-
+    
     pub fn is_not_disconnected(&self) -> bool {
         self.state != UserState::TemporallyDisconnected
+    }
+    
+    pub fn get_state(&self) -> &UserState {
+        &self.state
     }
 
     pub fn get_topics(&self) -> &Vec<String> {
@@ -87,5 +91,6 @@ impl User {
                 //.or_insert_with(VecDeque::new)
                 .push_back(message);
         }
-    }    
+    }
+    
 }
