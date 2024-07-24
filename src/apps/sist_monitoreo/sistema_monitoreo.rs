@@ -122,13 +122,13 @@ impl SistemaMonitoreo {
         rx: MpscReceiver<Incident>,
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
-        thread::spawn(move || loop {
+        thread::spawn(move ||
             while let Ok(inc) = rx.recv() {
                 let msg_clone = inc.clone();
                 self_clone.logger.log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
                 self_clone.publish_incident(msg_clone, &mqtt_client);
             }
-        })
+        )
     }
 
     fn clone_ref(&self) -> Self {

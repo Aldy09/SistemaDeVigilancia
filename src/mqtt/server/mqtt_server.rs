@@ -159,10 +159,8 @@ impl MQTTServer {
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
                 self.add_user(&stream, username)?;
-                //self.handle_connection(username, &mut stream)?;
-                if self.handle_connection(username, &mut stream).is_err() {
-                    println!("DEBUG:   SE HA SALIDO DE LA FUNCIÓN, SE DEJA DE LEER PARA EL CLIENTE: {}.", username);
-                }
+                self.handle_connection(username, &mut stream)?;                
+                println!("   se ha salido de la función, se deja de leer para el cliente: {}.", username); // debug
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -227,11 +225,6 @@ impl MQTTServer {
     /// Maneja la conexión con el cliente, recibe mensajes y los procesa.
     fn handle_connection(&self, username: &str, stream: &mut StreamType) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
-        //let (mut fixed_h_buf, mut fixed_h);
-        //let ceros: &[u8; 2] = &[0; 2];
-        //let mut empty: bool = false;
-
-        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
@@ -246,7 +239,6 @@ impl MQTTServer {
                         break;
                     }
 
-                    //msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
                     self.process_message(username, stream, &fixed_header_info)?;
                     // esta función lee UN mensaje.
                 }
@@ -260,35 +252,6 @@ impl MQTTServer {
             }
         }
         Ok(())
-        // Fin probando
-
-        /*// Lo que había
-        let mut fixed_header_info: ([u8; 2], FixedHeader);
-        let ceros: &[u8; 2] = &[0; 2];
-        let mut empty: bool;
-
-        println!("Mqtt cliente leyendo: esperando más mensajes.");
-        let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream(stream)?;
-
-        // println!("While: leí bien.");
-        fixed_header_info = (fixed_h_buf, fixed_h);
-        empty = &fixed_header_info.0 == ceros;
-
-        let mut msg_bytes: Vec<u8>;
-        while !empty {
-            msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-            self.process_message(username, stream, &fixed_header_info.1, msg_bytes)?; // esta función lee UN mensaje.
-                                                                                 // Leo fixed header para la siguiente iteración del while
-            println!("Server esperando más mensajes.");
-            let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream(stream)?;
-            // Guardo lo leído y comparo para siguiente vuelta del while
-            fixed_header_info = (fixed_h_buf, fixed_h);
-            empty = &fixed_header_info.0 == ceros;
-
-        }
-        Ok(())*/
     }
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
@@ -402,9 +365,7 @@ impl MQTTServer {
             PacketType::Subscribe => {
                 // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
-                // println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
-                // println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 //self.send_suback_to_outgoing(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
                 self.send_suback(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
@@ -427,15 +388,12 @@ impl MQTTServer {
 
     /// Procesa los mensajes entrantes de un dado cliente.
     fn handle_client(&self, mut stream: StreamType) -> Result<(), Error> {
-        // Probando
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         // Leo un fixed header, deberá ser de un connect
         let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream_for_conn(&mut stream)?;
 
         let fixed_header_info = (fixed_header_buf, fixed_header);
-        // Fin Probando
-        //let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
         let (fixed_header_buf, fixed_header) = (&fixed_header_info.0, &fixed_header_info.1);
 
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
@@ -570,9 +528,7 @@ impl MQTTServer {
                             if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
                                 while let Some(msg) = messages_topic_queue.pop_front() {
                                     let msg_bytes = msg.to_bytes();
-                                    println!("DEBUG: A PUNTO DE HACER EL WRITE:");
                                     write_message_to_stream(&msg_bytes, &mut user_stream)?;
-                                    println!("DEBUG:    WRITE EXITOSO.");
                                 }
                             }
                         }
