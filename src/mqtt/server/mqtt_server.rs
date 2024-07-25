@@ -12,6 +12,7 @@ use crate::mqtt::mqtt_utils::utils::{
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
+use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
 use std::collections::HashMap;
@@ -85,6 +86,47 @@ impl MQTTServer {
         }
     }
 
+    /// Cambia el estado del usuario del server con username `username` a TemporallyDisconnected,
+    /// para que no se le envíen mensajes si se encuentra en dicho estado y de esa forma evitar errores en writes.
+    fn set_user_as_temporally_disconnected(&self, username: &str) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            if let Some(user ) = users.get_mut(username){
+                user.set_state(UserState::TemporallyDisconnected);
+            }
+            println!("Username seteado como temporalmente desconectado: {:?}", username);
+        }
+    }
+
+    /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
+    /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
+    /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
+    fn manage_possible_reconnecting_or_duplicate_user(
+        &self,
+        client_id: &str,
+    ) -> Result<(), Error> {
+        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+            //if let Some(client) = connected_users_locked.remove(client_id) {
+            if let Some(client) = connected_users_locked.get_mut(client_id) {
+                match client.get_state() {
+                    UserState::Active => {
+                        // disconnect_previous_client_if_already_connected:
+                        let msg = DisconnectMessage::new();
+                        let mut stream = client.get_stream()?; //
+
+                        write_message_to_stream(&msg.to_bytes(), &mut stream)?;
+                    },
+                    UserState::TemporallyDisconnected => {
+                        // Vuelve a setearle estado activo, para que se le hagan los writes.
+                        client.set_state(UserState::Active);
+                        // Y acá iría la lógica para enviarle lo que pasó mientras no estuvo en línea.
+                    },
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Procesa el mensaje de conexión recibido, autentica
     /// al cliente y envía un mensaje de conexión de vuelta.
     fn process_connect(
@@ -106,7 +148,7 @@ impl MQTTServer {
 
         // Busca en el hashmap: si ya existía ese cliente, lo desconecta
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.disconnect_previous_client_if_already_connected(client_id)?;
+            self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
@@ -117,10 +159,8 @@ impl MQTTServer {
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
                 self.add_user(&stream, username)?;
-                //self.handle_connection(username, &mut stream)?;
-                if self.handle_connection(username, &mut stream).is_err() {
-                    println!("DEBUG:   SE HA SALIDO DE LA FUNCIÓN, SE DEJA DE LEER PARA EL CLIENTE: {}.", username);
-                }
+                self.handle_connection(username, &mut stream)?;                
+                println!("   se ha salido de la función, se deja de leer para el cliente: {}.", username); // debug
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente.");
@@ -185,11 +225,6 @@ impl MQTTServer {
     /// Maneja la conexión con el cliente, recibe mensajes y los procesa.
     fn handle_connection(&self, username: &str, stream: &mut StreamType) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
-        //let (mut fixed_h_buf, mut fixed_h);
-        //let ceros: &[u8; 2] = &[0; 2];
-        //let mut empty: bool = false;
-
-        //empty = &fixed_header_info.0 == ceros;
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
@@ -204,12 +239,12 @@ impl MQTTServer {
                         break;
                     }
 
-                    //msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
                     self.process_message(username, stream, &fixed_header_info)?;
                     // esta función lee UN mensaje.
                 }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
+                    self.set_user_as_temporally_disconnected(username);
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }
@@ -217,35 +252,6 @@ impl MQTTServer {
             }
         }
         Ok(())
-        // Fin probando
-
-        /*// Lo que había
-        let mut fixed_header_info: ([u8; 2], FixedHeader);
-        let ceros: &[u8; 2] = &[0; 2];
-        let mut empty: bool;
-
-        println!("Mqtt cliente leyendo: esperando más mensajes.");
-        let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream(stream)?;
-
-        // println!("While: leí bien.");
-        fixed_header_info = (fixed_h_buf, fixed_h);
-        empty = &fixed_header_info.0 == ceros;
-
-        let mut msg_bytes: Vec<u8>;
-        while !empty {
-            msg_bytes = complete_byte_message_read(stream, &fixed_header_info)?;
-            self.process_message(username, stream, &fixed_header_info.1, msg_bytes)?; // esta función lee UN mensaje.
-                                                                                 // Leo fixed header para la siguiente iteración del while
-            println!("Server esperando más mensajes.");
-            let (fixed_h_buf, fixed_h) =
-                get_fixed_header_from_stream(stream)?;
-            // Guardo lo leído y comparo para siguiente vuelta del while
-            fixed_header_info = (fixed_h_buf, fixed_h);
-            empty = &fixed_header_info.0 == ceros;
-
-        }
-        Ok(())*/
     }
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
@@ -359,9 +365,7 @@ impl MQTTServer {
             PacketType::Subscribe => {
                 // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
-                // println!(" Subscribe:  Antes de add_topics_to_subscriber");
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
-                // println!(" Subscribe:  Despues de add_topics_to_subscriber");
 
                 //self.send_suback_to_outgoing(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
                 self.send_suback(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
@@ -384,15 +388,12 @@ impl MQTTServer {
 
     /// Procesa los mensajes entrantes de un dado cliente.
     fn handle_client(&self, mut stream: StreamType) -> Result<(), Error> {
-        // Probando
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         // Leo un fixed header, deberá ser de un connect
         let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream_for_conn(&mut stream)?;
 
         let fixed_header_info = (fixed_header_buf, fixed_header);
-        // Fin Probando
-        //let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream(stream)?;
         let (fixed_header_buf, fixed_header) = (&fixed_header_info.0, &fixed_header_info.1);
 
         // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
@@ -516,42 +517,25 @@ impl MQTTServer {
         // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
         if let Ok(connected_users) = self.connected_users.lock() {
             for user in connected_users.values() {
-                let mut user_stream = user.get_stream()?;
-                let user_subscribed_topics = user.get_topics(); // Aux: (Esto sobra, las voy a recorrer a todas...)
-                                                                // println!("TOPICS: {:?}",topics);
-                let hashmap_messages = user.get_hashmap_messages();
-                if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
-                    for topic in user_subscribed_topics {
-                        // trae 1 cola de un topic y escribe los mensajes en el stream
-                        if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
-                            while let Some(msg) = messages_topic_queue.pop_front() {
-                                let msg_bytes = msg.to_bytes();
-                                println!("DEBUG: A PUNTO DE HACER EL WRITE:");
-                                write_message_to_stream(&msg_bytes, &mut user_stream)?;
-                                println!("DEBUG:    WRITE EXITOSO.");
+                if user.is_not_disconnected() {
+                    let mut user_stream = user.get_stream()?;
+                    let user_subscribed_topics = user.get_topics(); // Aux: (Esto sobra, las voy a recorrer a todas...)
+                                                                    // println!("TOPICS: {:?}",topics);
+                    let hashmap_messages = user.get_hashmap_messages();
+                    if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
+                        for topic in user_subscribed_topics {
+                            // trae 1 cola de un topic y escribe los mensajes en el stream
+                            if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
+                                while let Some(msg) = messages_topic_queue.pop_front() {
+                                    let msg_bytes = msg.to_bytes();
+                                    write_message_to_stream(&msg_bytes, &mut user_stream)?;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        Ok(())
-    }
-
-    /// Busca al client_id en el hashmap de conectados, si ya estaba conectado, le manda disconnect.
-    fn disconnect_previous_client_if_already_connected(
-        &self,
-        client_id: &str,
-    ) -> Result<(), Error> {
-        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-            if let Some(client) = connected_users_locked.remove(client_id) {
-                let msg = DisconnectMessage::new();
-                let mut stream = client.get_stream()?; //
-
-                write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-            }
-        }
-
         Ok(())
     }
 }
