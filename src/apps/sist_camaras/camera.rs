@@ -216,10 +216,10 @@ impl Camera {
         // Se modifica el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
         let adjusted_range = 0.00135 + 0.0012 * range;
 
-        println!(
+        /*println!(
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
-        ); // debug []
+        ); // debug []*/
         rad <= (adjusted_range)
     }
 }
