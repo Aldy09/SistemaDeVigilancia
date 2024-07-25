@@ -1,8 +1,17 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, sync::{Arc, Mutex}};
 
 use super::camera::Camera;
 
-pub fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
+/// Crea el hashmap de cámaras bien inicializado envuelto en un arc mutex, listo para ser usado
+/// por sistema cámaras y sus módulos.
+pub fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
+    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
+    Arc::new(Mutex::new(cameras))
+}
+
+/// Lee las cámaras desde el archivo `filename`, las parsea y las crea, configurando también cuáles
+/// son lindantes entre sí. Devuelve un hashmap con el id de cada cámara como clave y la cámara como valor.
+fn read_cameras_from_file(filename: &str) -> HashMap<u8, Camera> {
     let mut cameras: HashMap<u8, Camera> = HashMap::new();
     let contents = fs::read_to_string(filename).expect("Error al leer el archivo de properties");
 

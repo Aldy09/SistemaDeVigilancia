@@ -45,5 +45,9 @@ name = "sistema_camaras_main"
 path = "src/apps/sist_camaras/sistema_camaras_main.rs"
 
 [[bin]]
+name = "ai_detector_main"
+path = "src/apps/sist_camaras/ai_detector_main.rs"
+
+[[bin]]
 name = "dron_main"
 path = "src/apps/sist_dron/dron_main.rs"

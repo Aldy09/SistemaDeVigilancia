@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    sync::{mpsc, Arc, Mutex},
+    sync::mpsc,
     thread::{self},
 };
 
@@ -10,7 +9,7 @@ use rustx::{
     apps::{
         common_clients::{get_broker_address, join_all_threads},
         sist_camaras::{
-            camera::Camera, manage_stored_cameras::read_cameras_from_file,
+            manage_stored_cameras::create_cameras,
             sistema_camaras::SistemaCamaras,
         },
     },
@@ -46,29 +45,6 @@ fn create_channels() -> Channels {
         publish_message_rx,
     )
 }
-
-fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
-    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-    Arc::new(Mutex::new(cameras))
-}
-
-/*
-// Aux: Esta función no es necesaria, tiene un match y solo devuelve Ok y Err, y afuera se vuelve a hacer el match.
-// Se puede hacer el match afuera directamente entonces.
-fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStream, Error> {
-    let client_id = "Sistema-Camaras";
-    let handshake_result = mqtt_connect_to_broker(client_id, broker_addr);
-    match handshake_result {
-        Ok(stream) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(stream)
-        }
-        Err(e) => {
-            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
-            Err(e)
-        }
-    }
-}*/
 
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
