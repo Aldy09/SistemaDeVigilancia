@@ -31,7 +31,7 @@ thiserror = "1"
 crossbeam-channel = "0.5.1"
 
 serde = { version = "1.0", features = ["derive"] }
-
+serde_json = "1.0"
 [[bin]]
 name = "message_broker_server"
 path = "src/mqtt/server/message_broker_server.rs"
@@ -51,3 +51,7 @@ path = "src/apps/sist_camaras/ai_detector_main.rs"
 [[bin]]
 name = "dron_main"
 path = "src/apps/sist_dron/dron_main.rs"
+
+[[bin]]
+name = "parse_json"
+path = "src/apps/sist_camaras/parse_json.rs"

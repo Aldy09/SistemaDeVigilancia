@@ -66,3 +66,4 @@ fn query_ia_provider(img_name: &str) -> Result<String, Box<dyn Error>> {
 
     Ok(body)
 }
+
