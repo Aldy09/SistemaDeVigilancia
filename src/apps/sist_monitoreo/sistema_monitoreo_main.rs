@@ -6,6 +6,7 @@ use std::{
 
 use crossbeam_channel::unbounded;
 use rustx::logging::string_logger::StringLogger;
+use rustx::mqtt::mqtt_utils::will_message_utils::app_type::AppType;
 use rustx::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use rustx::{
     apps::{
@@ -44,7 +45,7 @@ fn get_formatted_app_id() -> String {
 }
 
 fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(String::from("Monitoreo"), 0)
+    WillContent::new(AppType::Monitoreo, 0) // []
 }
 
 fn main() -> Result<(), Error>{

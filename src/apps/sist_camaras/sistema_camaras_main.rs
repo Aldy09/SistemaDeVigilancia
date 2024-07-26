@@ -20,7 +20,7 @@ use rustx::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::will_content::WillContent,
+        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent},
     },
 };
 
@@ -57,7 +57,7 @@ fn get_formatted_app_id() -> String {
 }
 
 fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(String::from("Camaras"), 0)
+    WillContent::new(AppType::Cameras, 0)
 }
 
 fn main() -> Result<(), Error>{

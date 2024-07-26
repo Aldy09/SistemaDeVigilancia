@@ -3,7 +3,7 @@ use std::str::{from_utf8, Utf8Error};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
-use crate::apps::place_type::PlaceType;
+use crate::apps::place_type::{self, PlaceType};
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;
@@ -14,6 +14,8 @@ use crate::apps::vendor::{
     HttpOptions, Map, MapMemory, Place, Places, Position, Style, Tiles, TilesManager,
 };
 use crate::apps::{places, plugins::ImagesPluginData};
+use crate::mqtt::mqtt_utils::will_message_utils::app_type::AppType;
+use crate::mqtt::mqtt_utils::will_message_utils::will_content::{self, WillContent};
 use crossbeam::channel::Receiver;
 use egui::Context;
 use egui::{menu, Color32};
@@ -361,9 +363,34 @@ impl UISistemaMonitoreo {
     }
 
     fn handle_disconnection_message(&mut self, publish_message: PublishMessage) -> Result<(), Utf8Error> {
+        // Obtengo el contenido del publish message
+        let will_content_res =  WillContent::will_content_from_string(
+            from_utf8(&publish_message.get_payload())?);
+        if let Ok(will_content) = will_content_res {
+            let app_type = will_content.get_app_type_identifier();
+            // Obtengo los campos necesarios para remover del vector places
+            let id = will_content.get_id();
+            let place_type = PlaceType::from_app_type_will_content(&app_type);
+
+            match app_type {
+                AppType::Cameras => {
+                    // Se eliminan Todas las cámaras.
+                    println!("Desc, recibido will_message: Se desconectó Sistema Cámaras.");
+                    self.places.remove_places(place_type)
+                },
+                AppType::Dron => {
+                    println!("Desc, recibido will_message: Se desconectó Dron {}.", id);
+                    // Se elimina el dron de id indicado, porque el mismo se desconectó.
+                    self.places.remove_place(id, place_type)
+                },
+                AppType::Monitoreo => {
+                    // este caso nunca va a darse, no recibirá su propio mensaje, y tampoco interesa.
+                },
+            }
+
+        }
+
         // Solo estoy probando, si se desconecta cameras se desconectarían todas juntas irl.
-        let _string = from_utf8(&publish_message.get_payload())?;
-        // if string.contains("dron") // qué lío, mejor lo hago bien y listo
         let place_type = PlaceType::Camera;
         let id = 5;
         self.places.remove_place(id, place_type);
