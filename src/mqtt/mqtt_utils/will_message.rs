@@ -1,7 +1,3 @@
-//use std::{io::{Error, ErrorKind}, str::from_utf8};
-
-use crate::mqtt::messages::publish_flags::PublishFlags;
-
 /// Representa el campo will_message que estará presente en el payload
 /// del ConnectMessage si cada app de cliente decide enviar uno.
 #[derive(Debug, PartialEq)]

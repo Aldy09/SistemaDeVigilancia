@@ -12,7 +12,6 @@ use crate::mqtt::mqtt_utils::utils::{
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::mqtt_utils::will_message::WillMessageAndTopic;
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
@@ -131,16 +130,6 @@ impl MQTTServer {
     fn generate_packet_id(&mut self) -> u16 {
         self.available_packet_id += 1;
         self.available_packet_id
-    }
-
-    fn publish_users_will_message(&self, username: &str) {
-        if let Ok(mut users) = self.connected_users.lock() {
-            if let Some(user ) = users.get_mut(username){
-                user.set_state(UserState::TemporallyDisconnected);
-            }
-            println!("Username seteado como temporalmente desconectado: {:?}", username);
-        }
-
     }
 
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
@@ -291,7 +280,7 @@ impl MQTTServer {
                 }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
-                    self.set_user_as_temporally_disconnected_and_publish_their_will_msg(username);
+                    self.set_user_as_temporally_disconnected_and_publish_their_will_msg(username)?;
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }

@@ -1,7 +1,7 @@
 use crate::mqtt::{messages::{
     connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_payload::Payload,
     connect_variable_header::VariableHeader,
-}, mqtt_utils::will_message::{self, WillMessageAndTopic}};
+}, mqtt_utils::will_message::WillMessageAndTopic};
 
 #[derive(Debug)]
 pub struct ConnectMessage {
