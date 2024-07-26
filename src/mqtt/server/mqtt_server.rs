@@ -103,7 +103,7 @@ impl MQTTServer {
         }
         Ok(())
     }
-    
+
     /// Envía el will_message del user que se está desconectando, si tenía uno.
     fn publish_users_will_message(&self, username: &str) -> Result<(), Error> {
         let packet_id = 1000; // <-- aux: rever esto []: generate_packet_id requiere self mut, pero esto es multihilo, no tiene mucho sentido. Quizás un arc mutex u16, volver.
@@ -126,7 +126,7 @@ impl MQTTServer {
     /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
     /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
     /// en el envío para el cual fue llamada esta función.
-    fn generate_packet_id(&mut self) -> u16 {
+    fn _generate_packet_id(&mut self) -> u16 { // Aux: ToDo Ver []
         self.available_packet_id += 1;
         self.available_packet_id
     }

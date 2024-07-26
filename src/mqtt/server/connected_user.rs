@@ -7,7 +7,8 @@ use std::{
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
 type StreamType = TcpStream;
-use crate::mqtt::{messages::{publish_flags::PublishFlags, publish_message::PublishMessage}, mqtt_utils::will_message::WillMessageAndTopic};
+use crate::mqtt::{messages::{publish_flags::PublishFlags, publish_message::PublishMessage},
+           mqtt_utils::will_message_utils::will_message::WillMessageAndTopic};
 
 use super::user_state::UserState;
 

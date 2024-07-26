@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::{from_utf8, Utf8Error};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
@@ -359,12 +360,15 @@ impl UISistemaMonitoreo {
         self.last_incident_id
     }
 
-    fn handle_disconnection_message(&mut self, publish_message: PublishMessage){
+    fn handle_disconnection_message(&mut self, publish_message: PublishMessage) -> Result<(), Utf8Error> {
         // Solo estoy probando, si se desconecta cameras se desconectarían todas juntas irl.
+        let _string = from_utf8(&publish_message.get_payload())?;
+        // if string.contains("dron") // qué lío, mejor lo hago bien y listo
         let place_type = PlaceType::Camera;
         let id = 5;
         self.places.remove_place(id, place_type);
         
+        Ok(())
     }
 }
 

@@ -1,8 +1,8 @@
-/// Representa el campo will_message que estará presente en el payload
-/// del ConnectMessage si cada app de cliente decide enviar uno.
+/// Contiene la información relacionada al will_message extraída del ConnectMessage.
+/// Se almacena en un User, y es necesaria para posteriormente construir el PublishMessage
+/// a enviar a los suscriptores del will_topic.
 #[derive(Debug, PartialEq)]
 pub struct WillMessageAndTopic {
-    //disconnected_client_identifier: String,
     will_message_content: String,
     will_topic: String,
     qos: u8,
@@ -12,10 +12,6 @@ pub struct WillMessageAndTopic {
 impl WillMessageAndTopic {
     pub fn new(will_message_content: String, will_topic: String, qos: u8, will_retain: u8) -> Self {
         Self {will_message_content, will_topic, qos, will_retain }
-    }
-
-    pub fn get_as_tuple(&self) -> (String, String) {
-        (String::from(&self.will_message_content), String::from(&self.will_topic))
     }
 
     pub fn get_will_msg_content(&self) -> String {
