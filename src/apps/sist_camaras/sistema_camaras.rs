@@ -8,7 +8,7 @@ use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 // Importa la estructura desde el módulo
-use crate::apps::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
+use crate::apps::sist_camaras::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
 
 use std::collections::HashMap;
 use std::{sync::{

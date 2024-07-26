@@ -1,5 +1,3 @@
-
-
 use config::{Config, File};
 
 #[derive(Debug)]
@@ -16,7 +14,7 @@ impl ApiCredentials {
         settings
             .merge(File::with_name("key_and_endpoint"))
             .expect("Error al cargar el archivo de configuración");
-    
+
         // Leer las propiedades
         let prediction_key: String = settings
             .get("prediction_key")
@@ -36,5 +34,10 @@ impl ApiCredentials {
     pub fn get_endpoint(&self) -> String {
         self.endpoint.clone()
     }
-    
+}
+
+impl Default for ApiCredentials {
+    fn default() -> Self {
+        Self::new()
+    }
 }

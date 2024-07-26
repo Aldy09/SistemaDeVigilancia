@@ -1,3 +1,4 @@
+pub mod azure_model;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;

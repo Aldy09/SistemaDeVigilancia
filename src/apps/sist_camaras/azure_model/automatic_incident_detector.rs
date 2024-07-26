@@ -43,7 +43,7 @@ impl AutomaticIncidentDetector {
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         let path = Path::new("image_detection");
-        watcher.watch(&path, RecursiveMode::Recursive)?;
+        watcher.watch(path, RecursiveMode::Recursive)?;
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
 
