@@ -31,7 +31,7 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_conte
     let mut connect_msg = ConnectMessage::new(
         client_id.to_string(),
         Some(String::from(will_topic.to_str())),
-        Some(will_msg_content.to_string()),
+        Some(will_msg_content.to_str()),
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
         will_qos

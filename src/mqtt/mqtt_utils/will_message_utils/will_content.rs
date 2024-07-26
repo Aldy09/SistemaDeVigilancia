@@ -23,8 +23,8 @@ impl WillContent {
         self.id
     }
 
-    pub fn to_string(&self) -> String {
-        let string_app_type = self.app_type_identifier.to_string();
+    pub fn to_str(&self) -> String {
+        let string_app_type = self.app_type_identifier.to_str();
         format!("{}-{}",string_app_type, self.id)
     }
 
@@ -47,7 +47,7 @@ impl WillContent {
         bytes.extend_from_slice(&self.id.to_be_bytes());
         
         //bytes.extend_from_slice(&(self.app_type_identifier.len() as u8).to_be_bytes());
-        bytes.extend_from_slice(self.app_type_identifier.to_string().as_bytes());
+        bytes.extend_from_slice(self.app_type_identifier.to_str().as_bytes());
 
         bytes
     }
@@ -60,7 +60,7 @@ impl WillContent {
         let string = from_utf8(&bytes[1..])
             .map_err(|_| Error::new(ErrorKind::InvalidInput, "error de decodificación."))?;
         let app_type_identifier = AppType::app_type_from_str(string)?;
-        
+
         Ok(Self{app_type_identifier, id})
     }
 }

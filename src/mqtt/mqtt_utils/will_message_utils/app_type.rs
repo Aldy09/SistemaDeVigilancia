@@ -8,7 +8,7 @@ pub enum AppType {
 }
 
 impl AppType {
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> String {
         match self {
             AppType::Cameras => String::from("camaras"),
             AppType::Dron => String::from("dron"),
