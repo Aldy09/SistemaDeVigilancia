@@ -7,7 +7,7 @@ use std::{
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
 type StreamType = TcpStream;
-use crate::mqtt::{messages::publish_message::PublishMessage, mqtt_utils::will_message::{self, WillMessageAndTopic}};
+use crate::mqtt::{messages::{publish_flags::PublishFlags, publish_message::PublishMessage}, mqtt_utils::will_message::{self, WillMessageAndTopic}};
 
 use super::user_state::UserState;
 
@@ -21,7 +21,7 @@ pub struct User {
     stream: StreamType,
     username: String,
     state: UserState,
-    will_msg_and_topic: Option<WillMessageAndTopic>,
+    will_message: Option<WillMessageAndTopic>,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
@@ -32,7 +32,7 @@ impl User {
             stream,
             username,
             state: UserState::Active,
-            will_msg_and_topic,
+            will_message: will_msg_and_topic,
             topics: Vec::new(),
             messages: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -52,6 +52,29 @@ impl User {
     
     pub fn get_state(&self) -> &UserState {
         &self.state
+    }
+
+    /*pub fn get_will_message(&self) -> PublishMessage {
+        self.will_msg;
+    }*/
+    /*pub fn get_will_message_and_topic(&self) -> Option<WillMessageAndTopic> {
+        self.will_message
+    }*/
+    pub fn get_publish_message_with(&self, dup_flag: u8, packet_id: u16) -> Result<Option<PublishMessage>, Error> {
+        if let Some(info) = &self.will_message {
+            let flags = PublishFlags::new(dup_flag, info.get_qos(), info.get_will_retain())?;
+            let publish_msg = PublishMessage::new(
+                3,
+                flags,
+                &info.get_will_topic(),
+                Some(packet_id),
+                info.get_will_msg_content().as_bytes())?;
+            
+            return Ok(Some(publish_msg));
+
+        }
+        
+        Ok(None)
     }
 
     pub fn get_topics(&self) -> &Vec<String> {

@@ -256,11 +256,16 @@ impl ConnectMessage {
 
     /// Devuelve un WillMessageAndTopic con los campos will_message y will_topic del mensaje
     /// si ambos son some, o None en caso contrario.
-    pub fn get_will_message_and_topic(&self) -> Option<WillMessageAndTopic> {
+    pub fn get_will_to_publish(&self) -> Option<WillMessageAndTopic> {
         if let Some(msg) = &self.payload.will_message {
             if let Some(topic) = &self.payload.will_topic {
-                let will_msg = WillMessageAndTopic
-                            ::new(String::from(msg), String::from(topic));
+
+                let will_msg: WillMessageAndTopic = WillMessageAndTopic::new(
+                    String::from(msg),
+                    String::from(topic),
+                    self.variable_header.connect_flags.will_qos,
+                    self.variable_header.connect_flags.will_retain as u8,
+                );
                 return Some(will_msg);
             }
         }

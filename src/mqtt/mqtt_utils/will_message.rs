@@ -1,17 +1,39 @@
 //use std::{io::{Error, ErrorKind}, str::from_utf8};
 
+use crate::mqtt::messages::publish_flags::PublishFlags;
+
 /// Representa el campo will_message que estará presente en el payload
 /// del ConnectMessage si cada app de cliente decide enviar uno.
 #[derive(Debug, PartialEq)]
 pub struct WillMessageAndTopic {
     //disconnected_client_identifier: String,
-    will_message: String,
+    will_message_content: String,
     will_topic: String,
+    qos: u8,
+    will_retain: u8,
 }
 
 impl WillMessageAndTopic {
-    pub fn new(will_message: String, will_topic: String) -> Self {
-        Self {will_message, will_topic}
+    pub fn new(will_message_content: String, will_topic: String, qos: u8, will_retain: u8) -> Self {
+        Self {will_message_content, will_topic, qos, will_retain }
+    }
+
+    pub fn get_as_tuple(&self) -> (String, String) {
+        (String::from(&self.will_message_content), String::from(&self.will_topic))
+    }
+
+    pub fn get_will_msg_content(&self) -> String {
+        String::from(&self.will_message_content)
+    }
+    pub fn get_will_topic(&self) -> String {
+        String::from(&self.will_topic)
+    }
+
+    pub fn get_qos(&self) -> u8 {
+        self.qos
+    }
+    pub fn get_will_retain(&self) -> u8 {
+        self.will_retain
     }
 
      /*/// Convierte un struct `WillMessage` a bytes.
