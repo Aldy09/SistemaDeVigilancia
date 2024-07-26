@@ -20,7 +20,7 @@ use rustx::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::PublishMessage,
+        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::will_content::WillContent,
     },
 };
 
@@ -52,26 +52,12 @@ fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
     Arc::new(Mutex::new(cameras))
 }
 
-/*
-// Aux: Esta función no es necesaria, tiene un match y solo devuelve Ok y Err, y afuera se vuelve a hacer el match.
-// Se puede hacer el match afuera directamente entonces.
-fn establish_mqtt_broker_connection(broker_addr: &SocketAddr) -> Result<TcpStream, Error> {
-    let client_id = "Sistema-Camaras";
-    let handshake_result = mqtt_connect_to_broker(client_id, broker_addr);
-    match handshake_result {
-        Ok(stream) => {
-            println!("Cliente: Conectado al broker MQTT.");
-            Ok(stream)
-        }
-        Err(e) => {
-            println!("Sistema-Camara: Error al conectar al broker MQTT: {:?}", e);
-            Err(e)
-        }
-    }
-}*/
-
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
+}
+
+fn get_app_will_msg_content() -> WillContent {
+    WillContent::new(String::from("Camaras"), 0)
 }
 
 fn main() -> Result<(), Error>{
@@ -89,8 +75,10 @@ fn main() -> Result<(), Error>{
     // Se crean y configuran ambos extremos del string logger
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
+    let qos = 1; // []
     let client_id = get_formatted_app_id();
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr) {
+    let will_msg_content = get_app_will_msg_content();
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic, qos) {
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);

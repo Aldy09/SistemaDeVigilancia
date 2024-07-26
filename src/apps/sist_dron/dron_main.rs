@@ -16,7 +16,7 @@ use rustx::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::PublishMessage,
+        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{will_content::WillContent, will_message::WillMessageAndTopic},
     },
 };
 
@@ -34,8 +34,8 @@ fn get_formatted_app_id(id: u8) -> String {
     format!("dron-{}", id)
 }
 
-fn get_app_will_msg_content(id: u8) -> String {
-    format!("dron-{}", id)
+fn get_app_will_msg_content(id: u8) -> WillContent {
+    WillContent::new(String::from("dron"), id)
 }
 
 fn main() -> Result<(), Error> {

@@ -17,8 +17,8 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 pub struct MqttClientConnection {}
 
 pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_content: WillContent, will_topic: AppsMqttTopics, will_qos: u8) -> Result<TcpStream, Error> {
-    let will_topic = String::from("desc"); // PROBANDO
-    let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
+    //let will_topic = String::from("desc"); // PROBANDO
+    //let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
     // Inicializaciones
     // Intenta conectar al servidor MQTT
     let stream_tcp = TcpStream::connect(addr)
@@ -30,8 +30,8 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_conte
     // Crea el mensaje tipo Connect y lo pasa a bytes
     let mut connect_msg = ConnectMessage::new(
         client_id.to_string(),
-        Some(will_topic), // will_topic
-        Some(String::from("dron-5")),
+        Some(String::from(will_topic.to_str())),
+        Some(String::from("dron-5")), // Quiero: will_msg_content.to_string()
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
         will_qos

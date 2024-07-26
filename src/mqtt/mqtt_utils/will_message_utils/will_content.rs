@@ -21,6 +21,12 @@ impl WillContent {
         self.id
     }
 
+    /*pub fn to_string(&self) -> String {
+        match self.app_type_identifier {
+
+        }
+    }*/
+
     /// Convierte un struct `AppWillContent` a bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
