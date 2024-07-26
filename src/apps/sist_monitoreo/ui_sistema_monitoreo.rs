@@ -358,6 +358,14 @@ impl UISistemaMonitoreo {
         self.last_incident_id += 1;
         self.last_incident_id
     }
+
+    fn handle_disconnection_message(&mut self, publish_message: PublishMessage){
+        // Solo estoy probando, si se desconecta cameras se desconectarían todas juntas irl.
+        let place_type = PlaceType::Camera;
+        let id = 5;
+        self.places.remove_place(id, place_type);
+        
+    }
 }
 
 impl eframe::App for UISistemaMonitoreo {
@@ -380,8 +388,8 @@ impl eframe::App for UISistemaMonitoreo {
                 } else if publish_message.get_topic_name() == AppsMqttTopics::IncidentTopic.to_str() {
                     self.handle_incident_message(publish_message);
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DescTopic.to_str() {
-                    //self.handle_incident_message(publish_message);
-                    println!("RECIBIDO DE TOPIC DESC: {:?}", publish_message); // probando
+                    println!("RECIBIDO DE TOPIC DESC: {:?}", &publish_message); // probando
+                    self.handle_disconnection_message(publish_message);
                 }
             }
         });
