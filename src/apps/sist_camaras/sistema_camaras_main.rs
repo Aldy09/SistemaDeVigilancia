@@ -7,10 +7,7 @@ use std::io::Error;
 
 use rustx::{
     apps::{
-        common_clients::{get_broker_address, join_all_threads}, incident_data::incident, sist_camaras::{
-            manage_stored_cameras::create_cameras,
-            sistema_camaras::SistemaCamaras,
-        }
+        common_clients::{get_broker_address, join_all_threads}, sist_camaras::{manage_stored_cameras::create_cameras, sistema_camaras::SistemaCamaras},
     },
     logging::string_logger::StringLogger,
     mqtt::{
@@ -49,16 +46,10 @@ fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
 }
 
-fn main() -> Result<(), Error>{
+fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
-    let (
-        cameras_tx,
-        cameras_rx,
-        exit_tx,
-        exit_rx,
-        publish_message_tx,
-        publish_message_rx,
-    ) = create_channels();
+    let (cameras_tx, cameras_rx, exit_tx, exit_rx, publish_message_tx, publish_message_rx) =
+        create_channels();
     let cameras = create_cameras();
 
     // Se crean y configuran ambos extremos del string logger
@@ -78,12 +69,8 @@ fn main() -> Result<(), Error>{
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers = sistema_camaras.spawn_threads(
-                cameras_rx,
-                exit_rx,
-                publish_message_rx,
-                mqtt_client
-            );
+            let mut handlers =
+                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_message_rx, mqtt_client);
 
             handlers.push(handler_1);
             join_all_threads(handlers);

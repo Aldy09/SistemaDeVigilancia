@@ -116,7 +116,7 @@ impl SistemaCamaras {
         thread::spawn(move || {
             for inc in rx {
                 println!("Se recibe por rx el inc: {:?}", inc);
-                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self_clone.qos);
+                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self_clone.qos).unwrap();
             }
         })
     }

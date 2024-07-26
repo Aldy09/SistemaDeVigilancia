@@ -1,8 +1,4 @@
-use std::{
-    io::Error,
-    sync::mpsc,
-    thread,
-};
+use std::{io::Error, sync::mpsc, thread};
 
 use rustx::{
     apps::{
@@ -20,10 +16,7 @@ use rustx::{
     },
 };
 
-type Channels = (
-    mpsc::Sender<PublishMessage>,
-    mpsc::Receiver<PublishMessage>,
-);
+type Channels = (mpsc::Sender<PublishMessage>, mpsc::Receiver<PublishMessage>);
 
 fn create_channels() -> Channels {
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
@@ -35,7 +28,8 @@ fn get_formatted_app_id(id: u8) -> String {
 }
 
 fn main() -> Result<(), Error> {
-    let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
+    let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) =
+        get_id_lat_long_and_broker_address()?;
 
     let (publish_message_tx, publish_message_rx) = create_channels();
 
@@ -44,7 +38,7 @@ fn main() -> Result<(), Error> {
 
     // Se inicializa la conexión mqtt y el dron
     let client_id = get_formatted_app_id(id);
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr) {
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
@@ -54,10 +48,11 @@ fn main() -> Result<(), Error> {
             let mut dron = Dron::new(id, lat, lon, logger)?; //
 
             //match dron_res {
-                //Ok(mut dron) => {
+            //Ok(mut dron) => {
             //let mqtt_client_ref = Arc::new(Mutex::new(mqtt_client)); // Aux: quise agregar esto para llamar a
             //dron.publish_current_info(&Arc::clone(&mqtt_client_ref)); // aux: a esta función, pero es meterse en líos de borrow.
-            if let Ok(ci) = &dron.get_current_info().lock() { // Aux: dejo esto como estaba. Capaz qe se haga internamente? Ver [].
+            if let Ok(ci) = &dron.get_current_info().lock() {
+                // Aux: dejo esto como estaba. Capaz qe se haga internamente? Ver [].
                 mqtt_client.mqtt_publish(
                     AppsMqttTopics::DronTopic.to_str(),
                     &ci.to_bytes(),
@@ -65,23 +60,20 @@ fn main() -> Result<(), Error> {
                 )?;
             };
 
-            let handler_1 = thread::spawn(move || { // []
+            let handler_1 = thread::spawn(move || {
+                // []
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers =
-                dron.spawn_threads(mqtt_client, publish_message_rx)?;
+            let mut handlers = dron.spawn_threads(mqtt_client, publish_message_rx)?;
 
             handlers.push(handler_1);
 
             join_all_threads(handlers);
-                //}
+            //}
             //}
         }
-        Err(e) => println!(
-            "Dron ID {} : Error al conectar al broker MQTT: {:?}",
-            id, e
-        ),
+        Err(e) => println!("Dron ID {} : Error al conectar al broker MQTT: {:?}", id, e),
     }
 
     // Se espera al hijo para el logger writer
