@@ -16,7 +16,7 @@ use rustx::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent, will_message::WillMessageAndTopic},
+        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent},
     },
 };
 

@@ -3,7 +3,7 @@ use std::str::{from_utf8, Utf8Error};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
-use crate::apps::place_type::{self, PlaceType};
+use crate::apps::place_type::PlaceType;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
 use crate::apps::sist_dron::dron_state::DronState;
@@ -15,7 +15,7 @@ use crate::apps::vendor::{
 };
 use crate::apps::{places, plugins::ImagesPluginData};
 use crate::mqtt::mqtt_utils::will_message_utils::app_type::AppType;
-use crate::mqtt::mqtt_utils::will_message_utils::will_content::{self, WillContent};
+use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use crossbeam::channel::Receiver;
 use egui::Context;
 use egui::{menu, Color32};
@@ -389,11 +389,6 @@ impl UISistemaMonitoreo {
             }
 
         }
-
-        // Solo estoy probando, si se desconecta cameras se desconectarían todas juntas irl.
-        let place_type = PlaceType::Camera;
-        let id = 5;
-        self.places.remove_place(id, place_type);
         
         Ok(())
     }
@@ -412,6 +407,7 @@ impl eframe::App for UISistemaMonitoreo {
 
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
+                // (aux: sí, esto debe ser un match []).
                 if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
                     self.handle_camera_message(publish_message);
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
@@ -419,8 +415,7 @@ impl eframe::App for UISistemaMonitoreo {
                 } else if publish_message.get_topic_name() == AppsMqttTopics::IncidentTopic.to_str() {
                     self.handle_incident_message(publish_message);
                 } else if publish_message.get_topic_name() == AppsMqttTopics::DescTopic.to_str() {
-                    println!("RECIBIDO DE TOPIC DESC: {:?}", &publish_message); // probando
-                    self.handle_disconnection_message(publish_message);
+                    let _ = self.handle_disconnection_message(publish_message); // []
                 }
             }
         });
