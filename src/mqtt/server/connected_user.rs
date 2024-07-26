@@ -7,7 +7,7 @@ use std::{
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
 type StreamType = TcpStream;
-use crate::mqtt::messages::publish_message::PublishMessage;
+use crate::mqtt::{messages::publish_message::PublishMessage, mqtt_utils::will_message::{self, WillMessageAndTopic}};
 
 use super::user_state::UserState;
 
@@ -21,16 +21,18 @@ pub struct User {
     stream: StreamType,
     username: String,
     state: UserState,
+    will_msg_and_topic: Option<WillMessageAndTopic>,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
 }
 
 impl User {
-    pub fn new(stream: StreamType, username: String) -> Self {
+    pub fn new(stream: StreamType, username: String, will_msg_and_topic: Option<WillMessageAndTopic>) -> Self {
         User {
             stream,
             username,
             state: UserState::Active,
+            will_msg_and_topic,
             topics: Vec::new(),
             messages: Arc::new(Mutex::new(HashMap::new())),
         }

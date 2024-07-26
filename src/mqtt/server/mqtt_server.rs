@@ -12,6 +12,7 @@ use crate::mqtt::mqtt_utils::utils::{
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
+use crate::mqtt::mqtt_utils::will_message::WillMessageAndTopic;
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
 
@@ -66,9 +67,9 @@ impl MQTTServer {
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
-    fn add_user(&self, stream: &StreamType, username: &str) -> Result<(), Error> {
+    fn add_user(&self, stream: &StreamType, username: &str, will_msg: Option<WillMessageAndTopic>) -> Result<(), Error> {
         //[] Aux: Nos guardamos el stream, volver a ver esto.
-        let user = User::new(stream.try_clone()?, username.to_string()); //[]
+        let user = User::new(stream.try_clone()?, username.to_string(), will_msg); //[]
         if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
             println!("Username agregado a la lista del server: {:?}", username); // debug
@@ -157,8 +158,12 @@ impl MQTTServer {
         // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
         // y se maneja la conexión(handle_connection)
         if is_authentic {
+            // Asigna campo de user para conservar, si había, el
+            // will_message, para luego publicarlo al will_topic cuando user se desconecte
+            let will_msg_and_topic = connect_msg.get_will_message_and_topic();
+
             if let Some(username) = connect_msg.get_client_id() {
-                self.add_user(&stream, username)?;
+                self.add_user(&stream, username, will_msg_and_topic)?;
                 self.handle_connection(username, &mut stream)?;                
                 println!("   se ha salido de la función, se deja de leer para el cliente: {}.", username); // debug
             }

@@ -1,18 +1,20 @@
-use std::{io::{Error, ErrorKind}, str::from_utf8};
+//use std::{io::{Error, ErrorKind}, str::from_utf8};
 
 /// Representa el campo will_message que estará presente en el payload
 /// del ConnectMessage si cada app de cliente decide enviar uno.
 #[derive(Debug, PartialEq)]
-pub struct WillMessage {
-    disconnected_client_identifier: String,
+pub struct WillMessageAndTopic {
+    //disconnected_client_identifier: String,
+    will_message: String,
+    will_topic: String,
 }
 
-impl WillMessage {
-    pub fn new(disconnected_client_identifier: String) -> Self {
-        Self {disconnected_client_identifier}
+impl WillMessageAndTopic {
+    pub fn new(will_message: String, will_topic: String) -> Self {
+        Self {will_message, will_topic}
     }
 
-     /// Convierte un struct `WillMessage` a bytes.
+     /*/// Convierte un struct `WillMessage` a bytes.
      pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&(self.disconnected_client_identifier.len() as u16).to_be_bytes());
@@ -29,18 +31,19 @@ impl WillMessage {
         let disconnected_client_identifier = String::from(string);
 
         Ok(Self{disconnected_client_identifier})
-    } 
+    } */
 }
 
+/*
 #[cfg(test)]
 mod test {
-    use super::WillMessage;
+    use super::WillMessageAndTopic;
 
     #[test]
     fn test_will_message_to_and_from_bytes_works() {
         // pasada a bytes y reconstruida es igual al original
-        let will_msg = WillMessage::new(String::from("probando"));
+        let will_msg = WillMessageAndTopic::new(String::from("probando"), String::from("probando2"));
         
-        assert_eq!(will_msg, WillMessage::from_bytes(will_msg.to_bytes()).unwrap());
+        assert_eq!(will_msg, WillMessageAndTopic::from_bytes(will_msg.to_bytes()).unwrap());
     }
-}
+}*/
