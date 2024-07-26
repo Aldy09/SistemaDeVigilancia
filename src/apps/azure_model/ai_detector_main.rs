@@ -25,6 +25,7 @@ fn main() {
     // Enviará los inc por tx, por lo que escuchamos lo recibido al rx.
     while let Ok(inc) = rx.recv() {
         println!("Se recibe por rx el inc: {:?}", inc);
+        // Publicar incidente por mqtt.
     }
     
     // Esperar al hijo

@@ -1,5 +1,6 @@
 use std::sync::mpsc::Receiver;
 
+use crate::apps::incident_data::incident;
 use crate::apps::sist_camaras::{camera::Camera, sist_camaras_abm::ABMCameras};
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, incident_data::{incident::Incident, incident_info::IncidentInfo}};
@@ -82,6 +83,8 @@ impl SistemaCamaras {
 
         let self_clone = self.clone_ref();
 
+        let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
+
         children.push(self.spawn_abm_cameras_thread(
             &self.cameras,
             self_clone.cameras_tx,
@@ -94,13 +97,27 @@ impl SistemaCamaras {
             exit_rx,
         ));
 
-        //children.push(self._spawn_ai_incident_analyzer_thread(tx)); 
+        children.push(self.spawn_ai_incident_analyzer_thread(incident_tx)); 
+
+        children.push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone()));
 
         children.push(
             self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );
 
         children
+    }
+
+    pub fn spawn_receive_incident_detected_thread(
+        &self,
+        rx: Receiver<Incident>, mqtt_client_sh: Arc<Mutex<MQTTClient>>
+    ) -> JoinHandle<()> {
+        thread::spawn(move || {
+            for inc in rx {
+                println!("Se recibe por rx el inc: {:?}", inc);
+                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self.qos);
+            }
+        })
     }
 
     fn clone_ref(&self) -> Self {

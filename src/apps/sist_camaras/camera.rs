@@ -154,9 +154,19 @@ impl Camera {
         self.deleted = true;
     }
 
+    /// Devuelve el rango de la cámara.
+    pub fn get_range(&self) -> u8 {
+        self.range
+    }
+
     /// Devuelve la latitud de la cámara.
     pub fn get_latitude(&self) -> f64 {
         self.latitude
+    }
+
+    /// Devuelve la ubicacion de la cámara.
+    pub fn get_position(&self) -> (f64, f64) {
+        (self.latitude, self.longitude)
     }
 
     /// Devuelve la longitud de la cámara.

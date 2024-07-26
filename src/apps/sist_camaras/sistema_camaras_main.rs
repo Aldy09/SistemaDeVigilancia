@@ -7,11 +7,10 @@ use std::io::Error;
 
 use rustx::{
     apps::{
-        common_clients::{get_broker_address, join_all_threads},
-        sist_camaras::{
+        common_clients::{get_broker_address, join_all_threads}, incident_data::incident, sist_camaras::{
             manage_stored_cameras::create_cameras,
             sistema_camaras::SistemaCamaras,
-        },
+        }
     },
     logging::string_logger::StringLogger,
     mqtt::{
@@ -83,7 +82,7 @@ fn main() -> Result<(), Error>{
                 cameras_rx,
                 exit_rx,
                 publish_message_rx,
-                mqtt_client,
+                mqtt_client
             );
 
             handlers.push(handler_1);
