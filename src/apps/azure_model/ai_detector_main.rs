@@ -1,6 +1,14 @@
 use std::{sync::mpsc, thread};
 
-use rustx::apps::{incident_data::incident::Incident, sist_camaras::{automatic_incident_detector::AutomaticIncidentDetector, manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType}};
+
+// Importa la estructura desde el módulo
+use crate::apps::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
+
+use crate::apps::incident_data::incident::Incident;
+
+use crate::apps::sist_camaras::manage_stored_cameras::create_cameras;
+
+use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 
 fn main() {
 

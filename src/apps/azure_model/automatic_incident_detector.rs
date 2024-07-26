@@ -2,7 +2,7 @@ use std::sync::mpsc;
 
 use crate::apps::incident_data::incident::Incident;
 
-use super::shareable_cameras_type::ShCamerasType;
+use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};

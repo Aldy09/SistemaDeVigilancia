@@ -6,6 +6,9 @@ use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, inci
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
+// Importa la estructura desde el módulo
+use crate::apps::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
+
 use std::collections::HashMap;
 use std::{sync::{
     mpsc::{self, Sender},
@@ -15,7 +18,7 @@ use std::{sync::{
 use std::io::{self, Error, ErrorKind};
 use std::fs;
 
-use super::automatic_incident_detector::AutomaticIncidentDetector;
+//use super::automatic_incident_detector::AutomaticIncidentDetector;
 
 use super::shareable_cameras_type::ShCamerasType;
 
@@ -90,6 +93,9 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
+
+        //children.push(self._spawn_ai_incident_analyzer_thread(tx)); 
+
         children.push(
             self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );

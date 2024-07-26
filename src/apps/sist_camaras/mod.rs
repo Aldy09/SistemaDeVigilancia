@@ -1,4 +1,3 @@
-pub mod automatic_incident_detector;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
