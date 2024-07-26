@@ -20,16 +20,13 @@ use super::api_credentials::ApiCredentials;
 pub struct AutomaticIncidentDetector {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
-    api_credentials: ApiCredentials,
 }
 
 impl AutomaticIncidentDetector {
     pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>) -> Self {
-        let api_credentials = ApiCredentials::new();
         Self {
             cameras,
             tx,
-            api_credentials,
         }
     }
 
@@ -48,15 +45,15 @@ impl AutomaticIncidentDetector {
                     EventKind::Create(_) => {
                         if let Some(path) = event.paths.first() {
                             if path.is_file() {
-                                // Lanza un hilo por cada imagen a procesar
                                 let image_path = path.clone(); // Clona la ruta para moverla al hilo
+                                // Lanza un hilo por cada imagen a procesar
                                 pool.spawn(move || {
                                     process_image(image_path).unwrap();
                                 });
                             }
                         }
                     }
-                    _ => {} // Puedes agregar más manejadores si es necesario
+                    _ => {} // Ignorar otros eventos
                 },
                 Err(e) => println!("watch error: {:?}", e),
             }
@@ -105,19 +102,11 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
         })
 }
 
-fn process_image(image_path: PathBuf) -> Result<(), Box<dyn Error>> {
-    let mut file = std::fs::File::open(&image_path)?;
-    let mut buffer = Vec::new();
-    std::io::Read::read_to_end(&mut file, &mut buffer)?;
-    let api_credentials = ApiCredentials::new();
 
-    let client = Client::new();
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "Prediction-Key",
-        api_credentials.get_prediction_key().parse()?,
-    );
-    headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
+fn process_image(image_path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let buffer = read_image(&image_path)?;
+    let api_credentials = ApiCredentials::new();
+    let (client, headers) = create_client_and_headers(&api_credentials)?;
 
     let res = client
         .post(api_credentials.get_endpoint())
@@ -126,7 +115,51 @@ fn process_image(image_path: PathBuf) -> Result<(), Box<dyn Error>> {
         .send()?;
 
     let res_text = res.text()?;
-    let res_json: serde_json::Value = serde_json::from_str(&res_text)?;
+    let incident_probability = process_response(&res_text)?;
+
+    if incident_probability > 0.7 {
+        process_incident(incident_probability, image_path);
+    }
+
+    Ok(())
+}
+
+fn process_incident(incident_probability: f64, image_path: PathBuf) -> () {
+    if let Some(camera_id) = extract_camera_id(&image_path) {
+        let incident_location: (f64, f64) = self.get_incident_location(camera_id);
+        let incident = Incident::new(1, incident_location, IncidentSource::Automated);
+        self.tx.send(incident)?;
+    } else {
+        println!("Failed to extract camera ID from path");
+    }
+
+
+}
+
+
+fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut file = std::fs::File::open(image_path)?;
+    let mut buffer = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buffer)?;
+    Ok(buffer)
+}
+
+fn create_client_and_headers(api_credentials: &ApiCredentials) -> Result<(Client, HeaderMap), Box<dyn Error>> {
+    let client = Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Prediction-Key",
+        api_credentials.get_prediction_key().parse()?,
+    );
+    headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
+    Ok((client, headers))
+}
+
+
+
+
+fn process_response(res_text: &str) -> Result<f64, Box<dyn Error>> {
+    let res_json: serde_json::Value = serde_json::from_str(res_text)?;
     let incident_probability = res_json["predictions"]
         .as_array()
         .and_then(|predictions| {
@@ -139,18 +172,6 @@ fn process_image(image_path: PathBuf) -> Result<(), Box<dyn Error>> {
             })
         })
         .unwrap_or(0.0);
-
-    println!("Incident probability: {}", incident_probability);
-
-    if incident_probability > 0.7 {
-        if let Some(camera_id) = extract_camera_id(&image_path) {
-            //let incident_location: (f64, f64) = self.get_incident_location(camera_id);
-            //let incident = Incident::new(1, incident_location, IncidentSource::Automated);
-            //self.tx.send(incident)?;
-        } else {
-            println!("Failed to extract camera ID from path");
-        }
-    }
-
-    Ok(())
+    Ok(incident_probability)
 }
+
