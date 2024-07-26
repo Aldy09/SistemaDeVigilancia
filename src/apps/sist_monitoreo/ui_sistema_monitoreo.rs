@@ -379,6 +379,9 @@ impl eframe::App for UISistemaMonitoreo {
                     self.handle_drone_message(publish_message);
                 } else if publish_message.get_topic_name() == AppsMqttTopics::IncidentTopic.to_str() {
                     self.handle_incident_message(publish_message);
+                } else if publish_message.get_topic_name() == AppsMqttTopics::DescTopic.to_str() {
+                    //self.handle_incident_message(publish_message);
+                    println!("RECIBIDO DE TOPIC DESC: {:?}", publish_message); // probando
                 }
             }
         });

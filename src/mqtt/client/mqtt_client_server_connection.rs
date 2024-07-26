@@ -11,10 +11,13 @@ use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream,
     write_message_to_stream,
 };
+use crate::mqtt::mqtt_utils::will_message::WillMessage;
 
 pub struct MqttClientConnection {}
 
 pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpStream, Error> {
+    let will_message = WillMessage::new(String::from("dron-5")); //PROBANDO
+    let will_topic = String::from("desc"); // PROBANDO
     // Inicializaciones
     // Intenta conectar al servidor MQTT
     let stream_tcp = TcpStream::connect(addr)
@@ -26,8 +29,9 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpS
     // Crea el mensaje tipo Connect y lo pasa a bytes
     let mut connect_msg = ConnectMessage::new(
         client_id.to_string(),
-        None, // will_topic
-        None, // will_message
+        Some(will_topic), // will_topic
+        //Some(will_message), // will_message
+        Some(String::from("dron-5")),
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
     );

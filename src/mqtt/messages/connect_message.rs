@@ -14,7 +14,7 @@ impl ConnectMessage {
     pub fn new(
         client_id: String,
         will_topic: Option<String>,
-        will_message: Option<String>,
+        will_message: Option<String>, //
         username: Option<String>,
         password: Option<String>,
     ) -> Self {
@@ -144,7 +144,7 @@ impl ConnectMessage {
         let payload_start_index = 9;
 
         // Calcular la longitud del payload
-        let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
+        let variable_header_len: usize = 7; // (esto podría ser un método del variable header) // es payload_start_index - 2:
         let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes del variable header
                                                                                            // Extraer el payload del mensaje
         let payload_bytes = &bytes[payload_start_index..payload_start_index + payload_length];

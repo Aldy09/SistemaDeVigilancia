@@ -5,22 +5,25 @@ pub enum AppsMqttTopics {
     IncidentTopic,
     DronTopic,
     CameraTopic,
+    DescTopic,
 }
 
 impl AppsMqttTopics {
     pub fn to_str(&self) -> &str {
         match self {
-            AppsMqttTopics::IncidentTopic => "Inc",
-            AppsMqttTopics::DronTopic => "Dron",
-            AppsMqttTopics::CameraTopic => "Cam",
+            AppsMqttTopics::IncidentTopic => "inc",
+            AppsMqttTopics::DronTopic => "dron",
+            AppsMqttTopics::CameraTopic => "cam",
+            AppsMqttTopics::DescTopic => "desc",
         }
     }
 
     pub fn topic_from_str(str: &str) -> Result<Self, Error> {
         match str {
-            "Inc" => Ok(AppsMqttTopics::IncidentTopic),
-            "Dron" => Ok(AppsMqttTopics::DronTopic),
-            "Cam" => Ok(AppsMqttTopics::CameraTopic),
+            "inc" => Ok(AppsMqttTopics::IncidentTopic),
+            "dron" => Ok(AppsMqttTopics::DronTopic),
+            "cam" => Ok(AppsMqttTopics::CameraTopic),
+            "desc" => Ok(AppsMqttTopics::DescTopic),
             _ => Err(Error::new(std::io::ErrorKind::InvalidInput, "Error: string inválida para crea un enum AppsMqttTopics."))
 
         }
