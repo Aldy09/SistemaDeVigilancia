@@ -279,16 +279,21 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_from_bytes_parsing_fixed_header() {
-        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
+    fn create_connect_message() -> ConnectMessage {
+        ConnectMessage::new(
             "test_client".to_string(),
             Some("test/topic".to_string()),
             Some("test message".to_string()),
             Some("test_user".to_string()),
             Some("test_password".to_string()),
-        );
+            0
+        )
+    }
+
+    #[test]
+    fn test_from_bytes_parsing_fixed_header() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = create_connect_message();
 
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();
@@ -303,13 +308,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_variable_header() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         let bytes = connect_message.to_bytes();
 
@@ -326,13 +325,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_payload() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();
@@ -347,13 +340,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_payload_get_user_get_passwd() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         // La función get_user obtiene el user del mensaje sin pasar a bytes
         assert_eq!(
@@ -385,6 +372,7 @@ mod tests {
             None,
             Some("test_user".to_string()),
             Some("test_password123".to_string()),
+            0
         );
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();
