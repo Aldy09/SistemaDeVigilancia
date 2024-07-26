@@ -11,23 +11,23 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use super::api_credentials::{self, ApiCredentials};
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct AutomaticIncidentDetector {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
-    prediction_key: String,
-    endpoint: String,
+    api_credentials: ApiCredentials,
 }
 
 impl AutomaticIncidentDetector {
     pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>) -> Self {
-        let (prediction_key, endpoint) = get_key_and_endpoint();
+        let api_credentials = ApiCredentials::new();
         Self {
             cameras,
             tx,
-            prediction_key,
-            endpoint,
+            api_credentials
         }
     }
 
@@ -58,11 +58,11 @@ impl AutomaticIncidentDetector {
 
         let client = Client::new();
         let mut headers = HeaderMap::new();
-        headers.insert("Prediction-Key", self.prediction_key.parse()?);
+        headers.insert("Prediction-Key", self.api_credentials.get_prediction_key().parse()?);
         headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
 
         let res = client
-            .post(&self.endpoint)
+            .post(&self.api_credentials.get_endpoint())
             .headers(headers)
             .body(buffer)
             .send()?;
@@ -98,21 +98,6 @@ impl AutomaticIncidentDetector {
     }
 }
 
-fn get_key_and_endpoint() -> (String, String) {
-    // Inicializar la configuración
-    let mut settings = Config::default();
-    settings
-        .merge(File::with_name("key_and_endpoint"))
-        .expect("Error al cargar el archivo de configuración");
-
-    // Leer las propiedades
-    let prediction_key: String = settings
-        .get("prediction_key")
-        .expect("Error al leer prediction_key");
-    let endpoint: String = settings.get("endpoint").expect("Error al leer endpoint");
-
-    (prediction_key, endpoint)
-}
 
 fn extract_camera_id(path: &Path) -> Option<u8> {
     // Obtener el nombre del directorio padre
