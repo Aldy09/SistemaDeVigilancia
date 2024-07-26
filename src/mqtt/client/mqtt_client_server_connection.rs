@@ -16,6 +16,7 @@ pub struct MqttClientConnection {}
 
 pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpStream, Error> {
     let will_topic = String::from("desc"); // PROBANDO
+    let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
     // Inicializaciones
     // Intenta conectar al servidor MQTT
     let stream_tcp = TcpStream::connect(addr)
@@ -32,6 +33,7 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpS
         Some(String::from("dron-5")),
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
+        will_qos
     );
 
     // Intenta enviar el mensaje CONNECT al servidor MQTT

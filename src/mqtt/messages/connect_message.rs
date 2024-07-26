@@ -17,6 +17,7 @@ impl ConnectMessage {
         will_message: Option<String>, //
         username: Option<String>,
         password: Option<String>,
+        will_qos: u8,
     ) -> Self {
         let fixed_header = FixedHeader {
             message_type: 1 << 4,
@@ -30,7 +31,7 @@ impl ConnectMessage {
                 username_flag: username.is_some(),
                 password_flag: password.is_some(),
                 will_retain: false,
-                will_qos: 0,
+                will_qos,
                 will_flag: will_topic.is_some() && will_message.is_some(),
                 clean_session: true,
                 reserved: false,

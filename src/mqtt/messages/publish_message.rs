@@ -37,10 +37,9 @@ impl<'a> PublishMessage {
         packet_identifier: Option<u16>,
         content: &'a [u8],
     ) -> Result<Self, Error> {
-        /* // Este check está bien, ahora lo descomento
         if !flags.is_qos_greater_than_0() && packet_identifier.is_some() {
             return Err(Error::new(ErrorKind::InvalidData, "El packet_identifier debe ser None si qos = 0".to_string()));
-        }*/
+        }
 
         let variable_header = VariableHeader {
             topic_name: topic_name.to_string(),

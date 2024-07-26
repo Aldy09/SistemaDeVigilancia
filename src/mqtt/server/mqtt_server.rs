@@ -96,30 +96,32 @@ impl MQTTServer {
 
     /// Cambia el estado del usuario del server con username `username` a TemporallyDisconnected,
     /// para que no se le envíen mensajes si se encuentra en dicho estado y de esa forma evitar errores en writes.
-    fn set_user_as_temporally_disconnected_and_publish_their_will_msg(&self, username: &str) -> Result<(), Error>{
+    fn set_user_as_temporally_disconnected(&self, username: &str) -> Result<(), Error>{
         if let Ok(mut users) = self.connected_users.lock() {
             if let Some(user ) = users.get_mut(username){
                 user.set_state(UserState::TemporallyDisconnected);
-                println!("Username seteado como temporalmente desconectado: {:?}", username);
-                /////////////
-                // Envía el will_message del user que se está desconectando, si tenía uno.
+                println!("Username seteado como temporalmente desconectado: {:?}", username);    
+            }
+        }
+        Ok(())
+    }
+
+    /// Envía el will_message del user que se está desconectando, si tenía uno.
+    fn publish_users_will_message(&self, username: &str) -> Result<(), Error> {
+        let mut will_message_option = None;
+        if let Ok(mut users) = self.connected_users.lock() {
+            if let Some(user ) = users.get(username){
                 //let packet_id = &self.generate_packet_id(); // <-- aux: rever esto [].
                 let packet_id = 1000; // <-- aux: rever esto []: generate_packet_id requiere self mut, pero esto es multihilo, no tiene mucho sentido. Quizás un arc mutex u16, volver.
-                if let Some(will_message) = user.get_publish_message_with(0, packet_id)?{
-                    println!("Por enviar el will msg: publish message: {:?}", will_message);
-                    self.handle_publish_message(&will_message)?;
-                }
+                will_message_option = user.get_publish_message_with(0, packet_id)?;
                 println!("Chaus, desc, justo acá arriba debería haber prints relacionados.");
-                /*let will_msg_info = user.get_will_msg_info();
-                let mut publish_msg = None;
-                if let Some((will_msg_string, will_topic)) = will_msg_and_topic.get_as_tuple() {
-                    // Se crea el publish message a enviar
-
-                    publish_msg = Some(PublishMessage::new(3, flags, will_topic, Some(packet_id), will_msg_string.as_bytes())?);
-
-                }*/
-                //self.handle_publish_message(&publish_msg);
             }
+        }
+
+        // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
+        if let Some(will_message) = will_message_option{
+            println!("Por enviar el will msg: publish message: {:?}", will_message);
+            self.handle_publish_message(&will_message)?;
         }
         Ok(())
     }
@@ -280,7 +282,8 @@ impl MQTTServer {
                 }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
-                    self.set_user_as_temporally_disconnected_and_publish_their_will_msg(username)?;
+                    self.set_user_as_temporally_disconnected(username)?;
+                    self.publish_users_will_message(username)?;
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }
@@ -524,9 +527,11 @@ impl MQTTServer {
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
         // Inicio probando
+        println!("ANTES DE TOMAR LOCK. topic: {:?}, se le enviará el msj: {:?}.", msg.get_topic(), msg);
         // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
         if let Ok(mut connected_users) = self.connected_users.lock() {
             for user in connected_users.values_mut() {
+                println!("ANALIZANDO user: {:?}; si es susriptor a topic: {:?}, se le enviará el msj: {:?}.", user.get_username(), msg.get_topic(), msg);
                 //connected_users es un hashmap con key=username y value=user
                 // User/s que se suscribió/eron al topic del PublishMessage:
                 let user_topics = user.get_topics();
@@ -541,6 +546,7 @@ impl MQTTServer {
                 }
             }
         }
+        println!("AFUERA DEL FOR, ARRIBA DEL POP_AND_WRITE");
 
         // Aux: se debe desencolar solamente cuando llega el ack. Por eso está en un for separado.
         // Envía
