@@ -1,3 +1,7 @@
+
+
+use config::{Config, File};
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct ApiCredentials {
@@ -26,11 +30,11 @@ impl ApiCredentials {
     }
 
     pub fn get_prediction_key(&self) -> String {
-        self.prediction_key
+        self.prediction_key.clone()
     }
 
     pub fn get_endpoint(&self) -> String {
-        self.endpoint
+        self.endpoint.clone()
     }
     
 }

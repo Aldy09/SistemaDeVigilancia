@@ -29,20 +29,20 @@ tokio = { version = "1.28", features = ["macros"] }
 http-cache-reqwest = "0.13.0"
 thiserror = "1"
 crossbeam-channel = "0.5.1"
-reqwest = { version = "0.11", features = ["blocking"] }
+rayon = "1.5.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-notify = "5.0"
+notify = "6.1.1" 
 
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 [[bin]]
 name = "message_broker_server"
 path = "src/mqtt/server/message_broker_server.rs"
 
+
 [[bin]]
 name = "sistema_monitoreo_main"
 path = "src/apps/sist_monitoreo/sistema_monitoreo_main.rs"
+
 
 [[bin]]
 name = "sistema_camaras_main"

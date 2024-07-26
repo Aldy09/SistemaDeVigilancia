@@ -448,10 +448,10 @@ impl eframe::App for UISistemaMonitoreo {
                                             let latitude = latitude_text.parse::<f64>().unwrap();
                                             let longitude: f64 =
                                                 longitude_text.parse::<f64>().unwrap();
+                                            let location = (latitude, longitude);
                                             let incident = Incident::new(
                                                 self.get_next_incident_id(),
-                                                latitude,
-                                                longitude,
+                                                location,
                                                 IncidentSource::Manual,
                                             );
                                             self.add_incident(&incident);

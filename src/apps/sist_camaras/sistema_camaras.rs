@@ -112,10 +112,11 @@ impl SistemaCamaras {
         &self,
         rx: Receiver<Incident>, mqtt_client_sh: Arc<Mutex<MQTTClient>>
     ) -> JoinHandle<()> {
+        let self_clone = self.clone_ref();
         thread::spawn(move || {
             for inc in rx {
                 println!("Se recibe por rx el inc: {:?}", inc);
-                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self.qos);
+                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self_clone.qos);
             }
         })
     }
@@ -233,14 +234,14 @@ impl SistemaCamaras {
     }
 
     /// Pone en ejecución el módulo de detección automática de incidentes.
-    fn _spawn_ai_incident_analyzer_thread(
+    fn spawn_ai_incident_analyzer_thread(
         &self,
         tx: mpsc::Sender<Incident>
     ) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
         thread::spawn(move || {
             let ai_inc_detector = AutomaticIncidentDetector::new(cameras_ref, tx);
-            ai_inc_detector.run();
+            ai_inc_detector.run().unwrap();
         })
     }
 

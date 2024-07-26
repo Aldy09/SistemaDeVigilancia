@@ -1,17 +1,19 @@
-use crate::apps::incident_data::incident::Incident;
-use crate::apps::incident_data::incident_source::IncidentSource;
-use crate::apps::sist_camaras::camera::Camera;
-use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
-use config::{Config, File};
-use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
+
+use notify::event::EventKind;
+use notify::{RecursiveMode, Watcher};
+use rayon::ThreadPoolBuilder;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
 
-use super::api_credentials::{self, ApiCredentials};
+use crate::apps::incident_data::incident::Incident;
+
+
+use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
+
+use super::api_credentials::ApiCredentials;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -27,77 +29,64 @@ impl AutomaticIncidentDetector {
         Self {
             cameras,
             tx,
-            api_credentials
+            api_credentials,
         }
     }
 
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
         let (tx_fs, rx_fs) = mpsc::channel();
-        let mut watcher = watcher(tx_fs, Duration::from_secs(10))?;
-        watcher.watch("image_detection", RecursiveMode::Recursive)?;
+        let mut watcher = notify::recommended_watcher(tx_fs)?;
+        let path = Path::new("image_detection");
+        watcher.watch(&path, RecursiveMode::Recursive)?;
+
+        // Crear un pool de threads con el número de threads deseado
+        let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
 
         for event in rx_fs {
             match event {
-                DebouncedEvent::Create(path) => {
-                    if path.is_file() {
-                        self.process_image(path)?;
+                Ok(event) => match event.kind {
+                    EventKind::Create(_) => {
+                        if let Some(path) = event.paths.first() {
+                            if path.is_file() {
+                                // Lanza un hilo por cada imagen a procesar
+                                let image_path = path.clone(); // Clona la ruta para moverla al hilo
+                                pool.spawn(move || {
+                                    process_image(image_path).unwrap();
+                                });
+                            }
+                        }
                     }
-                }
+                    _ => {} // Puedes agregar más manejadores si es necesario
+                },
                 Err(e) => println!("watch error: {:?}", e),
-                _ => {}
             }
         }
 
         Ok(())
     }
 
-    fn process_image(&self, image_path: PathBuf) -> Result<(), Box<dyn Error>> {
-        let mut file = std::fs::File::open(&image_path)?;
-        let mut buffer = Vec::new();
-        std::io::Read::read_to_end(&mut file, &mut buffer)?;
 
-        let client = Client::new();
-        let mut headers = HeaderMap::new();
-        headers.insert("Prediction-Key", self.api_credentials.get_prediction_key().parse()?);
-        headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
+    
+    // Genera una ubicación de incidente aleatoria
+    // dentro del rango de la camara que detecto el incidente.
+    // fn get_incident_location(&self, camera_id: u8) -> (f64, f64) {
+    //     let camera: = self.cameras.lock().unwrap().get(&camera_id).unwrap();
+    //     let (x, y) = camera.get_position();
+    //     let range = camera.get_range();
 
-        let res = client
-            .post(&self.api_credentials.get_endpoint())
-            .headers(headers)
-            .body(buffer)
-            .send()?;
+    //     let mut rng = thread_rng();
 
-        let res_text = res.text()?;
-        let res_json: serde_json::Value = serde_json::from_str(&res_text)?;
-        let incident_probability = res_json["predictions"]
-            .as_array()
-            .and_then(|predictions| {
-                predictions.iter().find_map(|prediction| {
-                    if prediction["tagName"].as_str() == Some("incidente") {
-                        Some(prediction["probability"].as_f64().unwrap_or(0.0))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .unwrap_or(0.0);
+    //     // Genera un desplazamiento aleatorio dentro del rango para x e y
+    //     let dx = rng.gen_range(-range..=range);
+    //     let dy = rng.gen_range(-range..=range);
 
-        println!("Incident probability: {}", incident_probability);
+    //     // Calcula las nuevas coordenadas dentro del rango de la cámara
+    //     let new_x = x + dx;
+    //     let new_y = y + dy;
 
-        if incident_probability > 0.7 {
-            if let Some(camera_id) = extract_camera_id(&image_path) {
-                let incident_location: (f64, f64) = self.get_incident_location(camera_id);
-                let incident = Incident::new(1, incident_location, IncidentSource::Automatic);
-                self.tx.send(incident)?;
-            } else {
-                println!("Failed to extract camera ID from path");
-            }
-        }
-
-        Ok(())
-    }
+    //     (new_x, new_y)
+    // }
 }
-
 
 fn extract_camera_id(path: &Path) -> Option<u8> {
     // Obtener el nombre del directorio padre
@@ -116,22 +105,52 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
         })
 }
 
-// Genera una ubicación de incidente aleatoria
-// dentro del rango de la camara que detecto el incidente.
-fn get_incident_location(&self, camera_id: u8) -> (f64, f64) {
-    let camera: Camera = self.cameras.lock().unwrap().get(&camera_id).unwrap();
-    let (x, y) = camera.get_position();
-    let range = camera.get_range();
+fn process_image(image_path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let mut file = std::fs::File::open(&image_path)?;
+    let mut buffer = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buffer)?;
+    let api_credentials = ApiCredentials::new();
 
-    let mut rng = thread_rng();
+    let client = Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Prediction-Key",
+        api_credentials.get_prediction_key().parse()?,
+    );
+    headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
 
-    // Genera un desplazamiento aleatorio dentro del rango para x e y
-    let dx = rng.gen_range(-range..=range);
-    let dy = rng.gen_range(-range..=range);
+    let res = client
+        .post(api_credentials.get_endpoint())
+        .headers(headers)
+        .body(buffer)
+        .send()?;
 
-    // Calcula las nuevas coordenadas dentro del rango de la cámara
-    let new_x = x + dx;
-    let new_y = y + dy;
+    let res_text = res.text()?;
+    let res_json: serde_json::Value = serde_json::from_str(&res_text)?;
+    let incident_probability = res_json["predictions"]
+        .as_array()
+        .and_then(|predictions| {
+            predictions.iter().find_map(|prediction| {
+                if prediction["tagName"].as_str() == Some("incidente") {
+                    Some(prediction["probability"].as_f64().unwrap_or(0.0))
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or(0.0);
 
-    (new_x, new_y)
+    println!("Incident probability: {}", incident_probability);
+
+    if incident_probability > 0.7 {
+        if let Some(camera_id) = extract_camera_id(&image_path) {
+            //let incident_location: (f64, f64) = self.get_incident_location(camera_id);
+            //let incident = Incident::new(1, incident_location, IncidentSource::Automated);
+            //self.tx.send(incident)?;
+        } else {
+            println!("Failed to extract camera ID from path");
+        }
+    }
+
+    Ok(())
 }
