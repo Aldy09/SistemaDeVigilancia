@@ -2,6 +2,8 @@ extern crate block_modes;
 extern crate des;
 extern crate hex;
 
+use std::io::{Error, ErrorKind};
+
 // use des::cipher::generic_array::GenericArray;
 // use des::cipher::NewBlockCipher;
 use block_modes::block_padding::Pkcs7;
@@ -34,9 +36,9 @@ impl<'a> PublishMessage {
         topic_name: &'a str,
         packet_identifier: Option<u16>,
         content: &'a [u8],
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Error> {
         if !flags.is_qos_greater_than_0() && packet_identifier.is_some() {
-            return Err("El packet_identifier debe ser None si qos = 0".to_string());
+            return Err(Error::new(ErrorKind::InvalidData, "El packet_identifier debe ser None si qos = 0".to_string()));
         }
 
         let variable_header = VariableHeader {

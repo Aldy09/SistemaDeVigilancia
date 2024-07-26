@@ -34,6 +34,7 @@ fn clean_file(file_path: &str) -> Result<(), Error> {
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
+    available_packet_id: u16, //
 }
 
 impl MQTTServer {
@@ -45,6 +46,7 @@ impl MQTTServer {
 
         let mqtt_server = Self {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
+            available_packet_id: 0,
         };
         let listener = create_server(ip, port)?;
 
@@ -66,12 +68,16 @@ impl MQTTServer {
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
-    fn add_user(&self, stream: &StreamType, username: &str) -> Result<(), Error> {
+    fn add_user(&self, stream: &StreamType, username: &str, connect_msg: &ConnectMessage) -> Result<(), Error> {
+        // Obtiene el will_message con todos sus campos relacionados necesarios, y lo guarda en el user,
+        // para luego publicarlo al will_topic cuando user se desconecte                
+        let will_msg_info = connect_msg.get_will_to_publish();
+        
         //[] Aux: Nos guardamos el stream, volver a ver esto.
-        let user = User::new(stream.try_clone()?, username.to_string()); //[]
+        let user = User::new(stream.try_clone()?, username.to_string(), will_msg_info); //[]
         if let Ok(mut users) = self.connected_users.lock() {
             let username = user.get_username();
-            println!("Username agregado a la lista del server: {:?}", username); // debug
+            println!("Username agregado a la lista del server: {:?}", username);
             users.insert(username, user); //inserta el usuario en el hashmap
         }
         Ok(())
@@ -88,13 +94,41 @@ impl MQTTServer {
 
     /// Cambia el estado del usuario del server con username `username` a TemporallyDisconnected,
     /// para que no se le envíen mensajes si se encuentra en dicho estado y de esa forma evitar errores en writes.
-    fn set_user_as_temporally_disconnected(&self, username: &str) {
+    fn set_user_as_temporally_disconnected(&self, username: &str) -> Result<(), Error>{
         if let Ok(mut users) = self.connected_users.lock() {
             if let Some(user ) = users.get_mut(username){
                 user.set_state(UserState::TemporallyDisconnected);
+                println!("Username seteado como temporalmente desconectado: {:?}", username);    
             }
-            println!("Username seteado como temporalmente desconectado: {:?}", username);
         }
+        Ok(())
+    }
+
+    /// Envía el will_message del user que se está desconectando, si tenía uno.
+    fn publish_users_will_message(&self, username: &str) -> Result<(), Error> {
+        let packet_id = 1000; // <-- aux: rever esto []: generate_packet_id requiere self mut, pero esto es multihilo, no tiene mucho sentido. Quizás un arc mutex u16, volver.
+        let mut will_message_option = None;
+        
+        // Obtengo el will_message, si había uno.
+        if let Ok(users) = self.connected_users.lock() {
+            if let Some(user ) = users.get(username){
+                will_message_option = user.get_publish_message_with(0, packet_id)?;
+            }
+        }
+
+        // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
+        if let Some(will_message) = will_message_option{
+            self.handle_publish_message(&will_message)?;
+        }
+        Ok(())
+    }
+
+    /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
+    /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
+    /// en el envío para el cual fue llamada esta función.
+    fn _generate_packet_id(&mut self) -> u16 { // Aux: ToDo Ver []
+        self.available_packet_id += 1;
+        self.available_packet_id
     }
 
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
@@ -105,7 +139,7 @@ impl MQTTServer {
         client_id: &str,
     ) -> Result<(), Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-            //if let Some(client) = connected_users_locked.remove(client_id) {
+            //if let Some(client) = connected_users_locked.remove(client_id) { // <-- aux: volver [].
             if let Some(client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
                     UserState::Active => {
@@ -146,7 +180,8 @@ impl MQTTServer {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        // Busca en el hashmap: si ya existía ese cliente, lo desconecta
+        // Busca en el hashmap, contempla casos si ya existía ese cliente:
+        // lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
         if let Some(client_id) = connect_msg.get_client_id() {
             self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
         }
@@ -154,16 +189,16 @@ impl MQTTServer {
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
-        // Si el cliente se autenticó correctamente, se agrega a la lista de usuarios conectados(add_user)
-        // y se maneja la conexión(handle_connection)
+        // Si el cliente se autenticó correctamente y se conecta por primera vez,
+        // se agrega a la lista de usuarios conectados(add_user) y se maneja la conexión(handle_connection)
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
-                self.add_user(&stream, username)?;
+                self.add_user(&stream, username, &connect_msg)?;
                 self.handle_connection(username, &mut stream)?;                
                 println!("   se ha salido de la función, se deja de leer para el cliente: {}.", username); // debug
             }
         } else {
-            println!("   ERROR: No se pudo autenticar al cliente.");
+            println!("   ERROR: No se pudo autenticar al cliente."); //(ya se le envió el ack informando).
         }
 
         Ok(())
@@ -234,6 +269,7 @@ impl MQTTServer {
 
                     // Caso se recibe un disconnect
                     if is_disconnect_msg(&fixed_header_info.1) {
+                        self.publish_users_will_message(username)?;
                         self.remove_user(username);
                         shutdown(stream);
                         break;
@@ -244,7 +280,8 @@ impl MQTTServer {
                 }
                 Ok(None) => {
                     println!("Se desconectó el cliente: {:?}.", username);
-                    self.set_user_as_temporally_disconnected(username);
+                    self.set_user_as_temporally_disconnected(username)?;
+                    self.publish_users_will_message(username)?;
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }
@@ -413,6 +450,7 @@ impl MQTTServer {
     fn clone_ref(&self) -> Self {
         Self {
             connected_users: self.connected_users.clone(),
+            available_packet_id: self.available_packet_id,
         }
     }
 

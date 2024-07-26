@@ -16,7 +16,7 @@ use rustx::{
             mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
             mqtt_client_server_connection::mqtt_connect_to_broker,
         },
-        messages::publish_message::PublishMessage,
+        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent},
     },
 };
 
@@ -34,6 +34,10 @@ fn get_formatted_app_id(id: u8) -> String {
     format!("dron-{}", id)
 }
 
+fn get_app_will_msg_content(id: u8) -> WillContent {
+    WillContent::new(AppType::Dron, id)
+}
+
 fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) = get_id_lat_long_and_broker_address()?;
 
@@ -43,8 +47,10 @@ fn main() -> Result<(), Error> {
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
     // Se inicializa la conexión mqtt y el dron
+    let qos = 1; // []
     let client_id = get_formatted_app_id(id);
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr){
+    let will_msg_content = get_app_will_msg_content(id);
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, AppsMqttTopics::DescTopic, qos){
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
