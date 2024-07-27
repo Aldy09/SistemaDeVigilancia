@@ -6,6 +6,8 @@ use std::{
 
 use crossbeam_channel::unbounded;
 use rustx::logging::string_logger::StringLogger;
+use rustx::mqtt::mqtt_utils::will_message_utils::app_type::AppType;
+use rustx::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use rustx::{
     apps::{
         common_clients::{get_broker_address, join_all_threads},
@@ -37,6 +39,14 @@ fn get_formatted_app_id() -> String {
     String::from("Sistema-Monitoreo")
 }
 
+fn get_app_will_msg_content() -> WillContent {
+    WillContent::new(AppType::Monitoreo, 0) // []
+}
+
+fn get_app_will_msg_content() -> WillContent {
+    WillContent::new(AppType::Monitoreo, 0) // []
+}
+
 fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
 
@@ -46,8 +56,10 @@ fn main() -> Result<(), Error> {
     // Se crean y configuran ambos extremos del string logger
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
+    let qos = 1; // []
     let client_id = get_formatted_app_id();
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr) {
+    let will_msg_content = get_app_will_msg_content();
+    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic, qos){
         Ok(stream) => {
             let mut mqtt_client_listener =
                 MQTTClientListener::new(stream.try_clone()?, publish_message_tx);

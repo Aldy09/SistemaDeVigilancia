@@ -1,4 +1,3 @@
-pub mod app_type;
 pub mod apps_mqtt_topics;
 pub mod common_client_errors;
 pub mod common_clients;

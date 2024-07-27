@@ -3,18 +3,22 @@ use std::net::{SocketAddr, TcpStream};
 use std::io::{self, Error, ErrorKind};
 
 type StreamType = TcpStream;
-use crate::mqtt::messages::connack_message::ConnackMessage;
-use crate::mqtt::messages::connect_message::ConnectMessage;
-use crate::mqtt::messages::connect_return_code::ConnectReturnCode;
-use crate::mqtt::messages::packet_type::PacketType;
+use crate::apps::apps_mqtt_topics::AppsMqttTopics;
+use crate::mqtt::messages::{connack_message::ConnackMessage,
+                            connect_message::ConnectMessage,
+                            connect_return_code::ConnectReturnCode,
+                            packet_type::PacketType};
 use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream,
     write_message_to_stream,
 };
+use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 
 pub struct MqttClientConnection {}
 
-pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpStream, Error> {
+pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_content: WillContent, will_topic: AppsMqttTopics, will_qos: u8) -> Result<TcpStream, Error> {
+    //let will_topic = String::from("desc"); // PROBANDO
+    //let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
     // Inicializaciones
     // Intenta conectar al servidor MQTT
     let stream_tcp = TcpStream::connect(addr)
@@ -26,10 +30,11 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr) -> Result<TcpS
     // Crea el mensaje tipo Connect y lo pasa a bytes
     let mut connect_msg = ConnectMessage::new(
         client_id.to_string(),
-        None, // will_topic
-        None, // will_message
+        Some(String::from(will_topic.to_str())),
+        Some(will_msg_content.to_str()),
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
+        will_qos
     );
 
     // Intenta enviar el mensaje CONNECT al servidor MQTT

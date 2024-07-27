@@ -1,7 +1,7 @@
-use crate::mqtt::messages::{
+use crate::mqtt::{messages::{
     connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_payload::Payload,
     connect_variable_header::VariableHeader,
-};
+}, mqtt_utils::will_message_utils::will_message::WillMessageAndTopic};
 
 #[derive(Debug)]
 pub struct ConnectMessage {
@@ -14,9 +14,10 @@ impl ConnectMessage {
     pub fn new(
         client_id: String,
         will_topic: Option<String>,
-        will_message: Option<String>,
+        will_message: Option<String>, //
         username: Option<String>,
         password: Option<String>,
+        will_qos: u8,
     ) -> Self {
         let fixed_header = FixedHeader {
             message_type: 1 << 4,
@@ -30,7 +31,7 @@ impl ConnectMessage {
                 username_flag: username.is_some(),
                 password_flag: password.is_some(),
                 will_retain: false,
-                will_qos: 0,
+                will_qos,
                 will_flag: will_topic.is_some() && will_message.is_some(),
                 clean_session: true,
                 reserved: false,
@@ -144,7 +145,7 @@ impl ConnectMessage {
         let payload_start_index = 9;
 
         // Calcular la longitud del payload
-        let variable_header_len: usize = 7; // (esto podría ser un método del variable header)
+        let variable_header_len: usize = 7; // (esto podría ser un método del variable header) // es payload_start_index - 2:
         let payload_length = fixed_header.remaining_length as usize - variable_header_len; // Total - 7 bytes del variable header
                                                                                            // Extraer el payload del mensaje
         let payload_bytes = &bytes[payload_start_index..payload_start_index + payload_length];
@@ -253,6 +254,24 @@ impl ConnectMessage {
     pub fn get_client_id(&self) -> Option<&String> {
         Some(&self.payload.client_id)
     }
+
+    /// Devuelve un WillMessageAndTopic con los campos will_message y will_topic del mensaje
+    /// si ambos son some, o None en caso contrario.
+    pub fn get_will_to_publish(&self) -> Option<WillMessageAndTopic> {
+        if let Some(msg) = &self.payload.will_message {
+            if let Some(topic) = &self.payload.will_topic {
+
+                let will_msg: WillMessageAndTopic = WillMessageAndTopic::new(
+                    String::from(msg),
+                    String::from(topic),
+                    self.variable_header.connect_flags.will_qos,
+                    self.variable_header.connect_flags.will_retain as u8,
+                );
+                return Some(will_msg);
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
@@ -260,16 +279,21 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_from_bytes_parsing_fixed_header() {
-        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
+    fn create_connect_message() -> ConnectMessage {
+        ConnectMessage::new(
             "test_client".to_string(),
             Some("test/topic".to_string()),
             Some("test message".to_string()),
             Some("test_user".to_string()),
             Some("test_password".to_string()),
-        );
+            0
+        )
+    }
+
+    #[test]
+    fn test_from_bytes_parsing_fixed_header() {
+        // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
+        let mut connect_message = create_connect_message();
 
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();
@@ -284,13 +308,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_variable_header() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         let bytes = connect_message.to_bytes();
 
@@ -307,13 +325,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_payload() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();
@@ -328,13 +340,7 @@ mod tests {
     #[test]
     fn test_from_bytes_parsing_payload_get_user_get_passwd() {
         // Creamos una instancia de ConnectMessage con algunos valores de ejemplo
-        let mut connect_message = ConnectMessage::new(
-            "test_client".to_string(),
-            Some("test/topic".to_string()),
-            Some("test message".to_string()),
-            Some("test_user".to_string()),
-            Some("test_password".to_string()),
-        );
+        let mut connect_message = create_connect_message();
 
         // La función get_user obtiene el user del mensaje sin pasar a bytes
         assert_eq!(
@@ -366,6 +372,7 @@ mod tests {
             None,
             Some("test_user".to_string()),
             Some("test_password123".to_string()),
+            0
         );
         // Convertimos el mensaje a bytes
         let bytes = connect_message.to_bytes();

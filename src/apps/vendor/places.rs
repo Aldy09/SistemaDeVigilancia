@@ -132,6 +132,17 @@ impl Places {
             self.places.remove(index);
         }
     }
+
+    /// Elimina todos los elementos de `place_type` indicado, del vector de places que se muestra en el mapa,
+    /// sin importar su `id`.
+    /// Si el elemento no existía, no se considera error, simplemente no se hace nada.
+    pub fn remove_places(&mut self, place_type: PlaceType) {
+        // (La sintaxis de retain es "al revés", es !keep xq recibe los que No debe eliminar y elimina el resto).
+        self.places.retain(|p| {
+            let keep = p.place_type == place_type;
+            !keep
+        });
+    }
 }
 
 impl Plugin for Places {

@@ -160,6 +160,7 @@ impl SistemaMonitoreo {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::CameraTopic.to_str());
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
+        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DescTopic.to_str());
         self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 
