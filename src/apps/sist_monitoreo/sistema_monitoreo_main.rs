@@ -43,10 +43,6 @@ fn get_app_will_msg_content() -> WillContent {
     WillContent::new(AppType::Monitoreo, 0) // []
 }
 
-fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(AppType::Monitoreo, 0) // []
-}
-
 fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
 

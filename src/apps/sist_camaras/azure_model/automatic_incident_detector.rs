@@ -152,7 +152,7 @@ fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector
     Ok(())
 }
 
-fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> () {
+fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) {
     println!("image_path: {:?}", image_path);
     if let Some(camera_id) = extract_camera_id(&image_path) {
         // obtenemos la posición
@@ -166,7 +166,7 @@ fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetec
         self_clone.tx.send(incident).unwrap();
     } else {
         println!("Failed to extract camera ID from path");
-    }
+    };
 
 }
 

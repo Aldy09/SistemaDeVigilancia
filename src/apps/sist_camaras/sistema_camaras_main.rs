@@ -50,10 +50,6 @@ fn get_app_will_msg_content() -> WillContent {
     WillContent::new(AppType::Cameras, 0)
 }
 
-fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(AppType::Cameras, 0)
-}
-
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
     let (cameras_tx, cameras_rx, exit_tx, exit_rx, publish_message_tx, publish_message_rx) =
