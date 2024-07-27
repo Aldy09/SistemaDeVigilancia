@@ -42,7 +42,8 @@ impl AutomaticIncidentDetector {
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
-        let path = Path::new("image_detection");
+        println!("por crear el path");
+        let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
         watcher.watch(path, RecursiveMode::Recursive)?;
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();

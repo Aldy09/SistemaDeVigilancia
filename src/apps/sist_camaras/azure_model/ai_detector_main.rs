@@ -3,6 +3,7 @@ use std::{sync::mpsc, thread};
 use rustx::apps::{incident_data::incident::Incident, sist_camaras::{azure_model::automatic_incident_detector::AutomaticIncidentDetector, manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType}};
 
 fn main() {
+    println!("Iniciando detector.");
 
     // Crea un AutomaticIncidentDetector y lo pone en funcionamiento.
     let cameras: ShCamerasType = create_cameras();

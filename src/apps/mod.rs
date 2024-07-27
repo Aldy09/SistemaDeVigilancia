@@ -13,4 +13,3 @@ pub mod vendor;
 pub mod windows;
 pub mod incident_data;
 pub mod place_type;
-pub mod image_detection;
