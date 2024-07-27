@@ -2,6 +2,7 @@
 
 use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
+use rand::{thread_rng, Rng};
 use rayon::ThreadPoolBuilder;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
@@ -22,6 +23,7 @@ use super::api_credentials::ApiCredentials;
 pub struct AutomaticIncidentDetector {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
+    last_incident_id: u8,
 }
 
 impl AutomaticIncidentDetector {
@@ -29,6 +31,7 @@ impl AutomaticIncidentDetector {
         Self {
             cameras,
             tx,
+            last_incident_id: 0,
         }
     }
 
@@ -36,6 +39,7 @@ impl AutomaticIncidentDetector {
         Self {
             cameras: self.cameras.clone(),
             tx: self.tx.clone(),
+            last_incident_id: self.last_incident_id,
         }
     }
 
@@ -45,11 +49,10 @@ impl AutomaticIncidentDetector {
         let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
         watcher.watch(path, RecursiveMode::Recursive)?;
         // Crear un pool de threads con el número de threads deseado
-        println!("por crear la threadpool");
         let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
 
         for event in rx_fs {
-            let self_clone = self.clone_ref();
+            let mut self_clone = self.clone_ref();
             match event {
                 Ok(event) => match event.kind {
                     EventKind::Create(_) => {
@@ -59,7 +62,7 @@ impl AutomaticIncidentDetector {
                                 let image_path = path.clone(); // Clona la ruta para moverla al hilo
                                 // Lanza un hilo por cada imagen a procesar
                                 pool.spawn(move || {
-                                    process_image(image_path, &self_clone).unwrap();
+                                    process_image(image_path, &mut self_clone).unwrap();
                                 });
                             }
                         }
@@ -71,6 +74,39 @@ impl AutomaticIncidentDetector {
         }
 
         Ok(())
+    }
+
+    // Genera una ubicación de incidente aleatoria
+    // dentro del rango de la camara que detecto el incidente.
+    fn get_incident_location(&self, camera_id: u8) -> (f64, f64) {
+        if let Ok(cameras) = self.cameras.lock(){
+
+            if let Some(camera) = cameras.get(&camera_id) {
+
+                let (x, y) = camera.get_position();
+                let range = camera.get_range_area();
+
+                let mut rng = thread_rng();
+
+                // Genera un desplazamiento aleatorio dentro del rango para x e y
+                let dx = rng.gen_range(0.0..=range);
+                let dy = rng.gen_range(0.0..=range);
+
+                // Calcula las nuevas coordenadas dentro del rango de la cámara
+                let new_x = x + dx as f64;
+                let new_y = y + dy as f64;
+
+                return (new_x, new_y)
+            }
+        }
+
+        (0.0, 0.0) // aux: dsp borramos esto y devolvemos un error.
+        
+    }
+
+    fn get_next_incident_id(&mut self) -> u8 {
+        self.last_incident_id += 1;
+        self.last_incident_id
     }
 
 
@@ -94,7 +130,7 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
 }
 
 
-fn process_image(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) -> Result<(), Box<dyn Error>> {
+fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>> {
     let buffer = read_image(&image_path)?;
     let api_credentials = ApiCredentials::new();
     let (client, headers) = create_client_and_headers(&api_credentials)?;
@@ -116,39 +152,23 @@ fn process_image(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) ->
     Ok(())
 }
 
-fn process_incident(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) -> () {
-    //if let Some(_camera_id) = extract_camera_id(&image_path) {
-        //let incident_location: (f64, f64) = get_incident_location(camera_id);
-        let incident_location: (f64, f64) = (-34.6005, -58.3846);
-        let incident = Incident::new(1, incident_location, IncidentSource::Automated);
+fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> () {
+    println!("image_path: {:?}", image_path);
+    if let Some(camera_id) = extract_camera_id(&image_path) {
+        // obtenemos la posición
+        println!("camera_id: {}", camera_id);
+        let incident_location: (f64, f64) = self_clone.get_incident_location(camera_id);
+        // creamos el incidente
+        let inc_id = self_clone.get_next_incident_id();
+        let incident = Incident::new(inc_id, incident_location, IncidentSource::Automated);
         println!("Incidente creado! {:?}", incident);
+        // se envía el inc para ser publicado
         self_clone.tx.send(incident).unwrap();
-    //} else {
-        //println!("Failed to extract camera ID from path");
-    //}
+    } else {
+        println!("Failed to extract camera ID from path");
+    }
 
 }
-
-// Genera una ubicación de incidente aleatoria
-    // dentro del rango de la camara que detecto el incidente.
-    // fn get_incident_location(&self, camera_id: u8) -> (f64, f64) {
-    //     let camera: = self.cameras.lock().unwrap().get(&camera_id).unwrap();
-    //     let (x, y) = camera.get_position();
-    //     let range = camera.get_range();
-
-    //     let mut rng = thread_rng();
-
-    //     // Genera un desplazamiento aleatorio dentro del rango para x e y
-    //     let dx = rng.gen_range(-range..=range);
-    //     let dy = rng.gen_range(-range..=range);
-
-    //     // Calcula las nuevas coordenadas dentro del rango de la cámara
-    //     let new_x = x + dx;
-    //     let new_y = y + dy;
-
-    //     (new_x, new_y)
-    // }
-
 
 fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = std::fs::File::open(image_path)?;
