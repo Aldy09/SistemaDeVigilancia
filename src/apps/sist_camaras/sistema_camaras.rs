@@ -115,7 +115,7 @@ impl SistemaCamaras {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
             for inc in rx {
-                println!("Se recibe por rx el inc: {:?}", inc);
+                println!("Se recibe por rx para publicar el inc: {:?}", inc);
                 mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self_clone.qos).unwrap();
             }
         })
