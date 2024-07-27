@@ -42,10 +42,10 @@ impl AutomaticIncidentDetector {
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
-        println!("por crear el path");
         let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
         watcher.watch(path, RecursiveMode::Recursive)?;
         // Crear un pool de threads con el número de threads deseado
+        println!("por crear la threadpool");
         let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
 
         for event in rx_fs {
@@ -53,6 +53,7 @@ impl AutomaticIncidentDetector {
             match event {
                 Ok(event) => match event.kind {
                     EventKind::Create(_) => {
+                        println!("event ok: create");
                         if let Some(path) = event.paths.first() {
                             if path.is_file() {
                                 let image_path = path.clone(); // Clona la ruta para moverla al hilo
@@ -63,7 +64,7 @@ impl AutomaticIncidentDetector {
                             }
                         }
                     }
-                    _ => {} // Ignorar otros eventos
+                    _ => {println!("event otro tipo, se ignora");} // Ignorar otros eventos
                 },
                 Err(e) => println!("watch error: {:?}", e),
             }
@@ -107,6 +108,7 @@ fn process_image(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) ->
     let res_text = res.text()?;
     let incident_probability = process_response(&res_text)?;
 
+    println!("Propability: {:?}", incident_probability);
     if incident_probability > 0.7 {
         process_incident(image_path, self_clone);
     }
@@ -115,14 +117,15 @@ fn process_image(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) ->
 }
 
 fn process_incident(image_path: PathBuf, self_clone: &AutomaticIncidentDetector) -> () {
-    if let Some(_camera_id) = extract_camera_id(&image_path) {
+    //if let Some(_camera_id) = extract_camera_id(&image_path) {
         //let incident_location: (f64, f64) = get_incident_location(camera_id);
         let incident_location: (f64, f64) = (-34.6005, -58.3846);
         let incident = Incident::new(1, incident_location, IncidentSource::Automated);
+        println!("Incidente creado! {:?}", incident);
         self_clone.tx.send(incident).unwrap();
-    } else {
-        println!("Failed to extract camera ID from path");
-    }
+    //} else {
+        //println!("Failed to extract camera ID from path");
+    //}
 
 }
 

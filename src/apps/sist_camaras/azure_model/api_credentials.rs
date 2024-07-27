@@ -12,7 +12,7 @@ impl ApiCredentials {
         // Inicializar la configuración
         let mut settings = Config::default();
         settings
-            .merge(File::with_name("key_and_endpoint"))
+            .merge(File::with_name("./src/apps/sist_camaras/azure_model/key_and_endpoint"))
             .expect("Error al cargar el archivo de configuración");
 
         // Leer las propiedades
