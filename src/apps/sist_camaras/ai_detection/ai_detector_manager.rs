@@ -10,6 +10,10 @@ use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetec
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 
+use super::properties::DetectorProperties;
+
+const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.txt";
+
 #[derive(Debug)]
 /// Se encarga de inicializar todo lo relacionado a directorios, monitorearlos, y threads,
 /// y finalmente llama al Automatic Incident Detector cuando se crea una imagen en algún subdirectorio
@@ -31,17 +35,18 @@ impl AIDetectorManager {
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
+        let properties = DetectorProperties::new(PROPERTIES_FILE)?;
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
-        let aux = "./src/apps/sist_camaras/ai_detection/image_detection";
-        let path = Path::new(aux);
+        let path = Path::new(properties.get_base_dir());
         self.create_dirs_tree(path)?;
 
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         watcher.watch(path, RecursiveMode::Recursive)?;
+        println!("Monitoreando subdirs.");
 
         // Se inicializa el detector
-        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone());
+        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties);
 
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;

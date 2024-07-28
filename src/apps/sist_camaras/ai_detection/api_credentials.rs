@@ -8,12 +8,11 @@ pub struct ApiCredentials {
 }
 
 impl ApiCredentials {
-    pub fn new() -> Self {
+    pub fn new(key_endpoint_path: String) -> Self {
         // Inicializar la configuración
-        let aux = "./src/apps/sist_camaras/azure_model/key_and_endpoint";
         let mut settings = Config::default();
         settings
-            .merge(File::with_name(aux))
+            .merge(File::with_name(key_endpoint_path.as_str()))
             .expect("Error al cargar el archivo de configuración");
 
         // Leer las propiedades
@@ -37,8 +36,8 @@ impl ApiCredentials {
     }
 }
 
-impl Default for ApiCredentials {
+/*impl Default for ApiCredentials {
     fn default() -> Self {
         Self::new()
     }
-}
+}*/

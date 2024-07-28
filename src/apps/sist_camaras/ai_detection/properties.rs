@@ -2,7 +2,7 @@ use std::io::{Error, ErrorKind};
 
 use crate::apps::properties::Properties;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DetectorProperties {
     base_dir: String,
     api_credentials_file_path: String,
@@ -68,13 +68,13 @@ impl DetectorProperties {
     }
 
     /// Devuelve el directorio base que contendrá a todos los subdirectorios de las cámaras.
-    pub fn get_base_dir(&self) -> &String {
-        &self.base_dir
+    pub fn get_base_dir(&self) -> &str {
+        self.base_dir.as_str()
     }
 
     /// Devuelve el archivo de configuración de api credentials (key_and_endpoint).
-    pub fn get_api_credentials_file_path(&self) -> &String {
-        &self.api_credentials_file_path
+    pub fn get_api_credentials_file_path(&self) -> String {
+        self.api_credentials_file_path.clone()
     }
     
     /// Devuelve el tag a buscar en la response del proveedor de inteligencia artifial.

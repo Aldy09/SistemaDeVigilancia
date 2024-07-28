@@ -1,4 +1,4 @@
-base_dir="./src/apps/sist_camaras/ai_detection/image_detection"
-api_credentials="./src/apps/sist_camaras/ai_detection/key_and_endpoint"
-inc_tag="incidente"
+base_dir=./src/apps/sist_camaras/ai_detection/image_detection
+api_credentials_file_path=./src/apps/sist_camaras/ai_detection/key_and_endpoint.json
+inc_tag=incidente
 inc_threshold=0.7

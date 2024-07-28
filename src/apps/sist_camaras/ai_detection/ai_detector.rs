@@ -9,6 +9,7 @@ use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 use crate::apps::incident_data::incident_source::IncidentSource;
 use super::api_credentials::ApiCredentials;
+use super::properties::DetectorProperties;
 
 /// Se encarga de comunicarse con el proveedor de inteligencia artificial, enviarle la
 /// imagen de la cámara y evaluar si la respuesta indica que la imagen contiene o no un incidente.
@@ -18,14 +19,16 @@ pub struct AutomaticIncidentDetector {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
     last_incident_id: u8,
+    properties: DetectorProperties,
 }
 
 impl AutomaticIncidentDetector {
-    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>) -> Self {
+    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, properties: DetectorProperties) -> Self {
         Self {
             cameras,
             tx,
             last_incident_id: 0,
+            properties,
         }
     }
 
@@ -34,13 +37,14 @@ impl AutomaticIncidentDetector {
             cameras: self.cameras.clone(),
             tx: self.tx.clone(),
             last_incident_id: self.last_incident_id,
+            properties: self.properties.clone(),
         }
     }
 
     /// Lee la imagen de `image_path`, se la envía al proveedor de ia y analiza su respuesta para concluir si
     /// la imagen contiene o no un incidente. En caso afirmativo, se procesa al incidente.
     pub fn process_image(&mut self, image: Vec<u8>, cam_id: u8) -> Result<(), Box<dyn Error>> {
-        let api_credentials = ApiCredentials::new();
+        let api_credentials = ApiCredentials::new(self.properties.get_api_credentials_file_path());
         
         let (client, headers) = create_client_and_headers(&api_credentials)?;
 
@@ -52,14 +56,38 @@ impl AutomaticIncidentDetector {
             .send()?;
 
         let res_text = res.text()?;
-        let incident_probability = process_response(&res_text)?;
+        let incident_probability = self.process_response(&res_text)?;
 
         println!("Probability: {:?}", incident_probability);
-        if incident_probability > 0.7 {
+        if incident_probability > self.properties.get_inc_threshold() {
             self.process_incident(cam_id)?;
         }
 
         Ok(())
+    }
+
+    /// Interpreta el res_text recibido como json y devuelve la probabilidad con que el mismo afirma que
+    /// se trata de un incidente.
+    fn process_response(&self, res_text: &str) -> Result<f64, Box<dyn Error>> {
+        let res_json: serde_json::Value = serde_json::from_str(res_text)?;
+        let incident_probability_option  = res_json["predictions"]
+            .as_array()
+            .and_then(|predictions| {
+                predictions.iter().find_map(|prediction| {
+                    let tag = self.properties.get_inc_tag();
+                    if prediction["tagName"].as_str() == Some(tag) {
+                        prediction["probability"].as_f64()
+                    } else {
+                        None
+                    }
+                })
+            });
+        
+        if let Some(incident_probability) = incident_probability_option {
+            Ok(incident_probability)
+        } else {
+            Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al obtener la incident_probability.")))
+        }
     }
 
     /// Recibe el image_path de la imagen en la que se detectó un incidente, crea el Incident y lo envía internamente para
@@ -122,30 +150,5 @@ fn create_client_and_headers(api_credentials: &ApiCredentials) -> Result<(Client
     );
     headers.insert(CONTENT_TYPE, "application/octet-stream".parse()?);
     Ok((client, headers))
-}
-
-
-
-/// Interpreta el res_text recibido como json y devuelve la probabilidad con que el mismo afirma que
-/// se trata de un incidente.
-fn process_response(res_text: &str) -> Result<f64, Box<dyn Error>> {
-    let res_json: serde_json::Value = serde_json::from_str(res_text)?;
-    let incident_probability_option  = res_json["predictions"]
-        .as_array()
-        .and_then(|predictions| {
-            predictions.iter().find_map(|prediction| {
-                if prediction["tagName"].as_str() == Some("incidente") {
-                    prediction["probability"].as_f64()
-                } else {
-                    None
-                }
-            })
-        });
-    
-    if let Some(incident_probability) = incident_probability_option {
-        Ok(incident_probability)
-    } else {
-        Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al obtener la incident_probability.")))
-    }
 }
 
