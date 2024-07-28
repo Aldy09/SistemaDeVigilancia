@@ -18,6 +18,7 @@ use crate::apps::incident_data::incident::Incident;
 use crate::apps::incident_data::incident_source::IncidentSource;
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 
+use super::ai_detector_manager::AIDetectorManager;
 use super::api_credentials::ApiCredentials;
 
 #[derive(Debug)]
@@ -37,7 +38,7 @@ impl AutomaticIncidentDetector {
         }
     }
 
-    pub fn clone_ref(&self) -> Self {
+    pub fn clone_refs(&self) -> Self {
         Self {
             cameras: self.cameras.clone(),
             tx: self.tx.clone(),
@@ -45,83 +46,10 @@ impl AutomaticIncidentDetector {
         }
     }
 
-
-    /// Crea subdirectorios de `base_dir`, uno por cada cámara, de nombre "camera_i"
-    /// donde `i` es el id de dicha cámara.
-    fn create_subdirs(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
-        if let Ok(cameras) = self.cameras.lock() {
-            for cam in cameras.values() {
-                if cam.is_not_deleted() {
-                    // (para todas va a dar true, porque Sistema Camaras se está iniciando, pero así es más genérico)
-                    let cam_id = cam.get_id();
-                    self.create_subdir(base_dir, cam_id)?;
-                }
-            }
-        }
-    
-        Ok(())
-    }
-
-    /// Crea un subdirectorio de `base_dir` de nombre "camera_i" donde `i` es el u8 recibido.
-    fn create_subdir(&self, base_dir: &Path, i: u8) -> Result<(), std::io::Error> {    
-        // Concatena el nombre del subdir a crear, al dir base
-        let subdir = format!("camera_{}", i);
-        let new_dir_path = base_dir.join(subdir);
-
-        // Si no existe, lo crea
-        if !new_dir_path.exists() {
-            fs::create_dir(&new_dir_path)?;
-        }
-    
-        Ok(())
-    }
-
-    /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
-    fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
-        // Si no existe, lo crea
-        if !base_dir.exists() {
-            fs::create_dir(&base_dir)?;
-        }
-    
-        Ok(())
-    }
-
     /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
-        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
-        let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
-        self.create_basedir(path)?;
-        self.create_subdirs(path)?;
-        let (tx_fs, rx_fs) = mpsc::channel();
-        let mut watcher = notify::recommended_watcher(tx_fs)?;
-        watcher.watch(path, RecursiveMode::Recursive)?;
-
-        // Crear un pool de threads con el número de threads deseado
-        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
-
-        for event_res in rx_fs {
-            let mut self_clone = self.clone_ref();            
-            let event = event_res?;
-
-            // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
-            if let EventKind::Create(_) = event.kind {
-                println!("event ok: create");
-                if let Some(path) = event.paths.first() {
-                    if path.is_file() {
-                        let image_path = path.clone();
-                        // Lanza un hilo por cada imagen a procesar []
-                        pool.spawn(move || {
-                            if process_image(image_path, &mut self_clone).is_err() {
-                                println!("Error en process_image.");
-                            };
-                        });
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -158,80 +86,49 @@ impl AutomaticIncidentDetector {
         self.last_incident_id
     }
 
+    /// Lee la imagen de `image_path`, se la envía al proveedor de ia y analiza su respuesta para concluir si
+    /// la imagen contiene o no un incidente. En caso afirmativo, se procesa al incidente.
+    pub fn process_image(&mut self, image: Vec<u8>, cam_id: u8) -> Result<(), Box<dyn Error>> {
+        let api_credentials = ApiCredentials::new();
+        
+        let (client, headers) = create_client_and_headers(&api_credentials)?;
 
-}
+        // Se envía la imagen al proveedor
+        let res = client
+            .post(api_credentials.get_endpoint())
+            .headers(headers)
+            .body(image)
+            .send()?;
 
-/// Recibe el path de la imagen que se está procesando, obtiene el id
-/// de la cámara que capturó dicha imagen. Es decir la parte que sigue a "camera_"
-/// de su carpeta padre.
-fn extract_camera_id(path: &Path) -> Option<u8> {
-    // Obtiene el nombre del directorio padre
-    path.parent()
-        .and_then(|parent| parent.file_name())
-        .and_then(|file_name| file_name.to_str())
-        .and_then(|name| {
-            // El nombre del directorio tiene el formato "camera_u8"
-            let prefix = "camera_";
-            if name.starts_with(prefix) {
-                name[prefix.len()..].parse().ok()
-            } else {
-                None
-            }
-        })
-}
+        let res_text = res.text()?;
+        let incident_probability = process_response(&res_text)?;
 
+        println!("Probability: {:?}", incident_probability);
+        if incident_probability > 0.7 {
+            process_incident(self, cam_id)?;
+        }
 
-/// Lee la imagen de `image_path`, se la envía al proveedor de ia y analiza su respuesta para concluir si
-/// la imagen contiene o no un incidente. En caso afirmativo, se procesa al incidente.
-fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>> {
-    let buffer = read_image(&image_path)?;
-    let api_credentials = ApiCredentials::new();
-    
-    let (client, headers) = create_client_and_headers(&api_credentials)?;
-
-    // Se envía la imagen al proveedor
-    let res = client
-        .post(api_credentials.get_endpoint())
-        .headers(headers)
-        .body(buffer)
-        .send()?;
-
-    let res_text = res.text()?;
-    let incident_probability = process_response(&res_text)?;
-
-    println!("Probability: {:?}", incident_probability);
-    if incident_probability > 0.7 {
-        process_incident(image_path, self_clone)?;
+        Ok(())
     }
 
-    Ok(())
+
 }
+
+
 
 /// Recibe el image_path de la imagen en la que se detectó un incidente, crea el Incident y lo envía internamente para
 /// ser publicado por MQTT.
-fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>>{
-    println!("image_path: {:?}", image_path);
-    if let Some(camera_id) = extract_camera_id(&image_path) {
-        // obtenemos la posición
-        println!("camera_id: {}", camera_id);
-        let incident_position: (f64, f64) = self_clone.get_incident_position(camera_id)?;
-        // creamos el incidente
-        let inc_id = self_clone.get_next_incident_id();
-        let incident = Incident::new(inc_id, incident_position, IncidentSource::Automated);
-        println!("Incidente creado! {:?}", incident);
-        // se envía el inc para ser publicado
-        self_clone.tx.send(incident)?;
-        Ok(())
-    } else {
-        Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al extraer el cam_id del directorio.")))
-    }
-}
-
-fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut file = std::fs::File::open(image_path)?;
-    let mut buffer = Vec::new();
-    std::io::Read::read_to_end(&mut file, &mut buffer)?;
-    Ok(buffer)
+fn process_incident(self_clone: &mut AutomaticIncidentDetector, cam_id: u8) -> Result<(), Box<dyn Error>>{
+    // obtenemos la posición
+    println!("camera_id: {}", cam_id);
+    let incident_position: (f64, f64) = self_clone.get_incident_position(cam_id)?;
+    // creamos el incidente
+    let inc_id = self_clone.get_next_incident_id();
+    let incident = Incident::new(inc_id, incident_position, IncidentSource::Automated);
+    println!("Incidente creado! {:?}", incident);
+    // se envía el inc para ser publicado
+    self_clone.tx.send(incident)?;
+    Ok(())
 }
 
 fn create_client_and_headers(api_credentials: &ApiCredentials) -> Result<(Client, HeaderMap), Box<dyn Error>> {

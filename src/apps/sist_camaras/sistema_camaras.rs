@@ -21,6 +21,7 @@ use std::fs;
 
 //use super::automatic_incident_detector::AutomaticIncidentDetector;
 
+use super::azure_model::ai_detector_manager::AIDetectorManager;
 use super::shareable_cameras_type::ShCamerasType;
 
 type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
@@ -240,7 +241,7 @@ impl SistemaCamaras {
     ) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
         thread::spawn(move || {
-            let ai_inc_detector = AutomaticIncidentDetector::new(cameras_ref, tx);
+            let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx);
             ai_inc_detector.run().unwrap();
         })
     }

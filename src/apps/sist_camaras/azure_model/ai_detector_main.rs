@@ -1,7 +1,8 @@
 use std::{sync::mpsc, thread};
 
-use rustx::apps::{incident_data::incident::Incident, sist_camaras::{azure_model::automatic_incident_detector::AutomaticIncidentDetector, manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType}};
+use rustx::apps::{incident_data::incident::Incident, sist_camaras::{azure_model::{ai_detector_manager::AIDetectorManager, automatic_incident_detector::AutomaticIncidentDetector}, manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType}};
 
+/// Este main está para llamarlo con el cargo run sin tener que levantar server monitoreo y cámaras.
 fn main() {
     println!("Iniciando detector.");
 
@@ -11,7 +12,7 @@ fn main() {
 
     // Se ejecuta en otro hilo el run.
     let handle = thread::spawn(move || {
-        let ai_inc_detector = AutomaticIncidentDetector::new(cameras, tx);
+        let ai_inc_detector = AIDetectorManager::new(cameras, tx);
         match ai_inc_detector.run() {
             Ok(_) => println!("Finalizado con éxito."),
             Err(e) => println!("Error en el detector: {:?}.", e),
