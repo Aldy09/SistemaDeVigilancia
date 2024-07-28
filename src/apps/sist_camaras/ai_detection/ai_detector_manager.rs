@@ -32,7 +32,8 @@ impl AIDetectorManager {
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
-        let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
+        let aux = "./src/apps/sist_camaras/ai_detection/image_detection";
+        let path = Path::new(aux);
         self.create_dirs_tree(path)?;
 
         let (tx_fs, rx_fs) = mpsc::channel();
