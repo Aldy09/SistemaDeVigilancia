@@ -1,12 +1,13 @@
 use std::sync::mpsc::Receiver;
 
-use crate::apps::sist_camaras::{camera::Camera,
-    shareable_cameras_type::ShCamerasType,
-    sist_camaras_abm::ABMCameras,
-    ai_detection::ai_detector_manager::AIDetectorManager};
-use crate::apps::incident_data::incident;
-use crate::apps::apps_mqtt_topics::AppsMqttTopics;
-use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, incident_data::{incident::Incident, incident_info::IncidentInfo}};
+use crate::apps::{apps_mqtt_topics::AppsMqttTopics,
+                  sist_camaras::{camera::Camera,
+                                 shareable_cameras_type::ShCamerasType,
+                                 sist_camaras_abm::ABMCameras,
+                                 ai_detection::ai_detector_manager::AIDetectorManager}};
+use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error},
+                  incident_data::{incident::{self, Incident},
+                  incident_info::IncidentInfo}};
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
@@ -77,26 +78,27 @@ impl SistemaCamaras {
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
-        let self_clone = self.clone_ref();
-
-        let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
-
+        // ABM        
         children.push(self.spawn_abm_cameras_thread(
             &self.cameras,
-            self_clone.cameras_tx,
-            self_clone.exit_tx,
+            self.cameras_tx.clone(),
+            self.exit_tx.clone(),
         ));
-        //children.push(self.spawn_ai_incident_analyzer_thread(un tx)); // aux: le puedo pasar un tx y que me mande inc y yo publico en mqtt. []
+        
+        // Recibe las cámaras que envía el abm y las publica por MQTT
         children.push(self.spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
+        // Exit
         children.push(spawn_exit_when_asked_thread(
             mqtt_client_sh.clone(),
             exit_rx,
         ));
+        
+        // Incident detector (ai)
+        let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
+        children.push(self.spawn_ai_incident_analyzer_thread(incident_tx)); // conexión con proveedor intelig artificial
+        children.push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone())); // recibe inc y publica
 
-        children.push(self.spawn_ai_incident_analyzer_thread(incident_tx)); 
-
-        children.push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone()));
-
+        // Suscribe y recibe mensajes por MQTT
         children.push(
             self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
         );
@@ -104,15 +106,29 @@ impl SistemaCamaras {
         children
     }
 
-    pub fn spawn_receive_incident_detected_thread(
+    /// Recibe los incidentes que envía el detector, y los publica por MQTT al topic de incidentes.
+    fn spawn_receive_incident_detected_thread(
         &self,
-        rx: Receiver<Incident>, mqtt_client_sh: Arc<Mutex<MQTTClient>>
+        rx: Receiver<Incident>, mqtt_client: Arc<Mutex<MQTTClient>>
     ) -> JoinHandle<()> {
-        let self_clone = self.clone_ref();
+        let qos = self.qos;
+        let logger_thread = self.logger.clone_ref();
         thread::spawn(move || {
             for inc in rx {
                 println!("Se recibe por rx para publicar el inc: {:?}", inc);
-                mqtt_client_sh.lock().unwrap().mqtt_publish("Inc", &inc.to_bytes(), self_clone.qos).unwrap();
+                if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+                    let res_publish = mqtt_client_lock.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &inc.to_bytes(), qos);
+                    match res_publish {
+                        Ok(publish_message) => {
+                            logger_thread.log(format!("Sistema-Camaras: publico inc: {:?}", publish_message));
+                        }
+                        Err(e) => {
+                            println!("Sistema-Camara: Error al hacer el publish {:?}", e);
+                            logger_thread.log(format!("Sistema-Camaras: Error al hacer el publish {:?}", e));
+                        },
+    
+                    };
+                }
             }
         })
     }
@@ -235,9 +251,13 @@ impl SistemaCamaras {
         tx: mpsc::Sender<Incident>
     ) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
+        let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
             let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx);
-            ai_inc_detector.run().unwrap();
+            if ai_inc_detector.run().is_err() {
+                println!("Error en detector, desde hilo para detector.");
+                logger_ai.log("Error en detector, desde hilo para detector.".to_string());
+            }
         })
     }
 
