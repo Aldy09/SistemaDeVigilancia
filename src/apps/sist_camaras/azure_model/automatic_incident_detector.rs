@@ -7,6 +7,7 @@ use rayon::ThreadPoolBuilder;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use std::error::Error;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
@@ -43,33 +44,35 @@ impl AutomaticIncidentDetector {
         }
     }
 
+    /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
+    /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
+    /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
         watcher.watch(path, RecursiveMode::Recursive)?;
         // Crear un pool de threads con el número de threads deseado
-        let pool = ThreadPoolBuilder::new().num_threads(6).build().unwrap();
+        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
 
-        for event in rx_fs {
-            let mut self_clone = self.clone_ref();
-            match event {
-                Ok(event) => match event.kind {
-                    EventKind::Create(_) => {
-                        println!("event ok: create");
-                        if let Some(path) = event.paths.first() {
-                            if path.is_file() {
-                                let image_path = path.clone(); // Clona la ruta para moverla al hilo
-                                // Lanza un hilo por cada imagen a procesar
-                                pool.spawn(move || {
-                                    process_image(image_path, &mut self_clone).unwrap();
-                                });
-                            }
-                        }
+        for event_res in rx_fs {
+            let mut self_clone = self.clone_ref();            
+            let event = event_res?;
+
+            // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
+            if let EventKind::Create(_) = event.kind {
+                println!("event ok: create");
+                if let Some(path) = event.paths.first() {
+                    if path.is_file() {
+                        let image_path = path.clone();
+                        // Lanza un hilo por cada imagen a procesar []
+                        pool.spawn(move || {
+                            if process_image(image_path, &mut self_clone).is_err() {
+                                println!("Error en process_image.");
+                            };
+                        });
                     }
-                    _ => {println!("event otro tipo, se ignora");} // Ignorar otros eventos
-                },
-                Err(e) => println!("watch error: {:?}", e),
+                }
             }
         }
 
@@ -77,8 +80,8 @@ impl AutomaticIncidentDetector {
     }
 
     // Genera una ubicación de incidente aleatoria
-    // dentro del rango de la camara que detecto el incidente.
-    fn get_incident_location(&self, camera_id: u8) -> (f64, f64) {
+    // dentro del rango de la camara que detectó el incidente.
+    fn get_incident_position(&self, camera_id: u8) -> Result<(f64, f64), std::io::Error> {
         if let Ok(cameras) = self.cameras.lock(){
 
             if let Some(camera) = cameras.get(&camera_id) {
@@ -96,11 +99,11 @@ impl AutomaticIncidentDetector {
                 let new_x = x + dx as f64;
                 let new_y = y + dy as f64;
 
-                return (new_x, new_y)
+                return Ok((new_x, new_y));
             }
         }
 
-        (0.0, 0.0) // aux: dsp borramos esto y devolvemos un error.
+        Err(std::io::Error::new(ErrorKind::Other, "Error al obtener la camera del hashmap en get_incident_position."))
         
     }
 
@@ -112,14 +115,16 @@ impl AutomaticIncidentDetector {
 
 }
 
+/// Recibe el path de la imagen que se está procesando, obtiene el id
+/// de la cámara que capturó dicha imagen. Es decir la parte que sigue a "camera_"
+/// de su carpeta padre.
 fn extract_camera_id(path: &Path) -> Option<u8> {
-    // Obtener el nombre del directorio padre
+    // Obtiene el nombre del directorio padre
     path.parent()
         .and_then(|parent| parent.file_name())
         .and_then(|file_name| file_name.to_str())
         .and_then(|name| {
-            // Supongamos que el nombre del directorio tiene el formato "camera_u8"
-            // donde "u8" es el ID de la cámara.
+            // El nombre del directorio tiene el formato "camera_u8"
             let prefix = "camera_";
             if name.starts_with(prefix) {
                 name[prefix.len()..].parse().ok()
@@ -133,8 +138,10 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
 fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>> {
     let buffer = read_image(&image_path)?;
     let api_credentials = ApiCredentials::new();
+    
     let (client, headers) = create_client_and_headers(&api_credentials)?;
 
+    // Se envía la imagen al proveedor
     let res = client
         .post(api_credentials.get_endpoint())
         .headers(headers)
@@ -144,30 +151,32 @@ fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector
     let res_text = res.text()?;
     let incident_probability = process_response(&res_text)?;
 
-    println!("Propability: {:?}", incident_probability);
+    println!("Probability: {:?}", incident_probability);
     if incident_probability > 0.7 {
-        process_incident(image_path, self_clone);
+        process_incident(image_path, self_clone)?;
     }
 
     Ok(())
 }
 
-fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) {
+/// Recibe el image_path de la imagen en la que se detectó un incidente, crea el Incident y lo envía internamente para
+/// ser publicado por MQTT.
+fn process_incident(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>>{
     println!("image_path: {:?}", image_path);
     if let Some(camera_id) = extract_camera_id(&image_path) {
         // obtenemos la posición
         println!("camera_id: {}", camera_id);
-        let incident_location: (f64, f64) = self_clone.get_incident_location(camera_id);
+        let incident_position: (f64, f64) = self_clone.get_incident_position(camera_id)?;
         // creamos el incidente
         let inc_id = self_clone.get_next_incident_id();
-        let incident = Incident::new(inc_id, incident_location, IncidentSource::Automated);
+        let incident = Incident::new(inc_id, incident_position, IncidentSource::Automated);
         println!("Incidente creado! {:?}", incident);
         // se envía el inc para ser publicado
-        self_clone.tx.send(incident).unwrap();
+        self_clone.tx.send(incident)?;
+        Ok(())
     } else {
-        println!("Failed to extract camera ID from path");
-    };
-
+        Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al extraer el cam_id del directorio.")))
+    }
 }
 
 fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -190,21 +199,26 @@ fn create_client_and_headers(api_credentials: &ApiCredentials) -> Result<(Client
 
 
 
-
+/// Interpreta el res_text recibido como json y devuelve la probabilidad con que el mismo afirma que
+/// se trata de un incidente.
 fn process_response(res_text: &str) -> Result<f64, Box<dyn Error>> {
     let res_json: serde_json::Value = serde_json::from_str(res_text)?;
-    let incident_probability = res_json["predictions"]
+    let incident_probability_option  = res_json["predictions"]
         .as_array()
         .and_then(|predictions| {
             predictions.iter().find_map(|prediction| {
                 if prediction["tagName"].as_str() == Some("incidente") {
-                    Some(prediction["probability"].as_f64().unwrap_or(0.0))
+                    prediction["probability"].as_f64()
                 } else {
                     None
                 }
             })
-        })
-        .unwrap_or(0.0);
-    Ok(incident_probability)
+        });
+    
+    if let Some(incident_probability) = incident_probability_option {
+        Ok(incident_probability)
+    } else {
+        Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al obtener la incident_probability.")))
+    }
 }
 
