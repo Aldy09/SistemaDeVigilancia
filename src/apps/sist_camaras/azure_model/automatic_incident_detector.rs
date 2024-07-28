@@ -7,6 +7,7 @@ use rayon::ThreadPoolBuilder;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use std::error::Error;
+use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -44,14 +45,59 @@ impl AutomaticIncidentDetector {
         }
     }
 
+
+    /// Crea subdirectorios de `base_dir`, uno por cada cámara, de nombre "camera_i"
+    /// donde `i` es el id de dicha cámara.
+    fn create_subdirs(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
+        if let Ok(cameras) = self.cameras.lock() {
+            for cam in cameras.values() {
+                if cam.is_not_deleted() {
+                    // (para todas va a dar true, porque Sistema Camaras se está iniciando, pero así es más genérico)
+                    let cam_id = cam.get_id();
+                    self.create_subdir(base_dir, cam_id)?;
+                }
+            }
+        }
+    
+        Ok(())
+    }
+
+    /// Crea un subdirectorio de `base_dir` de nombre "camera_i" donde `i` es el u8 recibido.
+    fn create_subdir(&self, base_dir: &Path, i: u8) -> Result<(), std::io::Error> {    
+        // Concatena el nombre del subdir a crear, al dir base
+        let subdir = format!("camera_{}", i);
+        let new_dir_path = base_dir.join(subdir);
+
+        // Si no existe, lo crea
+        if !new_dir_path.exists() {
+            fs::create_dir(&new_dir_path)?;
+        }
+    
+        Ok(())
+    }
+
+    /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
+    fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
+        // Si no existe, lo crea
+        if !base_dir.exists() {
+            fs::create_dir(&base_dir)?;
+        }
+    
+        Ok(())
+    }
+
     /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
+        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
+        let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
+        self.create_basedir(path)?;
+        self.create_subdirs(path)?;
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
-        let path = Path::new("./src/apps/sist_camaras/azure_model/image_detection");
         watcher.watch(path, RecursiveMode::Recursive)?;
+
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
 
@@ -135,6 +181,8 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
 }
 
 
+/// Lee la imagen de `image_path`, se la envía al proveedor de ia y analiza su respuesta para concluir si
+/// la imagen contiene o no un incidente. En caso afirmativo, se procesa al incidente.
 fn process_image(image_path: PathBuf, self_clone: &mut AutomaticIncidentDetector) -> Result<(), Box<dyn Error>> {
     let buffer = read_image(&image_path)?;
     let api_credentials = ApiCredentials::new();
