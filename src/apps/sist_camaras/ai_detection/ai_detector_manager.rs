@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::mpsc;
 
-use crate::apps::sist_camaras::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
+use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 

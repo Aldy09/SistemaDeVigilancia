@@ -3,7 +3,7 @@ use std::sync::mpsc::Receiver;
 use crate::apps::sist_camaras::{camera::Camera,
     shareable_cameras_type::ShCamerasType,
     sist_camaras_abm::ABMCameras,
-    azure_model::ai_detector_manager::AIDetectorManager};
+    ai_detection::ai_detector_manager::AIDetectorManager};
 use crate::apps::incident_data::incident;
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, incident_data::{incident::Incident, incident_info::IncidentInfo}};

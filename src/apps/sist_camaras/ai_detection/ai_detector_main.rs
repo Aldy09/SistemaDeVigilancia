@@ -3,7 +3,7 @@ use std::{sync::mpsc, thread};
 use rustx::apps::{
     incident_data::incident::Incident,
     sist_camaras::{
-        azure_model::ai_detector_manager::AIDetectorManager, manage_stored_cameras::create_cameras,
+        ai_detection::ai_detector_manager::AIDetectorManager, manage_stored_cameras::create_cameras,
         shareable_cameras_type::ShCamerasType,
     },
 };

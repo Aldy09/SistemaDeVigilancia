@@ -50,7 +50,7 @@ path = "src/apps/sist_camaras/sistema_camaras_main.rs"
 
 [[bin]]
 name = "ai_detector_main"
-path = "src/apps/sist_camaras/azure_model/ai_detector_main.rs"
+path = "src/apps/sist_camaras/ai_detection/ai_detector_main.rs"
 
 [[bin]]
 name = "dron_main"

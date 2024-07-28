@@ -1,4 +1,4 @@
-pub mod azure_model;
+pub mod ai_detection;
 pub mod camara_errors;
 pub mod camera;
 pub mod camera_state;
