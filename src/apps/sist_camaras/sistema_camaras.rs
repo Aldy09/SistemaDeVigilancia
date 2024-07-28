@@ -1,28 +1,23 @@
 use std::sync::mpsc::Receiver;
 
+use crate::apps::sist_camaras::{camera::Camera,
+    shareable_cameras_type::ShCamerasType,
+    sist_camaras_abm::ABMCameras,
+    azure_model::ai_detector_manager::AIDetectorManager};
 use crate::apps::incident_data::incident;
-use crate::apps::sist_camaras::{camera::Camera, sist_camaras_abm::ABMCameras};
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error}, incident_data::{incident::Incident, incident_info::IncidentInfo}};
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 // Importa la estructura desde el módulo
-use crate::apps::sist_camaras::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
-
 use std::collections::HashMap;
 use std::{sync::{
-    mpsc::{self, Sender},
-    Arc, Mutex, MutexGuard,
-}, thread::{self, JoinHandle}};
-
-use std::io::{self, Error, ErrorKind};
-use std::fs;
-
-//use super::automatic_incident_detector::AutomaticIncidentDetector;
-
-use super::azure_model::ai_detector_manager::AIDetectorManager;
-use super::shareable_cameras_type::ShCamerasType;
+                mpsc::{self, Sender},
+                Arc, Mutex, MutexGuard,
+                },
+          thread::{self, JoinHandle}};
+use std::{fs, io::{self, Error, ErrorKind}};
 
 type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
 

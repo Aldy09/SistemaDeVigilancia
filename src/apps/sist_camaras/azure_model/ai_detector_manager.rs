@@ -1,23 +1,19 @@
-
-
 use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
-use rand::{thread_rng, Rng};
 use rayon::ThreadPoolBuilder;
-use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use std::error::Error;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc;
-
-use crate::apps::incident_data::incident::Incident;
 
 use crate::apps::sist_camaras::azure_model::automatic_incident_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
-
+use crate::apps::incident_data::incident::Incident;
 
 #[derive(Debug)]
-#[allow(dead_code)]
+/// Se encarga de inicializar todo lo relacionado a directorios, monitorearlos, y threads,
+/// y finalmente llama al Automatic Incident Detector cuando se crea una imagen en algún subdirectorio
+/// de alguna cámara.
 pub struct AIDetectorManager {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
@@ -65,7 +61,6 @@ impl AIDetectorManager {
                             match read_image(&image_path) {
                                 Ok(image) => {
                                     if let Some(cam_id) = extract_camera_id(&image_path){
-                                        //let mut aidetector = AutomaticIncidentDetector::new(cameras, tx);
                                         if aidetector.process_image(image, cam_id).is_err() {
                                             println!("Error en process_image.");
                                         }
@@ -94,7 +89,7 @@ impl AIDetectorManager {
     fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
         // Si no existe, lo crea
         if !base_dir.exists() {
-            fs::create_dir(&base_dir)?;
+            fs::create_dir(base_dir)?;
         }
     
         Ok(())
