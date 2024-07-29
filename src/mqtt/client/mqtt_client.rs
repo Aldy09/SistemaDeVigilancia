@@ -1,10 +1,14 @@
 use crate::mqtt::client::mqtt_client_listener::MQTTClientListener;
 use crate::mqtt::client::mqtt_client_writer::MQTTClientWritter;
+use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use std::io::Error;
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
+use std::sync::mpsc::{self, Receiver};
 
 use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::messages::subscribe_message::SubscribeMessage;
+
+use super::mqtt_client_server_connection::{mqtt_connect_to_broker, MqttClientConnection};
 
 type StreamType = TcpStream;
 
@@ -15,6 +19,23 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
+    
+    pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_content: WillContent, will_topic: &str, will_qos: u8) -> Result<(Self, Receiver<PublishMessage>), Error> {
+        // Efectúa la conexión al server
+        let stream = mqtt_connect_to_broker(client_id, addr, will_msg_content, will_topic, will_qos)?;
+
+        // Inicializa su listener y writer
+        let writer = MQTTClientWritter::new(stream.try_clone()?);
+        let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
+        let listener =
+                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
+
+        let mqtt_client = MQTTClient { writer, listener };
+
+        Ok((mqtt_client, publish_message_rx))
+    }
+
+
     pub fn new(stream: StreamType, listener: MQTTClientListener) -> MQTTClient {
         let writer = MQTTClientWritter::new(stream.try_clone().unwrap());
         MQTTClient { writer, listener }

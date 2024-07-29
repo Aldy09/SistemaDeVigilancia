@@ -3,7 +3,6 @@ use std::net::{SocketAddr, TcpStream};
 use std::io::{self, Error, ErrorKind};
 
 type StreamType = TcpStream;
-use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::mqtt::messages::{connack_message::ConnackMessage,
                             connect_message::ConnectMessage,
                             connect_return_code::ConnectReturnCode,
@@ -16,7 +15,7 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 
 pub struct MqttClientConnection {}
 
-pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_content: WillContent, will_topic: AppsMqttTopics, will_qos: u8) -> Result<TcpStream, Error> {
+pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_content: WillContent, will_topic: &str, will_qos: u8) -> Result<TcpStream, Error> {
     //let will_topic = String::from("desc"); // PROBANDO
     //let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
     // Inicializaciones
@@ -30,7 +29,7 @@ pub fn mqtt_connect_to_broker(client_id: &str, addr: &SocketAddr, will_msg_conte
     // Crea el mensaje tipo Connect y lo pasa a bytes
     let mut connect_msg = ConnectMessage::new(
         client_id.to_string(),
-        Some(String::from(will_topic.to_str())),
+        Some(String::from(will_topic)),
         Some(will_msg_content.to_str()),
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
