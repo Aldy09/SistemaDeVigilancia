@@ -155,9 +155,11 @@ fn extract_camera_id(path: &Path) -> Option<u8> {
             // El nombre del directorio tiene el formato "camera_u8"
             let prefix = "camera_";
             if name.starts_with(prefix) {
-                name[prefix.len()..].parse().ok()
-            } else {
-                None
+                if let Some(cam_id) = name.strip_prefix(prefix) {
+                    return cam_id.parse().ok()
+                }
             }
+                None
+            
         })
 }
