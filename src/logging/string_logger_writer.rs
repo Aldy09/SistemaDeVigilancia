@@ -19,10 +19,10 @@ impl StringLoggerWriter {
     /// Escribe el mensaje recibido al archivo de log.
     fn write_to_file(&self, message: String) -> Result<(), Error> {
         
-        let filename = format!("s_log_{:?}.txt", self.id);
+        let filename = format!("s_log_{}.txt", self.id);
         let mut file = std::fs::OpenOptions::new().create(true).append(true).open(filename)?;
 
-        writeln!(file, "{}\n", message)?;
+        writeln!(file, "{}", message)?;
 
         Ok(())
     }

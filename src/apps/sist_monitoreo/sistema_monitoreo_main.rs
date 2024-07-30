@@ -2,7 +2,6 @@ use std::io::Error;
 
 use crossbeam_channel::unbounded;
 use rustx::logging::string_logger::StringLogger;
-use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 use rustx::apps::{
         common_clients::{get_broker_address, join_all_threads},
