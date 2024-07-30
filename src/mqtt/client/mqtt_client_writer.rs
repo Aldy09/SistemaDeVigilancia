@@ -82,14 +82,10 @@ impl MQTTClientWriter {
         // Lo envío
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
-        println!("Mqtt disconnect: bytes {:?}", msg);
+        //println!("Mqtt disconnect: bytes {:?}", msg);
 
         // Cerramos la conexión con el servidor
-
-        match self.stream.shutdown(Shutdown::Both) {
-            Ok(_) => println!("Mqtt disconnect: Conexión terminada con éxito"),
-            Err(e) => println!("Mqtt disconnect: Error al terminar la conexión: {:?}", e),
-        }
+        self.stream.shutdown(Shutdown::Both)?;
 
         Ok(())
     }

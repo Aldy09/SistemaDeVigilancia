@@ -3,6 +3,7 @@ use crate::mqtt::client::{
     mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
 };
 use crate::mqtt::messages::publish_message::PublishMessage;
+use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use std::io::Error;
 use std::net::SocketAddr;
 use std::{sync::mpsc::{self, Receiver}, thread::{self, JoinHandle}};
@@ -20,13 +21,11 @@ impl MQTTClient {
     pub fn mqtt_connect_to_broker(
         client_id: String,
         addr: &SocketAddr,
-        will_msg_content: String,
-        will_topic: String,
-        will_qos: u8,
+        will: Option<WillMessageData>,
     ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
         // Efectúa la conexión al server
         let stream =
-            mqtt_connect_to_broker(client_id, addr, will_msg_content, will_topic, will_qos)?;
+            mqtt_connect_to_broker(client_id, addr, will)?;
 
         // Inicializa su listener y writer
         let writer = MQTTClientWriter::new(stream.try_clone()?);

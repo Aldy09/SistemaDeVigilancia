@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use std::io::Error;
 
 use rustx::logging::string_logger::StringLogger;
+use rustx::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::{
     apps::{
@@ -30,7 +31,7 @@ fn get_formatted_app_id() -> String {
 }
 
 fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(AppType::Cameras, 0)
+    WillContent::new(AppType::Cameras, None)
 }
 
 fn main() -> Result<(), Error> {
@@ -44,28 +45,24 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id();
     let will_msg_content = get_app_will_msg_content();
-    match MQTTClient::mqtt_connect_to_broker(
-        client_id,
-        &broker_addr,
-        will_msg_content.to_str(),
-        get_app_will_topic(),
-        qos,
-    ) {
+    let will_msg_data = WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
+    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data)) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
-            println!("Cliente: Conectado al broker MQTT.");
+            println!("Conectado al broker MQTT.");
+            logger.log("Conectado al broker MQTT".to_string());
 
             let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
 
-            let mut handlers =
+            let mut handles =
                 sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_message_rx, mqtt_client);
 
-            handlers.push(handle);
-            join_all_threads(handlers);
+            handles.push(handle);
+            join_all_threads(handles);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
 
-    // Se espera al hijo para el logger writer
+    // Se espera al hijo para el logger
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }

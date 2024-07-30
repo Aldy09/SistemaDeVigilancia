@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 
 use crate::{
-    apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::is_disconnected_error},
+    apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs},
     logging::string_logger::StringLogger,
 };
 
@@ -116,17 +116,18 @@ impl SistemaMonitoreo {
         );
     }
 
+    /// Recibe incidente desde la UI, y lo publica por MQTT.
     fn spawn_publish_incidents_in_topic_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: MpscReceiver<Incident>,
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
-        thread::spawn(move ||
-            while let Ok(inc) = rx.recv() {
-                let msg_clone = inc.clone();
-                self_clone.logger.log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
-                self_clone.publish_incident(msg_clone, &mqtt_client);
+        thread::spawn(move || {
+                while let Ok(inc) = rx.recv() {
+                    self_clone.logger.log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
+                    self_clone.publish_incident(inc, &mqtt_client);
+                }
             }
         )
     }
@@ -140,6 +141,7 @@ impl SistemaMonitoreo {
         }
     }
 
+    /// Se suscribe a los topics y queda recibiendo PublishMessages de esos topics.
     fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
@@ -172,7 +174,7 @@ impl SistemaMonitoreo {
                     self.logger.log(format!("Sistema-Monitoreo: subscripto a topic {:?}", topic));
                 }
                 Err(e) => {
-                    println!("Cliente: Error al hacer un subscribe a topic: {:?}", e);
+                    println!("Error al hacer un subscribe a topic: {:?}", e);
                     self.logger.log(format!("Error al hacer un subscribe al topic: {:?}", e));
                 },
             }
@@ -181,26 +183,19 @@ impl SistemaMonitoreo {
 
     // Recibe mensajes de los topics a los que se ha suscrito
     fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
-        loop {
-            match mqtt_rx.recv() {
-                //Publish message: camera o dron
-                Ok(publish_message) => {                    
-                    self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_message));
-                    self.send_publish_message_to_ui(publish_message)
-                }
-                Err(_) => {
-                    is_disconnected_error();
-                    break;
-                }
-            }
+        for publish_msg in mqtt_rx {
+            self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_msg));
+            self.send_publish_message_to_ui(publish_msg)
         }
+        
+        there_are_no_more_publish_msgs(&self.logger);
     }
 
     fn send_publish_message_to_ui(&self, msg: PublishMessage) {
         let res_send = self.egui_tx.send(msg);
         match res_send {
-            Ok(_) => println!("Cliente: Enviado mensaje a la UI"),
-            Err(e) => println!("Cliente: Error al enviar mensaje a la UI: {:?}", e),
+            Ok(_) => println!("Enviado mensaje a la UI"),
+            Err(e) => println!("Error al enviar mensaje a la UI: {:?}", e),
         }
     }
 

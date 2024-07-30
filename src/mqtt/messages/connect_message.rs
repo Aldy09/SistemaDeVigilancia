@@ -1,7 +1,7 @@
 use crate::mqtt::{messages::{
     connect_fixed_header::FixedHeader, connect_flags::ConnectFlags, connect_payload::Payload,
     connect_variable_header::VariableHeader,
-}, mqtt_utils::will_message_utils::will_message::WillMessageAndTopic};
+}, mqtt_utils::will_message_utils::will_message::WillMessageData};
 
 #[derive(Debug)]
 pub struct ConnectMessage {
@@ -257,11 +257,11 @@ impl ConnectMessage {
 
     /// Devuelve un WillMessageAndTopic con los campos will_message y will_topic del mensaje
     /// si ambos son some, o None en caso contrario.
-    pub fn get_will_to_publish(&self) -> Option<WillMessageAndTopic> {
+    pub fn get_will_to_publish(&self) -> Option<WillMessageData> {
         if let Some(msg) = &self.payload.will_message {
             if let Some(topic) = &self.payload.will_topic {
 
-                let will_msg: WillMessageAndTopic = WillMessageAndTopic::new(
+                let will_msg: WillMessageData = WillMessageData::new(
                     String::from(msg),
                     String::from(topic),
                     self.variable_header.connect_flags.will_qos,

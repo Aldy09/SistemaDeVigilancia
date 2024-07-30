@@ -369,7 +369,7 @@ impl UISistemaMonitoreo {
         if let Ok(will_content) = will_content_res {
             let app_type = will_content.get_app_type_identifier();
             // Obtengo los campos necesarios para remover del vector places
-            let id = will_content.get_id();
+            let id_option = will_content.get_id(); // es un option xq solo dron tiene id en este contexto.
             let place_type = PlaceType::from_app_type_will_content(&app_type);
 
             match app_type {
@@ -379,9 +379,11 @@ impl UISistemaMonitoreo {
                     self.places.remove_places(place_type)
                 },
                 AppType::Dron => {
-                    println!("Desc, recibido will_message: Se desconectó Dron {}.", id);
-                    // Se elimina el dron de id indicado, porque el mismo se desconectó.
-                    self.places.remove_place(id, place_type)
+                    if let Some(id) = id_option {
+                        println!("Desc, recibido will_message: Se desconectó Dron {}.", id);
+                        // Se elimina el dron de id indicado, porque el mismo se desconectó.
+                        self.places.remove_place(id, place_type)                        
+                    }
                 },
                 AppType::Monitoreo => {
                     // este caso nunca va a darse, no recibirá su propio mensaje, y tampoco interesa.

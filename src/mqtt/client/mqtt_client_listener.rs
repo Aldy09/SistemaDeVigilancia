@@ -46,7 +46,7 @@ impl MQTTClientListener {
                     self.read_a_message(&fixed_header_info)?; // esta función lee UN mensaje.
                 }
                 Ok(None) => {
-                    println!("Se desconectó el server.");
+                    println!("Se cerró la conexión con server.");
                     break;
                 }
                 Err(_) => todo!(),

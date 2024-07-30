@@ -19,16 +19,16 @@ impl StringLoggerWriter {
     /// Escribe el mensaje recibido al archivo de log.
     fn write_to_file(&self, message: String) -> Result<(), Error> {
         
-        let filename = format!("s_log_{:?}.txt", self.id);
+        let filename = format!("s_log_{}.txt", self.id);
         let mut file = std::fs::OpenOptions::new().create(true).append(true).open(filename)?;
 
-        writeln!(file, "{}\n", message)?;
+        writeln!(file, "{}", message)?;
 
         Ok(())
     }
 
-    /// Lanza hilo para recibir por rx cada string a logguear, y la escribe en el athcivo.
-    pub fn spawn_dron_stuff_to_string_logger_thread(self
+    /// Lanza hilo que recibe por rx cada string a logguear, y la escribe en el athcivo.
+    pub fn spawn_event_listening_thread_to_write_to_file(self
     ) -> JoinHandle<()> {
         thread::spawn(move || {
             while let Ok(msg) = self.logger_rx.recv() {

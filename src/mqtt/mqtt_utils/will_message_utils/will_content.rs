@@ -1,4 +1,4 @@
-use std::{io::{Error, ErrorKind}, str::from_utf8};
+use std::io::{Error, ErrorKind};
 
 use super::app_type::AppType;
 
@@ -7,11 +7,11 @@ use super::app_type::AppType;
 #[derive(Debug, PartialEq)]
 pub struct WillContent {
     app_type_identifier: AppType,
-    id: u8,    
+    id: Option<u8>,    
 }
 
 impl WillContent {
-    pub fn new(app_type_identifier: AppType, id: u8) -> Self {
+    pub fn new(app_type_identifier: AppType, id: Option<u8>) -> Self {
         Self {app_type_identifier, id }
     }
 
@@ -19,49 +19,43 @@ impl WillContent {
         self.app_type_identifier
     }
 
-    pub fn get_id(&self) -> u8 {
+    pub fn get_id(&self) -> Option<u8> {
         self.id
     }
 
     pub fn to_str(&self) -> String {
         let string_app_type = self.app_type_identifier.to_str();
-        format!("{}-{}",string_app_type, self.id)
+        let len = self.id.is_some() as u8; // indica si hay que continuar para leer el id o si el mismo es none.
+        if let Some(id) = self.id {
+            format!("{}-{}-{}",string_app_type, len, id)
+        } else {
+            format!("{}-{}-{}",string_app_type, len, 0)
+        }
     }
 
     pub fn will_content_from_string(string: &str) -> Result<Self, Error> {
         let trimmed = string.trim();
-        if let Some((app_type_string, id_string)) = trimmed.split_once('-') {
+        let parts: Vec<&str> = trimmed.split('-').collect();
+        if parts.len() == 3 {
+            let app_type_id_string = parts[0];
+            let len_string = parts[1];
+            let id_string = parts[2];
             // Obtiene el app type
-            let app_type_identifier = AppType::app_type_from_str(app_type_string)?;
-            // obtiene el id
-            if let Ok(id) = id_string.parse::<u8>(){
-                return Ok(Self{ app_type_identifier, id });
+            let app_type_identifier = AppType::app_type_from_str(app_type_id_string)?;
+            // obtiene el len
+            if let Ok(len) = len_string.parse::<u8>(){
+                // si había, obtiene el id; else lo crea con None
+                if len==1 {
+                    if let Ok(id) = id_string.parse::<u8>(){
+                        return Ok(Self{ app_type_identifier, id: Some(id)});
+                    }
+                } else {
+                    return Ok(Self{ app_type_identifier, id: None });
+
+                }
             }
         }
         Err(Error::new(ErrorKind::InvalidData, "Error al decodear WillContent."))
-    }
-
-    /// Convierte un struct `AppWillContent` a bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.id.to_be_bytes());
-        
-        //bytes.extend_from_slice(&(self.app_type_identifier.len() as u8).to_be_bytes());
-        bytes.extend_from_slice(self.app_type_identifier.to_str().as_bytes());
-
-        bytes
-    }
-
-    /// Obtiene un struct `AppWillContent` a partir de bytes.
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
-        
-        let id = u8::from_be_bytes([bytes[0]]);
-
-        let string = from_utf8(&bytes[1..])
-            .map_err(|_| Error::new(ErrorKind::InvalidInput, "error de decodificación."))?;
-        let app_type_identifier = AppType::app_type_from_str(string)?;
-
-        Ok(Self{app_type_identifier, id})
     }
 }
 
@@ -74,9 +68,9 @@ mod test {
 
     #[test]
     fn test_app_will_content_to_and_from_bytes_works() {
-        // pasada a bytes y reconstruida es igual al original
-        let will_msg = WillContent::new(AppType::Cameras, 1);
+        // pasada a string y reconstruida es igual al original
+        let will_msg = WillContent::new(AppType::Cameras, Some(1));
         
-        assert_eq!(will_msg, WillContent::from_bytes(will_msg.to_bytes()).unwrap());
+        assert_eq!(will_msg, WillContent::will_content_from_string(will_msg.to_str().as_str()).unwrap());
     }
 }
