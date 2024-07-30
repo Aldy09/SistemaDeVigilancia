@@ -27,8 +27,8 @@ impl StringLoggerWriter {
         Ok(())
     }
 
-    /// Lanza hilo para recibir por rx cada string a logguear, y la escribe en el athcivo.
-    pub fn spawn_dron_stuff_to_string_logger_thread(self
+    /// Lanza hilo que recibe por rx cada string a logguear, y la escribe en el athcivo.
+    pub fn spawn_event_listening_thread_to_write_to_file(self
     ) -> JoinHandle<()> {
         thread::spawn(move || {
             while let Ok(msg) = self.logger_rx.recv() {

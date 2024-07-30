@@ -9,6 +9,7 @@ use std::sync::mpsc;
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
+use crate::logging::string_logger::StringLogger;
 
 use super::properties::DetectorProperties;
 
@@ -21,13 +22,15 @@ const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.t
 pub struct AIDetectorManager {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
+    logger: StringLogger,
 }
 
 impl AIDetectorManager {
-    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>) -> Self {
+    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, logger: StringLogger) -> Self {
         Self {
             cameras,
             tx,
+            logger,
         }
     }
 
@@ -43,10 +46,12 @@ impl AIDetectorManager {
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         watcher.watch(path, RecursiveMode::Recursive)?;
-        println!("Monitoreando subdirs.");
+        println!("Detector: Monitoreando subdirs.");
+        self.logger.log("Detector: Monitoreando subdirs".to_string());
 
         // Se inicializa el detector
-        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties);
+        let logger_ai = self.logger.clone_ref();
+        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties, logger_ai);
 
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
@@ -56,7 +61,7 @@ impl AIDetectorManager {
 
             // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
             if let EventKind::Create(_) = event.kind {
-                println!("event ok: create");
+                self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
                     if path.is_file() {
                         let image_path = path.clone();
@@ -68,11 +73,11 @@ impl AIDetectorManager {
                                 Ok(image) => {
                                     if let Some(cam_id) = extract_camera_id(&image_path){
                                         if aidetector.process_image(image, cam_id).is_err() {
-                                            println!("Error en process_image.");
+                                            println!("Detector: Error en process_image.");                                            
                                         }
                                     }
                                 },
-                                Err(e) => println!("Error al leer la imagen: {:?}, {:?}", image_path, e),
+                                Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
                             };
                             
                         });

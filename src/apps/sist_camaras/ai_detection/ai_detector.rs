@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 use crate::apps::incident_data::incident_source::IncidentSource;
+use crate::logging::string_logger::StringLogger;
 use super::api_credentials::ApiCredentials;
 use super::properties::DetectorProperties;
 
@@ -20,15 +21,17 @@ pub struct AutomaticIncidentDetector {
     tx: mpsc::Sender<Incident>,
     last_incident_id: u8,
     properties: DetectorProperties,
+    logger: StringLogger,
 }
 
 impl AutomaticIncidentDetector {
-    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, properties: DetectorProperties) -> Self {
+    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, properties: DetectorProperties, logger: StringLogger) -> Self {
         Self {
             cameras,
             tx,
             last_incident_id: 0,
             properties,
+            logger,
         }
     }
 
@@ -38,6 +41,7 @@ impl AutomaticIncidentDetector {
             tx: self.tx.clone(),
             last_incident_id: self.last_incident_id,
             properties: self.properties.clone(),
+            logger: self.logger.clone_ref(),
         }
     }
 
@@ -58,7 +62,8 @@ impl AutomaticIncidentDetector {
         let res_text = res.text()?;
         let incident_probability = self.process_response(&res_text)?;
 
-        println!("Probability: {:?}", incident_probability);
+        println!("Detector: Probability: {:?}", incident_probability);
+        self.logger.log(format!("Detector: Probability: {:?}", incident_probability));
         if incident_probability > self.properties.get_inc_threshold() {
             self.process_incident(cam_id)?;
         }
@@ -94,12 +99,13 @@ impl AutomaticIncidentDetector {
     /// ser publicado por MQTT.
     fn process_incident(&mut self, cam_id: u8) -> Result<(), Box<dyn Error>>{
         // obtenemos la posición
-        println!("camera_id: {}", cam_id);
         let incident_position: (f64, f64) = self.get_incident_position(cam_id)?;
         // creamos el incidente
         let inc_id = self.get_next_incident_id();
         let incident = Incident::new(inc_id, incident_position, IncidentSource::Automated);
-        println!("Incidente creado! {:?}", incident);
+        
+        println!("Detector: Incidente creado! {:?}", incident);
+        self.logger.log(format!("Detector: Incidente creado! {:?}", incident));
         // se envía el inc para ser publicado
         self.tx.send(incident)?;
         Ok(())
@@ -138,8 +144,6 @@ impl AutomaticIncidentDetector {
     }
 
 }
-
-
 
 fn create_client_and_headers(api_credentials: &ApiCredentials) -> Result<(Client, HeaderMap), Box<dyn Error>> {
     let client = Client::new();

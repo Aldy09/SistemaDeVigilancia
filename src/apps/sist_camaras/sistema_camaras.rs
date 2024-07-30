@@ -62,7 +62,7 @@ impl SistemaCamaras {
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
         logger: StringLogger,
     ) -> Self {
-        println!("SISTEMA DE CAMARAS\n");
+        println!("Sistema de Cámaras\n");
         let qos =
             leer_qos_desde_archivo("src/apps/sist_camaras/qos_sistema_camaras.properties").unwrap();
 
@@ -285,7 +285,7 @@ impl SistemaCamaras {
         let cameras_ref = Arc::clone(&self.cameras);
         let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
-            let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx);
+            let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx, logger_ai.clone_ref());
             if ai_inc_detector.run().is_err() {
                 println!("Error en detector, desde hilo para detector.");
                 logger_ai.log("Error en detector, desde hilo para detector.".to_string());
@@ -355,12 +355,12 @@ impl SistemaCamaras {
                                 let state_has_changed =
                                     camera_to_update.remove_from_incs_being_managed(inc.get_info());
                                 self.logger.log(format!(
-                                    "  la cámara queda:\n   cam id y lista de incs: {:?}",
+                                    "  la cámara queda: cam id y lista de incs: {:?}",
                                     camera_to_update.get_id_and_incs_for_debug_display()
                                 ));
                                 if state_has_changed {
                                     self.logger.log(format!(
-                                        "CÁMARAS: a activo, enviando cámara: {:?}",
+                                        "Cambiado estado a ActiveMode, enviando cámara: {:?}",
                                         camera_to_update
                                     ));
                                     self.send_camera_bytes(camera_to_update, &self.cameras_tx);
@@ -435,7 +435,7 @@ impl SistemaCamaras {
                     cameras_that_follow_inc.push(*bordering_cam_id);
                 }
                 self.logger.log(format!(
-                    "  la cámara queda:\n   cam id y lista de incs: {:?}",
+                    "  la cámara queda: cam id y lista de incs: {:?}",
                     camera.get_id_and_incs_for_debug_display()
                 ));
             }
@@ -455,7 +455,7 @@ impl SistemaCamaras {
         for msg in rx {
             self.handle_received_message(msg, cameras, &mut incs_being_managed)
         }
-        
+
         there_are_no_more_publish_msgs(&self.logger);
     }
 

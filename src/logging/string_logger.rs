@@ -8,12 +8,14 @@ pub struct StringLogger {
 }
 
 impl StringLogger {
+    /// Crea y configura todo lo necesario para utilizar el StringLogger.
+    /// Devuelve el logger que posee un método de log, y un handle que debe ser esperado para terminar la ejecución correctamente.
     pub fn create_logger(id: String) -> (StringLogger, JoinHandle<()>) {
         // Se crean y configuran ambos extremos del string logger
         let (string_logger_tx, string_logger_rx) = mpsc::channel::<String>();
         let logger = StringLogger::new(string_logger_tx);
         let logger_writer = StringLoggerWriter::new(id, string_logger_rx);
-        let handle_logger = logger_writer.spawn_dron_stuff_to_string_logger_thread(); //
+        let handle_logger = logger_writer.spawn_event_listening_thread_to_write_to_file();
 
         (logger, handle_logger)
     }

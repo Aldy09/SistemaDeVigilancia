@@ -1,12 +1,12 @@
 use std::{sync::mpsc, thread};
 
-use rustx::apps::{
+use rustx::{apps::{
     incident_data::incident::Incident,
     sist_camaras::{
         ai_detection::ai_detector_manager::AIDetectorManager, manage_stored_cameras::create_cameras,
         shareable_cameras_type::ShCamerasType,
     },
-};
+}, logging::string_logger::StringLogger};
 
 /// Este main está para llamarlo con el cargo run sin tener que levantar server monitoreo y cámaras.
 fn main() {
@@ -15,10 +15,11 @@ fn main() {
     // Crea un AutomaticIncidentDetector y lo pone en funcionamiento.
     let cameras: ShCamerasType = create_cameras();
     let (tx, rx) = mpsc::channel::<Incident>();
+    let (logger, handle_logger) = StringLogger::create_logger("detector_main".to_string());
 
     // Se ejecuta en otro hilo el run.
     let handle = thread::spawn(move || {
-        let ai_inc_detector = AIDetectorManager::new(cameras, tx);
+        let ai_inc_detector = AIDetectorManager::new(cameras, tx, logger);
         match ai_inc_detector.run() {
             Ok(_) => println!("Finalizado con éxito."),
             Err(e) => println!("Error en el detector: {:?}.", e),
@@ -35,4 +36,9 @@ fn main() {
     if handle.join().is_err() {
         println!("Error al esperar al hijo.");
     }
+    // Se espera al hijo para el logger
+    if handle_logger.join().is_err() {
+        println!("Error al esperar al hijo para string logger writer.")
+    }
+
 }

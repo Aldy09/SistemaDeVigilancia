@@ -66,7 +66,7 @@ fn main() -> Result<(), Error> {
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
 
-    // Se espera al hijo para el logger writer
+    // Se espera al hijo para el logger
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
