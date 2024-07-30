@@ -1,26 +1,50 @@
-use crate::mqtt::client::mqtt_client_listener::MQTTClientListener;
-use crate::mqtt::client::mqtt_client_writer::MQTTClientWritter;
-use std::io::Error;
-use std::net::TcpStream;
-
+use crate::mqtt::client::{
+    mqtt_client_listener::MQTTClientListener,
+    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
+};
 use crate::mqtt::messages::publish_message::PublishMessage;
-use crate::mqtt::messages::subscribe_message::SubscribeMessage;
-
-type StreamType = TcpStream;
+use std::io::Error;
+use std::net::SocketAddr;
+use std::{sync::mpsc::{self, Receiver}, thread::{self, JoinHandle}};
 
 #[derive(Debug)]
 pub struct MQTTClient {
-    writer: MQTTClientWritter,
-    listener: MQTTClientListener,
+    writer: MQTTClientWriter,
+    //listener: MQTTClientListener,
 }
 
 impl MQTTClient {
-    pub fn new(stream: StreamType, listener: MQTTClientListener) -> MQTTClient {
-        let writer = MQTTClientWritter::new(stream.try_clone().unwrap());
-        MQTTClient { writer, listener }
+    /// Función de la librería de MQTTClient para conectarse al servidor.
+    /// Devuelve el MQTTClient al que solicitarle los demás métodos, un rx por el que recibir los PublishMessages que
+    /// se publiquen a los topics a los que nos suscribamos, y un joinhandle que debe ser 'esperado' para finalizar correctamente la ejecución.
+    pub fn mqtt_connect_to_broker(
+        client_id: String,
+        addr: &SocketAddr,
+        will_msg_content: String,
+        will_topic: String,
+        will_qos: u8,
+    ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
+        // Efectúa la conexión al server
+        let stream =
+            mqtt_connect_to_broker(client_id, addr, will_msg_content, will_topic, will_qos)?;
+
+        // Inicializa su listener y writer
+        let writer = MQTTClientWriter::new(stream.try_clone()?);
+        let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
+        let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx);
+
+        let mqtt_client = MQTTClient { writer };
+
+        let listener_handler = thread::spawn(move || {
+            let _ = listener.read_from_server();
+        });
+
+        Ok((mqtt_client, publish_msg_rx, listener_handler))
     }
 
-    // Delega la llamada al método mqtt_publish del writer
+    // Las siguientes funciones son wrappes, delegan la llamada al método del mismo nombre del writer.
+
+    /// Función de la librería de MQTTClient para realizar un publish.
     pub fn mqtt_publish(
         &mut self,
         topic: &str,
@@ -30,19 +54,13 @@ impl MQTTClient {
         self.writer.mqtt_publish(topic, payload, qos)
     }
 
-    pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<SubscribeMessage, Error> {
+    /// Función de la librería de MQTTClient para realizar un subscribe.
+    pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<(), Error> {
         self.writer.mqtt_subscribe(topics)
     }
 
+    /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         self.writer.mqtt_disconnect()
-    }
-}
-
-impl Clone for MQTTClient {
-    fn clone(&self) -> Self {
-        let listener = self.listener.clone();
-        let writer = self.writer.clone();
-        MQTTClient { writer, listener }
     }
 }

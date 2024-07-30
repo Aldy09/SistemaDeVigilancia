@@ -1,27 +1,24 @@
-use std::net::TcpStream;
-
 use std::io::{Error, ErrorKind};
 
-use crate::mqtt::messages::disconnect_message::DisconnectMessage;
-use crate::mqtt::messages::subscribe_message::SubscribeMessage;
+use crate::mqtt::stream_type::StreamType;
 use crate::mqtt::{
-    messages::{publish_flags::PublishFlags, publish_message::PublishMessage},
+    messages::{
+        disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
+        publish_message::PublishMessage, subscribe_message::SubscribeMessage,
+    },
     mqtt_utils::utils::write_message_to_stream,
 };
-
 use std::net::Shutdown;
 
-type StreamType = TcpStream;
-
 #[derive(Debug)]
-pub struct MQTTClientWritter {
+pub struct MQTTClientWriter {
     stream: StreamType,
     available_packet_id: u16,
 }
 
-impl MQTTClientWritter {
-    pub fn new(stream: StreamType) -> MQTTClientWritter {
-        MQTTClientWritter {
+impl MQTTClientWriter {
+    pub fn new(stream: StreamType) -> MQTTClientWriter {
+        MQTTClientWriter {
             stream,
             available_packet_id: 0,
         }
@@ -60,7 +57,7 @@ impl MQTTClientWritter {
     pub fn mqtt_subscribe(
         &mut self,
         topics_to_subscribe: Vec<String>,
-    ) -> Result<SubscribeMessage, Error> {
+    ) -> Result<(), Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
@@ -75,7 +72,7 @@ impl MQTTClientWritter {
             subs_bytes
         );
 
-        Ok(subscribe_msg)
+        Ok(())
     }
 
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
@@ -103,15 +100,5 @@ impl MQTTClientWritter {
     fn generate_packet_id(&mut self) -> u16 {
         self.available_packet_id += 1;
         self.available_packet_id
-    }
-}
-
-impl Clone for MQTTClientWritter {
-    fn clone(&self) -> Self {
-        let stream = self.stream.try_clone().unwrap();
-        MQTTClientWritter {
-            stream,
-            available_packet_id: self.available_packet_id,
-        }
     }
 }
