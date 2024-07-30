@@ -11,25 +11,33 @@ use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream,
     write_message_to_stream,
 };
+use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 
 pub struct MqttClientConnection {}
 
-pub fn mqtt_connect_to_broker(client_id: String, addr: &SocketAddr, will_msg_content: String, will_topic: String, will_qos: u8) -> Result<TcpStream, Error> {
+pub fn mqtt_connect_to_broker(client_id: String, addr: &SocketAddr, will: Option<WillMessageData>) -> Result<TcpStream, Error> {
+    //will_msg_content: String, will_topic: String, will_qos: u8
+    //will.get_will_msg_content(), will.get_will_topic(), will.get_qos()
     //let will_topic = String::from("desc"); // PROBANDO
     //let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
     // Inicializaciones
     // Intenta conectar al servidor MQTT
-    let stream_tcp = TcpStream::connect(addr)
+    let mut stream = TcpStream::connect(addr)
         .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
-
-    //let mut stream = Arc::new(Mutex::new(stream_tcp));
-    let mut stream = stream_tcp;
+    
+    // Aux: sintaxis es let (a, b) = if condicion { (a_si_true, b_si_true) } else { (a_si_false, b_si_false) };
+    let (will_msg_content, will_topic, will_qos, _will_retain) =
+    if let Some(will) = will {
+        (Some(will.get_will_msg_content()), Some(will.get_will_topic()), will.get_qos(), will.get_will_retain())
+    } else {
+        (None, None, 0, 0) // aux: decidir / revisar, asumimos 0 si no están? []
+    };
 
     // Crea el mensaje tipo Connect y lo pasa a bytes
     let mut connect_msg = ConnectMessage::new(
         client_id,
-        Some(will_topic),
-        Some(will_msg_content),
+        will_topic,
+        will_msg_content,
         Some("usuario0".to_string()),
         Some("rustx123".to_string()),
         will_qos

@@ -1,16 +1,16 @@
-/// Struct utilizado por el MQTTServer.
+/// Struct utilizado por el MQTTServer, y por las Apps antes de llamar a la función que efectúa el connect.
 /// Contiene la información relacionada al will_message extraída del ConnectMessage.
 /// Se almacena en un User del MQTTServer, y es necesaria para posteriormente construir el PublishMessage
 /// a enviar a los suscriptores del will_topic.
 #[derive(Debug, PartialEq)]
-pub struct WillMessageAndTopic {
+pub struct WillMessageData {
     will_message_content: String,
     will_topic: String,
     qos: u8,
     will_retain: u8,
 }
 
-impl WillMessageAndTopic {
+impl WillMessageData {
     pub fn new(will_message_content: String, will_topic: String, qos: u8, will_retain: u8) -> Self {
         Self {will_message_content, will_topic, qos, will_retain }
     }

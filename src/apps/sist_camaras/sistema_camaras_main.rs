@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use std::io::Error;
 
 use rustx::logging::string_logger::StringLogger;
+use rustx::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::{
     apps::{
@@ -44,13 +45,8 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id();
     let will_msg_content = get_app_will_msg_content();
-    match MQTTClient::mqtt_connect_to_broker(
-        client_id,
-        &broker_addr,
-        will_msg_content.to_str(),
-        get_app_will_topic(),
-        qos,
-    ) {
+    let will_msg_data = WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
+    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data)) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
