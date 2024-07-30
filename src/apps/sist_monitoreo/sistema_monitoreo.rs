@@ -6,7 +6,7 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 
 use crate::{
-    apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::is_disconnected_error},
+    apps::apps_mqtt_topics::AppsMqttTopics,
     logging::string_logger::StringLogger,
 };
 
@@ -181,19 +181,11 @@ impl SistemaMonitoreo {
 
     // Recibe mensajes de los topics a los que se ha suscrito
     fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
-        loop {
-            match mqtt_rx.recv() {
-                //Publish message: camera o dron
-                Ok(publish_message) => {                    
-                    self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_message));
-                    self.send_publish_message_to_ui(publish_message)
-                }
-                Err(_) => {
-                    is_disconnected_error();
-                    break;
-                }
-            }
+        for publish_msg in mqtt_rx {
+            self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_msg));
+            self.send_publish_message_to_ui(publish_msg)
         }
+        println!("Cliente: No hay más PublishMessage's por leer.");
     }
 
     fn send_publish_message_to_ui(&self, msg: PublishMessage) {

@@ -9,15 +9,15 @@ use std::{
 
 use std::sync::mpsc::Receiver as MpscReceiver;
 
-use crate::logging::string_logger::StringLogger;
-use crate::apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads, sist_dron::dron_state::DronState
-    };
-use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState};
-use crate::{
-    apps::common_clients::is_disconnected_error,
-    mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
+use crate::apps::incident_data::{
+    incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState,
 };
+use crate::apps::{
+    apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads,
+    sist_dron::dron_state::DronState,
+};
+use crate::logging::string_logger::StringLogger;
+use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 use super::{
     dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
@@ -46,12 +46,7 @@ pub struct Dron {
 #[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
-    pub fn new(
-        id: u8,
-        lat: f64,
-        lon: f64,
-        logger: StringLogger,
-    ) -> Result<Self, Error> {
+    pub fn new(id: u8, lat: f64, lon: f64, logger: StringLogger) -> Result<Self, Error> {
         let dron = Self::new_internal(id, lat, lon, logger)?;
         dron.logger.log(format!("Dron: Iniciado dron {:?}", id));
 
@@ -80,7 +75,6 @@ impl Dron {
         mqtt_client: MQTTClient,
         mqtt_rx: MpscReceiver<PublishMessage>,
     ) -> Result<Vec<JoinHandle<()>>, Error> {
-
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
@@ -147,25 +141,16 @@ impl Dron {
         mqtt_rx: MpscReceiver<PublishMessage>,
     ) {
         let mut children = vec![];
-        loop {
-            match mqtt_rx.recv() {
-                //Publish message: Incidente o dron
-                Ok(publish_message) => {
-                    self.logger.log(format!(
-                        "Dron: Recibo mensaje Publish: {:?}",
-                        publish_message
-                    ));
 
-                    let handle_thread =
-                        self.spawn_process_recvd_msg_thread(publish_message, mqtt_client);
-                    children.push(handle_thread);
-                }
-                Err(_) => {
-                    is_disconnected_error();
-                    break;
-                }
-            }
+        for publish_msg in mqtt_rx {
+            self.logger
+                .log(format!("Dron: Recibo mensaje Publish: {:?}", publish_msg));
+
+            // Lanza un hilo para procesar el mensaje, y luego lo espera correctamente
+            let handle_thread = self.spawn_process_recvd_msg_thread(publish_msg, mqtt_client);
+            children.push(handle_thread);
         }
+        println!("Cliente: No hay más PublishMessage's por leer.");
 
         join_all_threads(children);
     }
@@ -891,11 +876,14 @@ impl Dron {
             self.logger
                 .log("Batería baja, debo ir a mantenimiento.".to_string());
             // Se determina a qué posición volver después de cargarse
-            let (position_to_go, state_to_set)=
-            if self.get_state()? == DronState::ManagingIncident {
+            let (position_to_go, state_to_set) = if self.get_state()? == DronState::ManagingIncident
+            {
                 (self.get_current_position()?, DronState::ManagingIncident)
             } else {
-                (self.dron_properties.get_range_center_position(), DronState::ExpectingToRecvIncident)
+                (
+                    self.dron_properties.get_range_center_position(),
+                    DronState::ExpectingToRecvIncident,
+                )
             };
             // Vuela a mantenimiento
             self.set_state(DronState::Mantainance, true)?;
@@ -909,7 +897,6 @@ impl Dron {
             // Vuelve a la posición correspondiente
             self.fly_to_mantainance(position_to_go, mqtt_client, true)?;
             self.set_state(state_to_set, true)?;
-            
         }
         Ok(())
     }
@@ -930,10 +917,10 @@ impl Dron {
 #[cfg(test)]
 
 mod test {
-    use std::sync::mpsc;
+    use super::Dron;
     use crate::apps::sist_dron::dron_state::DronState;
     use crate::logging::string_logger::StringLogger;
-    use super::Dron;
+    use std::sync::mpsc;
 
     fn create_dron_4() -> Dron {
         let (str_logger_tx, _str_logger_rx) = mpsc::channel::<String>();

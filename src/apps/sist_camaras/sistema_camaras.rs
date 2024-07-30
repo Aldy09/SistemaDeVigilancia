@@ -5,7 +5,7 @@ use crate::apps::{apps_mqtt_topics::AppsMqttTopics,
                                  shareable_cameras_type::ShCamerasType,
                                  sist_camaras_abm::ABMCameras,
                                  ai_detection::ai_detector_manager::AIDetectorManager}};
-use crate::apps::{common_clients::{exit_when_asked, is_disconnected_error},
+use crate::apps::{common_clients::exit_when_asked,
                   incident_data::{incident::{self, Incident},
                   incident_info::IncidentInfo}};
 use crate::logging::string_logger::StringLogger;
@@ -412,15 +412,10 @@ impl SistemaCamaras {
     ) {
         let mut incs_being_managed: HashmapIncsType = HashMap::new();
 
-        loop {
-            match rx.recv() {
-                Ok(msg) => self.handle_received_message(msg, cameras, &mut incs_being_managed),
-                Err(_) => {
-                    is_disconnected_error();
-                    break;
-                }
-            }
+        for msg in rx {
+            self.handle_received_message(msg, cameras, &mut incs_being_managed)
         }
+        println!("Cliente: No hay más PublishMessage's por leer.");
     }
 
     fn spawn_subscribe_to_topics_thread(
