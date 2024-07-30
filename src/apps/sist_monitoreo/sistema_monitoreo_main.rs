@@ -14,7 +14,7 @@ fn get_formatted_app_id() -> String {
 }
 
 fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(AppType::Monitoreo, 0) // []
+    WillContent::new(AppType::Monitoreo, None)
 }
 
 fn main() -> Result<(), Error> {

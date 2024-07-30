@@ -30,7 +30,7 @@ fn get_formatted_app_id() -> String {
 }
 
 fn get_app_will_msg_content() -> WillContent {
-    WillContent::new(AppType::Cameras, 0)
+    WillContent::new(AppType::Cameras, None)
 }
 
 fn main() -> Result<(), Error> {

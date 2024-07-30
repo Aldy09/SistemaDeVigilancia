@@ -14,7 +14,7 @@ fn get_formatted_app_id(id: u8) -> String {
 }
 
 fn get_app_will_msg_content(id: u8) -> WillContent {
-    WillContent::new(AppType::Dron, id)
+    WillContent::new(AppType::Dron, Some(id))
 }
 
 fn main() -> Result<(), Error> {
