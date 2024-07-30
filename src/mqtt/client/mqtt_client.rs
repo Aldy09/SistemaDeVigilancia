@@ -9,7 +9,7 @@ use std::thread::{self, JoinHandle};
 use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::messages::subscribe_message::SubscribeMessage;
 
-use super::mqtt_client_server_connection::{mqtt_connect_to_broker, MqttClientConnection};
+use super::mqtt_client_server_connection::mqtt_connect_to_broker;
 
 type StreamType = TcpStream;
 
@@ -20,6 +20,9 @@ pub struct MQTTClient {
 }
 
 impl MQTTClient {
+    /// Función de la librería de MQTTClient para conectarse al servidor.
+    /// Devuelve el MQTTClient al que solicitarle los demás métodos, un rx por el que recibir los PublishMessages que
+    /// se publiquen a los topics a los que nos suscribamos, y un joinhandle que debe ser 'esperado' para finalizar correctamente la ejecución.
     pub fn mqtt_connect_to_broker(
         client_id: &str,
         addr: &SocketAddr,
@@ -45,11 +48,7 @@ impl MQTTClient {
         Ok((mqtt_client, publish_msg_rx, listener_handler))
     }
 
-    pub fn new(stream: StreamType, listener: MQTTClientListener) -> MQTTClient {
-        let writer = MQTTClientWritter::new(stream.try_clone().unwrap());
-        MQTTClient { writer } //, listener }
-    }
-
+    /// Función de la librería de MQTTClient para realizar un publish.
     // Delega la llamada al método mqtt_publish del writer
     pub fn mqtt_publish(
         &mut self,
@@ -60,10 +59,12 @@ impl MQTTClient {
         self.writer.mqtt_publish(topic, payload, qos)
     }
 
+    /// Función de la librería de MQTTClient para realizar un subscribe.
     pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<SubscribeMessage, Error> {
         self.writer.mqtt_subscribe(topics)
     }
 
+    /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         self.writer.mqtt_disconnect()
     }

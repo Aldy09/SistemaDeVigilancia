@@ -1,27 +1,13 @@
-use std::{io::Error, sync::mpsc, thread};
+use std::io::Error;
 
-use rustx::{
-    apps::{
+use rustx::logging::string_logger::StringLogger;
+use rustx::mqtt::client::mqtt_client::MQTTClient;
+use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
+use rustx::apps::{
         apps_mqtt_topics::AppsMqttTopics,
         common_clients::join_all_threads,
-        sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
-    },
-    logging::string_logger::StringLogger,
-    mqtt::{
-        client::{
-            mqtt_client::MQTTClient, mqtt_client_listener::MQTTClientListener,
-            mqtt_client_server_connection::mqtt_connect_to_broker,
-        },
-        messages::publish_message::PublishMessage, mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent},
-    },
+        sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},    
 };
-
-type Channels = (mpsc::Sender<PublishMessage>, mpsc::Receiver<PublishMessage>);
-
-fn create_channels() -> Channels {
-    let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
-    (publish_message_tx, publish_message_rx)
-}
 
 fn get_formatted_app_id(id: u8) -> String {
     format!("dron-{}", id)
@@ -32,11 +18,8 @@ fn get_app_will_msg_content(id: u8) -> WillContent {
 }
 
 fn main() -> Result<(), Error> {
-    let (id, lat, lon, broker_addr): (u8, f64, f64, std::net::SocketAddr) =
-        get_id_lat_long_and_broker_address()?;
-
-    let (publish_message_tx, publish_message_rx) = create_channels();
-
+    let (id, lat, lon, broker_addr) = get_id_lat_long_and_broker_address()?;
+    
     // Se crean y configuran ambos extremos del string logger
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
