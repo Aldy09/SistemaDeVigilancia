@@ -154,9 +154,20 @@ impl Camera {
         self.deleted = true;
     }
 
+    /// Devuelve el rango ajustado de la cámara.
+    pub fn get_range_area(&self) -> f64 {
+        0.00135 + 0.0012 * self.range as f64
+        //self.range
+    }
+
     /// Devuelve la latitud de la cámara.
     pub fn get_latitude(&self) -> f64 {
         self.latitude
+    }
+
+    /// Devuelve la ubicacion de la cámara.
+    pub fn get_position(&self) -> (f64, f64) {
+        (self.latitude, self.longitude)
     }
 
     /// Devuelve la longitud de la cámara.
@@ -216,10 +227,10 @@ impl Camera {
         // Se modifica el range de las cámaras, ahora que son latitudes de verdad y no "3 4".
         let adjusted_range = 0.00135 + 0.0012 * range;
 
-        println!(
+        /*println!(
             "Dio que la cuenta vale: {}, y adj_range vale: {}. Era rango: {}",
             rad, adjusted_range, range
-        ); // debug []
+        ); // debug []*/
         rad <= (adjusted_range)
     }
 }

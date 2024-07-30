@@ -16,11 +16,11 @@ pub struct Incident {
 }
 
 impl Incident {
-    pub fn new(id: u8, latitude: f64, longitude: f64, source: IncidentSource) -> Self {
+    pub fn new(id: u8, location: (f64, f64), source: IncidentSource) -> Self {
         Self {
             id,
-            latitude,
-            longitude,
+            latitude: location.0,
+            longitude: location.1,
             state: IncidentState::ActiveIncident,
             source,
         }

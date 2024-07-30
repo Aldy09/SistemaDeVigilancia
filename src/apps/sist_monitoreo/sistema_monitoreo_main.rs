@@ -32,12 +32,7 @@ type Channels = (
 fn create_channels() -> Channels {
     let (publish_message_tx, publish_message_rx) = mpsc::channel::<PublishMessage>();
     let (egui_tx, egui_rx) = unbounded::<PublishMessage>();
-    (
-        publish_message_tx,
-        publish_message_rx,
-        egui_tx,
-        egui_rx,
-    )
+    (publish_message_tx, publish_message_rx, egui_tx, egui_rx)
 }
 
 fn get_formatted_app_id() -> String {
@@ -48,12 +43,11 @@ fn get_app_will_msg_content() -> WillContent {
     WillContent::new(AppType::Monitoreo, 0) // []
 }
 
-fn main() -> Result<(), Error>{
+fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
 
     // Los logger_tx y logger_rx de este tipo de datos, podrían eliminarse por ser reemplazados por el nuevo string logger; se conservan temporalmente por compatibilidad hacia atrás.
-    let (publish_message_tx, publish_message_rx, egui_tx, egui_rx) =
-        create_channels();
+    let (publish_message_tx, publish_message_rx, egui_tx, egui_rx) = create_channels();
 
     // Se crean y configuran ambos extremos del string logger
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
@@ -72,17 +66,15 @@ fn main() -> Result<(), Error>{
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers = sistema_monitoreo.spawn_threads(
-                publish_message_rx,
-                egui_rx,
-                mqtt_client,
-            );
+            let mut handlers =
+                sistema_monitoreo.spawn_threads(publish_message_rx, egui_rx, mqtt_client);
 
             handlers.push(handler_1);
             join_all_threads(handlers);
         }
         Err(e) => println!(
-            "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",e
+            "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",
+            e
         ),
     }
 

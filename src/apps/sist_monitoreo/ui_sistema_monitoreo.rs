@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::str::{from_utf8, Utf8Error};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
+use crate::apps::incident_data::incident_state::IncidentState;
 use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
 use crate::apps::place_type::PlaceType;
 use crate::apps::sist_camaras::camera_state::CameraState;
@@ -249,8 +250,6 @@ impl UISistemaMonitoreo {
                             self.incidents_to_resolve[index].drones.push(dron.clone());
                         }
                         None => {
-                            // Aux para que compile, temporalmente:
-                            // aux: let inc_info = IncidentInfo::new(inc_id, IncidentSource::Manual);
                             // Si no tengo guardado el inc_id_to_res, crea una nueva posicion con el dron respectivo.
                             self.incidents_to_resolve.push(IncidentWithDrones {
                                 incident_info: inc_info,
@@ -283,6 +282,7 @@ impl UISistemaMonitoreo {
                 }
             }
 
+            // Crea lo necesario para dibujar al dron
             let (lat, lon) = dron.get_current_position();
             let dron_pos = Position::from_lon_lat(lon, lat);
 
@@ -318,10 +318,10 @@ impl UISistemaMonitoreo {
     /// Recibe un PublishMessage de topic Inc, y procesa el incidente recibido
     /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
     fn handle_incident_message(&mut self, msg: PublishMessage) {
-        println!("Recibo inc desde cámaras"); // o desde 'self'.
         if let Ok(inc) = Incident::from_bytes(msg.get_payload()){
+            println!("Recibo inc desde cámaras: {:?}", inc); // o desde 'self'.
             // Agregamos el incidente (add_incident) solamente si él no fue creado por sist monitoreo.
-            if *inc.get_source() != IncidentSource::Manual {
+            if *inc.get_source() == IncidentSource::Automated && *inc.get_state() == IncidentState::ActiveIncident {
                 self.add_incident(&inc);
             }
         }
@@ -350,7 +350,7 @@ impl UISistemaMonitoreo {
             place_type,
         };
         self.places.add_place(new_place_incident);
-
+        
         let inc_info = IncidentInfo::new(incident.get_id(), *incident.get_source());
         let inc_to_store = incident.clone();
         self.hashmap_incidents
@@ -485,10 +485,10 @@ impl eframe::App for UISistemaMonitoreo {
                                             let latitude = latitude_text.parse::<f64>().unwrap();
                                             let longitude: f64 =
                                                 longitude_text.parse::<f64>().unwrap();
+                                            let location = (latitude, longitude);
                                             let incident = Incident::new(
                                                 self.get_next_incident_id(),
-                                                latitude,
-                                                longitude,
+                                                location,
                                                 IncidentSource::Manual,
                                             );
                                             self.add_incident(&incident);

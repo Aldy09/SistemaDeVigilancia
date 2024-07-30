@@ -14,6 +14,7 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-log.txt
-src/log.txt
+# Logs y árbol de (sub)directorios para cámaras
 *log*.txt
+**/image_detection/*
+**/image_detection/

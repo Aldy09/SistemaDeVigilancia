@@ -1,0 +1,75 @@
+{
+    "tags": [
+        {
+            "name": "outdoor",
+            "confidence": 0.9943615794181824
+        },
+        {
+            "name": "land vehicle",
+            "confidence": 0.9877010583877563
+        },
+        {
+            "name": "vehicle",
+            "confidence": 0.9841424822807312
+        },
+        {
+            "name": "wheel",
+            "confidence": 0.97196364402771
+        },
+        {
+            "name": "tire",
+            "confidence": 0.9506891965866089
+        },
+        {
+            "name": "auto part",
+            "confidence": 0.9238327741622925
+        },
+        {
+            "name": "motor vehicle",
+            "confidence": 0.9020521640777588
+        },
+        {
+            "name": "crash",
+            "confidence": 0.8975179195404053
+        },
+        {
+            "name": "grass",
+            "confidence": 0.8951404690742493
+        },
+        {
+            "name": "vehicle door",
+            "confidence": 0.876509428024292
+        },
+        {
+            "name": "automotive exterior",
+            "confidence": 0.8683110475540161
+        },
+        {
+            "name": "family car",
+            "confidence": 0.8526458740234375
+        },
+        {
+            "name": "road",
+            "confidence": 0.8415854573249817
+        },
+        {
+            "name": "transport",
+            "confidence": 0.840815544128418
+        },
+        {
+            "name": "parked",
+            "confidence": 0.8348158597946167
+        },
+        {
+            "name": "car",
+            "confidence": 0.5645129084587097
+        }
+    ],
+    "requestId": "856fab0b-3ac0-4ae3-808b-c0108653b2e8",
+    "metadata": {
+        "height": 194,
+        "width": 259,
+        "format": "Jpeg"
+    },
+    "modelVersion": "2021-04-01"
+}

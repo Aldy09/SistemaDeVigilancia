@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    sync::{mpsc, Arc, Mutex},
+    sync::mpsc,
     thread::{self},
 };
 
@@ -8,11 +7,7 @@ use std::io::Error;
 
 use rustx::{
     apps::{
-        common_clients::{get_broker_address, join_all_threads},
-        sist_camaras::{
-            camera::Camera, manage_stored_cameras::read_cameras_from_file,
-            sistema_camaras::SistemaCamaras,
-        },
+        common_clients::{get_broker_address, join_all_threads}, sist_camaras::{manage_stored_cameras::create_cameras, sistema_camaras::SistemaCamaras},
     },
     logging::string_logger::StringLogger,
     mqtt::{
@@ -47,11 +42,6 @@ fn create_channels() -> Channels {
     )
 }
 
-fn create_cameras() -> Arc<Mutex<HashMap<u8, Camera>>> {
-    let cameras: HashMap<u8, Camera> = read_cameras_from_file("./cameras.properties");
-    Arc::new(Mutex::new(cameras))
-}
-
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
 }
@@ -62,14 +52,8 @@ fn get_app_will_msg_content() -> WillContent {
 
 fn main() -> Result<(), Error>{
     let broker_addr = get_broker_address();
-    let (
-        cameras_tx,
-        cameras_rx,
-        exit_tx,
-        exit_rx,
-        publish_message_tx,
-        publish_message_rx,
-    ) = create_channels();
+    let (cameras_tx, cameras_rx, exit_tx, exit_rx, publish_message_tx, publish_message_rx) =
+        create_channels();
     let cameras = create_cameras();
 
     // Se crean y configuran ambos extremos del string logger
@@ -91,12 +75,8 @@ fn main() -> Result<(), Error>{
                 let _ = mqtt_client_listener.read_from_server();
             });
 
-            let mut handlers = sistema_camaras.spawn_threads(
-                cameras_rx,
-                exit_rx,
-                publish_message_rx,
-                mqtt_client,
-            );
+            let mut handlers =
+                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_message_rx, mqtt_client);
 
             handlers.push(handler_1);
             join_all_threads(handlers);

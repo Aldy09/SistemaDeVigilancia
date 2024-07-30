@@ -1,0 +1,47 @@
+{
+    "tags": [
+        {
+            "name": "firefighter",
+            "confidence": 0.9878422021865845
+        },
+        {
+            "name": "outdoor",
+            "confidence": 0.9848906397819519
+        },
+        {
+            "name": "sky",
+            "confidence": 0.9730533361434937
+        },
+        {
+            "name": "building",
+            "confidence": 0.9391651749610901
+        },
+        {
+            "name": "fire",
+            "confidence": 0.9325634241104126
+        },
+        {
+            "name": "pollution",
+            "confidence": 0.8845106363296509
+        },
+        {
+            "name": "disaster",
+            "confidence": 0.8801347017288208
+        },
+        {
+            "name": "explosion",
+            "confidence": 0.8768836259841919
+        },
+        {
+            "name": "smoke",
+            "confidence": 0.683802604675293
+        }
+    ],
+    "requestId": "85c50264-ca10-4752-a60a-7ae6f0c4f968",
+    "metadata": {
+        "height": 1682,
+        "width": 2362,
+        "format": "Jpeg"
+    },
+    "modelVersion": "2021-04-01"
+}
