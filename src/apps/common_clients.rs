@@ -5,7 +5,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use crate::mqtt::client::mqtt_client::MQTTClient;
+use crate::{logging::string_logger::StringLogger, mqtt::client::mqtt_client::MQTTClient};
 
 use super::apps_mqtt_topics::AppsMqttTopics;
 
@@ -60,21 +60,23 @@ pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
 /// Al recibir por el rx, se encarga de enviar disconnect de mqtt.
 pub fn exit_when_asked(mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bool>) {
     // Espero que otro hilo (ej la ui, ej el abm) me indique que se desea salir
-    let exit_res = exit_rx.recv();
-    match exit_res {
-        Ok(exit) => {
-            // Cuando eso ocurre, envío disconnect por mqtt
-            if exit {
-                if let Ok(mut mqtt_locked) = mqtt_client.lock() {
-                    match mqtt_locked.mqtt_disconnect() {
-                        Ok(_) => println!("Saliendo exitosamente."),
-                        Err(e) => println!("Error al salir: {:?}", e),
-                    }
+    if let Ok(exit) = exit_rx.recv(){
+        // Cuando eso ocurre, envío disconnect por mqtt
+        if exit {
+            if let Ok(mut mqtt_locked) = mqtt_client.lock() {
+                match mqtt_locked.mqtt_disconnect() {
+                    Ok(_) => println!("Saliendo exitosamente."),
+                    Err(e) => println!("Error al salir: {:?}", e),
                 }
-
-                // Aux: ver si hay que hacer algo más para salir [].
             }
+    
+            // Aux: ver si hay que hacer algo más para salir [].
         }
-        Err(e) => println!("Error al recibir por exit_rx {:?}", e),
     }
+}
+
+// Printea y logguea que no hay más PublishMessage's por leer.
+pub fn there_are_no_more_publish_msgs(logger: &StringLogger) {
+    println!("No hay más PublishMessage's por leer.");
+    logger.log("No hay más PublishMessage's por leer.".to_string());
 }

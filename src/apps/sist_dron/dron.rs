@@ -9,9 +9,9 @@ use std::{
 
 use std::sync::mpsc::Receiver as MpscReceiver;
 
-use crate::apps::incident_data::{
+use crate::apps::{common_clients::there_are_no_more_publish_msgs, incident_data::{
     incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState,
-};
+}};
 use crate::apps::{
     apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads,
     sist_dron::dron_state::DronState,
@@ -124,7 +124,7 @@ impl Dron {
                 Err(_) => {
                     return Err(Error::new(
                         std::io::ErrorKind::Other,
-                        "Cliente: Error al hacer un subscribe a topic",
+                        "Error al hacer un subscribe a topic",
                     ))
                 }
             }
@@ -150,7 +150,7 @@ impl Dron {
             let handle_thread = self.spawn_process_recvd_msg_thread(publish_msg, mqtt_client);
             children.push(handle_thread);
         }
-        println!("Cliente: No hay más PublishMessage's por leer.");
+        there_are_no_more_publish_msgs(&self.logger);
 
         join_all_threads(children);
     }

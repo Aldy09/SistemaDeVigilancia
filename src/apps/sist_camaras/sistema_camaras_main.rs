@@ -52,15 +52,16 @@ fn main() -> Result<(), Error> {
         qos,
     ) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
-            println!("Cliente: Conectado al broker MQTT.");
+            println!("Conectado al broker MQTT.");
+            logger.log("Conectado al broker MQTT".to_string());
 
             let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
 
-            let mut handlers =
+            let mut handles =
                 sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_message_rx, mqtt_client);
 
-            handlers.push(handle);
-            join_all_threads(handlers);
+            handles.push(handle);
+            join_all_threads(handles);
         }
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }

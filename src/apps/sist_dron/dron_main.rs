@@ -29,7 +29,8 @@ fn main() -> Result<(), Error> {
     let will_msg_content = get_app_will_msg_content(id);
     match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, will_msg_content.to_str(), get_app_will_topic(), qos) {
         Ok((mut mqtt_client, publish_message_rx, handle)) => {            
-            println!("Cliente: Conectado al broker MQTT.");
+            println!("Conectado al broker MQTT.");
+            logger.log("Conectado al broker MQTT".to_string());
 
             let mut dron = Dron::new(id, lat, lon, logger)?; //
 
@@ -46,11 +47,11 @@ fn main() -> Result<(), Error> {
                 )?;
             };
 
-            let mut handlers = dron.spawn_threads(mqtt_client, publish_message_rx)?;
+            let mut handles = dron.spawn_threads(mqtt_client, publish_message_rx)?;
 
-            handlers.push(handle);
+            handles.push(handle);
 
-            join_all_threads(handlers);
+            join_all_threads(handles);
             //}
             //}
         }

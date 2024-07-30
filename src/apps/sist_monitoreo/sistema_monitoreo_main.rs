@@ -1,13 +1,13 @@
 use std::io::Error;
 
 use crossbeam_channel::unbounded;
+use rustx::apps::{
+    common_clients::{get_app_will_topic, get_broker_address, join_all_threads},
+    sist_monitoreo::sistema_monitoreo::SistemaMonitoreo,
+};
 use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
-use rustx::apps::{
-        common_clients::{get_broker_address, get_app_will_topic, join_all_threads},
-        sist_monitoreo::sistema_monitoreo::SistemaMonitoreo,   
-};
 
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Monitoreo")
@@ -37,14 +37,15 @@ fn main() -> Result<(), Error> {
         qos,
     ) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
+            println!("Conectado al broker MQTT.");
+            logger.log("Conectado al broker MQTT".to_string());
             let sistema_monitoreo = SistemaMonitoreo::new(egui_tx, logger);
-            println!("Cliente: Conectado al broker MQTT.");
 
-            let mut handlers =
+            let mut handles =
                 sistema_monitoreo.spawn_threads(publish_message_rx, egui_rx, mqtt_client);
 
-            handlers.push(handle);
-            join_all_threads(handlers);
+            handles.push(handle);
+            join_all_threads(handles);
         }
         Err(e) => println!(
             "Sistema-Monitoreo: Error al conectar al broker MQTT: {:?}",

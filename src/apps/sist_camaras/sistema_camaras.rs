@@ -1,24 +1,34 @@
 use std::sync::mpsc::Receiver;
 
-use crate::apps::{apps_mqtt_topics::AppsMqttTopics,
-                  sist_camaras::{camera::Camera,
-                                 shareable_cameras_type::ShCamerasType,
-                                 sist_camaras_abm::ABMCameras,
-                                 ai_detection::ai_detector_manager::AIDetectorManager}};
-use crate::apps::{common_clients::exit_when_asked,
-                  incident_data::{incident::{self, Incident},
-                  incident_info::IncidentInfo}};
+use crate::apps::{
+    apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs, sist_camaras::{
+        ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
+        shareable_cameras_type::ShCamerasType, sist_camaras_abm::ABMCameras,
+    }
+};
+use crate::apps::{
+    common_clients::exit_when_asked,
+    incident_data::{
+        incident::{self, Incident},
+        incident_info::IncidentInfo,
+    },
+};
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 // Importa la estructura desde el módulo
 use std::collections::HashMap;
-use std::{sync::{
-                mpsc::{self, Sender},
-                Arc, Mutex, MutexGuard,
-                },
-          thread::{self, JoinHandle}};
-use std::{fs, io::{self, Error, ErrorKind}};
+use std::{
+    fs,
+    io::{self, Error, ErrorKind},
+};
+use std::{
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex, MutexGuard,
+    },
+    thread::{self, JoinHandle},
+};
 
 type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
 
@@ -50,7 +60,7 @@ impl SistemaCamaras {
         cameras_tx: Sender<Vec<u8>>,
         exit_tx: Sender<bool>,
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
-        logger: StringLogger
+        logger: StringLogger,
     ) -> Self {
         println!("SISTEMA DE CAMARAS\n");
         let qos =
@@ -61,7 +71,7 @@ impl SistemaCamaras {
             exit_tx,
             cameras,
             qos,
-            logger
+            logger,
         };
 
         sistema_camaras
@@ -78,13 +88,13 @@ impl SistemaCamaras {
 
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
 
-        // ABM        
+        // ABM
         children.push(self.spawn_abm_cameras_thread(
             &self.cameras,
             self.cameras_tx.clone(),
             self.exit_tx.clone(),
         ));
-        
+
         // Recibe las cámaras que envía el abm y las publica por MQTT
         children.push(self.spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
         // Exit
@@ -92,11 +102,12 @@ impl SistemaCamaras {
             mqtt_client_sh.clone(),
             exit_rx,
         ));
-        
+
         // Incident detector (ai)
         let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
         children.push(self.spawn_ai_incident_analyzer_thread(incident_tx)); // conexión con proveedor intelig artificial
-        children.push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone())); // recibe inc y publica
+        children
+            .push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone())); // recibe inc y publica
 
         // Suscribe y recibe mensajes por MQTT
         children.push(
@@ -109,7 +120,8 @@ impl SistemaCamaras {
     /// Recibe los incidentes que envía el detector, y los publica por MQTT al topic de incidentes.
     fn spawn_receive_incident_detected_thread(
         &self,
-        rx: Receiver<Incident>, mqtt_client: Arc<Mutex<MQTTClient>>
+        rx: Receiver<Incident>,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> JoinHandle<()> {
         let qos = self.qos;
         let logger_thread = self.logger.clone_ref();
@@ -117,16 +129,25 @@ impl SistemaCamaras {
             for inc in rx {
                 println!("Se recibe por rx para publicar el inc: {:?}", inc);
                 if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                    let res_publish = mqtt_client_lock.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &inc.to_bytes(), qos);
+                    let res_publish = mqtt_client_lock.mqtt_publish(
+                        AppsMqttTopics::IncidentTopic.to_str(),
+                        &inc.to_bytes(),
+                        qos,
+                    );
                     match res_publish {
                         Ok(publish_message) => {
-                            logger_thread.log(format!("Sistema-Camaras: publico inc: {:?}", publish_message));
+                            logger_thread.log(format!(
+                                "Sistema-Camaras: publico inc: {:?}",
+                                publish_message
+                            ));
                         }
                         Err(e) => {
                             println!("Sistema-Camara: Error al hacer el publish {:?}", e);
-                            logger_thread.log(format!("Sistema-Camaras: Error al hacer el publish {:?}", e));
-                        },
-    
+                            logger_thread.log(format!(
+                                "Sistema-Camaras: Error al hacer el publish {:?}",
+                                e
+                            ));
+                        }
                     };
                 }
             }
@@ -159,12 +180,13 @@ impl SistemaCamaras {
     /// Envía la cámara recibida, por el channel, para que quien la reciba por rx haga el publish.
     /// Además logguea la operación.
     fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
-
-        self.logger.log(format!("Sistema-Camaras: envío cámara: {:?}", camera));
+        self.logger
+            .log(format!("Sistema-Camaras: envío cámara: {:?}", camera));
 
         if camera_tx.send(camera.to_bytes()).is_err() {
             println!("Error al enviar cámara por tx desde hilo abm.");
-            self.logger.log("Sistema-Camaras: error al enviar cámara por tx desde hilo abm.".to_string());
+            self.logger
+                .log("Sistema-Camaras: error al enviar cámara por tx desde hilo abm.".to_string());
         }
     }
 
@@ -198,12 +220,16 @@ impl SistemaCamaras {
         if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
             match res_subscribe {
-                Ok(_) => {                    
-                    self.logger.log(format!("Sistema-Camaras: subscripto a topic: {:?}", topics_to_log));
+                Ok(_) => {
+                    self.logger.log(format!(
+                        "Sistema-Camaras: subscripto a topic: {:?}",
+                        topics_to_log
+                    ));
                 }
                 Err(e) => {
                     println!("Sistema-Camara: Error al subscribirse {:?}", e);
-                    self.logger.log(format!("Sistema-Camaras: Error al subscribirse: {:?}", e));
+                    self.logger
+                        .log(format!("Sistema-Camaras: Error al subscribirse: {:?}", e));
                     return Err(e);
                 }
             };
@@ -222,13 +248,18 @@ impl SistemaCamaras {
                 let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
                 match res_publish {
                     Ok(publish_message) => {
-                        self.logger.log(format!("Sistema-Camaras: envió mensaje: {:?}", publish_message));
+                        self.logger.log(format!(
+                            "Sistema-Camaras: envió mensaje: {:?}",
+                            publish_message
+                        ));
                     }
                     Err(e) => {
                         println!("Sistema-Camara: Error al hacer el publish {:?}", e);
-                        self.logger.log(format!("Sistema-Camaras: Error al hacer el publish {:?}", e));
-                    },
-
+                        self.logger.log(format!(
+                            "Sistema-Camaras: Error al hacer el publish {:?}",
+                            e
+                        ));
+                    }
                 };
             }
         }
@@ -241,15 +272,16 @@ impl SistemaCamaras {
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
-            self_clone.publish_to_topic(mqtt_client_sh, AppsMqttTopics::CameraTopic.to_str(), cameras_rx);
+            self_clone.publish_to_topic(
+                mqtt_client_sh,
+                AppsMqttTopics::CameraTopic.to_str(),
+                cameras_rx,
+            );
         })
     }
 
     /// Pone en ejecución el módulo de detección automática de incidentes.
-    fn spawn_ai_incident_analyzer_thread(
-        &self,
-        tx: mpsc::Sender<Incident>
-    ) -> JoinHandle<()> {
+    fn spawn_ai_incident_analyzer_thread(&self, tx: mpsc::Sender<Incident>) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
         let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
@@ -267,8 +299,11 @@ impl SistemaCamaras {
         cameras: &mut ShCamerasType,
         incs_being_managed: &mut HashmapIncsType,
     ) {
-        if let Ok(incident) = Incident::from_bytes(msg.get_payload()){
-            self.logger.log(format!("Sistema-Camaras: recibió incidente: {:?}", incident));
+        if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
+            self.logger.log(format!(
+                "Sistema-Camaras: recibió incidente: {:?}",
+                incident
+            ));
             self.manage_incidents(incident, cameras, incs_being_managed);
         }
     }
@@ -302,6 +337,10 @@ impl SistemaCamaras {
                 "Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.",
                 inc.get_id()
             );
+            self.logger.log(format!(
+                "Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.",
+                inc.get_id()
+            ));
             // Busco la/s cámara/s que atendían este incidente
             if let Some(cams_managing_inc) = incs_being_managed.get(&inc.get_info()) {
                 // sé que existe, por el if de más arriba
@@ -315,15 +354,15 @@ impl SistemaCamaras {
                             if let Some(camera_to_update) = cams.get_mut(camera_id) {
                                 let state_has_changed =
                                     camera_to_update.remove_from_incs_being_managed(inc.get_info());
-                                println!(
+                                self.logger.log(format!(
                                     "  la cámara queda:\n   cam id y lista de incs: {:?}",
                                     camera_to_update.get_id_and_incs_for_debug_display()
-                                );
+                                ));
                                 if state_has_changed {
-                                    println!(
+                                    self.logger.log(format!(
                                         "CÁMARAS: a activo, enviando cámara: {:?}",
                                         camera_to_update
-                                    );
+                                    ));
                                     self.send_camera_bytes(camera_to_update, &self.cameras_tx);
                                 }
                             }
@@ -351,6 +390,7 @@ impl SistemaCamaras {
         match cameras.lock() {
             Ok(mut cams) => {
                 println!("Proceso el incidente {:?} por primera vez", inc.get_info());
+                self.logger.log(format!("Proceso el incidente {:?} por primera vez", inc.get_info()));
                 let cameras_that_follow_inc =
                     self.get_id_of_cameras_that_will_change_state_to_active(&mut cams, &inc);
 
@@ -361,7 +401,7 @@ impl SistemaCamaras {
                         let state_has_changed =
                             bordering_cam.append_to_incs_being_managed(inc.get_info());
                         if state_has_changed {
-                            println!("CÁMARAS: a saving, enviando cámara: {:?}", bordering_cam);
+                            self.logger.log(format!("Cambiando a SavingMode, enviando cámara: {:?}", bordering_cam));
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
                         }
                     };
@@ -384,20 +424,20 @@ impl SistemaCamaras {
         // Recorremos cada una de las cámaras, para ver si el inc está en su rango
         for (cam_id, camera) in cams.iter_mut() {
             if camera.will_register(inc.get_position()) {
-                println!(
+                self.logger.log(format!(
                     "Está en rango de cam: {}, cambiando su estado a activo.",
                     cam_id
-                );
+                ));
 
                 cameras_that_follow_inc.push(*cam_id);
 
                 for bordering_cam_id in camera.get_bordering_cams() {
-                    cameras_that_follow_inc.push(*bordering_cam_id); // Aux: quizás haya que pensar otro diseño, xq si no puedo hacer el bloque comentado de acá arriba se complica.
+                    cameras_that_follow_inc.push(*bordering_cam_id);
                 }
-                println!(
+                self.logger.log(format!(
                     "  la cámara queda:\n   cam id y lista de incs: {:?}",
                     camera.get_id_and_incs_for_debug_display()
-                );
+                ));
             }
         }
 
@@ -415,7 +455,8 @@ impl SistemaCamaras {
         for msg in rx {
             self.handle_received_message(msg, cameras, &mut incs_being_managed)
         }
-        println!("Cliente: No hay más PublishMessage's por leer.");
+        
+        there_are_no_more_publish_msgs(&self.logger);
     }
 
     fn spawn_subscribe_to_topics_thread(
@@ -427,7 +468,8 @@ impl SistemaCamaras {
         let mut self_clone = self.clone_ref();
         let topic = AppsMqttTopics::IncidentTopic.to_str();
         thread::spawn(move || {
-            let res = self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]);
+            let res =
+                self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]);
             match res {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
@@ -435,7 +477,7 @@ impl SistemaCamaras {
                 }
                 Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
             };
-            println!("Saliendo del hilo de subscribirme");
+            println!("Saliendo del hilo que recibe los PublishMessage's.");
         })
     }
 }

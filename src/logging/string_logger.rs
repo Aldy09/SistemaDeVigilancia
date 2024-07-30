@@ -28,7 +28,7 @@ impl StringLogger {
     /// Función a llamar para grabar en el log el evento pasado por parámetro.
     pub fn log(&self, event: String) {
         if self.tx.send(event).is_err() {
-            println!("Cliente: Error al intentar loggear.");
+            println!("Error al intentar loggear.");
         }
     }
 
