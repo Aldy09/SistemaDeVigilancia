@@ -3,8 +3,7 @@ use std::sync::mpsc;
 use std::io::Error;
 
 use rustx::apps::{
-    common_clients::{get_broker_address, join_all_threads},
-    sist_camaras::{manage_stored_cameras::create_cameras, sistema_camaras::SistemaCamaras},
+    apps_mqtt_topics::AppsMqttTopics, common_clients::{get_broker_address, join_all_threads}, sist_camaras::{manage_stored_cameras::create_cameras, sistema_camaras::SistemaCamaras}
 };
 use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::client::mqtt_client::MQTTClient;
@@ -46,7 +45,7 @@ fn main() -> Result<(), Error> {
         client_id.as_str(),
         &broker_addr,
         will_msg_content,
-        rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(),
+        AppsMqttTopics::DescTopic.to_str(),
         qos,
     ) {
         Ok((mqtt_client, publish_message_rx, handle)) => {

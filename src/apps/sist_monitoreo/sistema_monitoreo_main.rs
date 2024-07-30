@@ -1,6 +1,7 @@
 use std::io::Error;
 
 use crossbeam_channel::unbounded;
+use rustx::apps::apps_mqtt_topics::AppsMqttTopics;
 use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
@@ -33,7 +34,7 @@ fn main() -> Result<(), Error> {
         client_id.as_str(),
         &broker_addr,
         will_msg_content,
-        rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(),
+        AppsMqttTopics::DescTopic.to_str(),
         qos,
     ) {
         Ok((mqtt_client, publish_message_rx, handle)) => {

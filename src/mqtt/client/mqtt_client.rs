@@ -1,21 +1,16 @@
-use crate::mqtt::client::mqtt_client_listener::MQTTClientListener;
-use crate::mqtt::client::mqtt_client_writer::MQTTClientWritter;
+use crate::mqtt::client::{
+    mqtt_client_listener::MQTTClientListener,
+    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
+};
+use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use std::io::Error;
-use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::{self, Receiver};
-use std::thread::{self, JoinHandle};
-
-use crate::mqtt::messages::publish_message::PublishMessage;
-use crate::mqtt::messages::subscribe_message::SubscribeMessage;
-
-use super::mqtt_client_server_connection::mqtt_connect_to_broker;
-
-type StreamType = TcpStream;
+use std::net::SocketAddr;
+use std::{sync::mpsc::{self, Receiver}, thread::{self, JoinHandle}};
 
 #[derive(Debug)]
 pub struct MQTTClient {
-    writer: MQTTClientWritter,
+    writer: MQTTClientWriter,
     //listener: MQTTClientListener,
 }
 
@@ -35,7 +30,7 @@ impl MQTTClient {
             mqtt_connect_to_broker(client_id, addr, will_msg_content, will_topic, will_qos)?;
 
         // Inicializa su listener y writer
-        let writer = MQTTClientWritter::new(stream.try_clone()?);
+        let writer = MQTTClientWriter::new(stream.try_clone()?);
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx);
 
@@ -48,8 +43,9 @@ impl MQTTClient {
         Ok((mqtt_client, publish_msg_rx, listener_handler))
     }
 
+    // Las siguientes funciones son wrappes, delegan la llamada al método del mismo nombre del writer.
+
     /// Función de la librería de MQTTClient para realizar un publish.
-    // Delega la llamada al método mqtt_publish del writer
     pub fn mqtt_publish(
         &mut self,
         topic: &str,
@@ -60,20 +56,12 @@ impl MQTTClient {
     }
 
     /// Función de la librería de MQTTClient para realizar un subscribe.
-    pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<SubscribeMessage, Error> {
+    pub fn mqtt_subscribe(&mut self, topics: Vec<String>) -> Result<(), Error> {
         self.writer.mqtt_subscribe(topics)
     }
 
     /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         self.writer.mqtt_disconnect()
-    }
-}
-
-impl Clone for MQTTClient {
-    fn clone(&self) -> Self {
-        //let listener = self.listener.clone();
-        let writer = self.writer.clone();
-        MQTTClient { writer } //, listener }
     }
 }
