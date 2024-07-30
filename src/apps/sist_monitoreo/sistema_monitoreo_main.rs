@@ -55,21 +55,15 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id();
     let will_msg_content = get_app_will_msg_content();
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(), qos){
-        Ok(stream) => {
-            let mut mqtt_client_listener =
-                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
-            let mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
+    match MQTTClient::mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(), qos) {
+        Ok((mqtt_client, publish_message_rx, handle)) => {            
             let sistema_monitoreo = SistemaMonitoreo::new(egui_tx, logger);
             println!("Cliente: Conectado al broker MQTT.");
-            let handler_1 = thread::spawn(move || {
-                let _ = mqtt_client_listener.read_from_server();
-            });
 
             let mut handlers =
                 sistema_monitoreo.spawn_threads(publish_message_rx, egui_rx, mqtt_client);
 
-            handlers.push(handler_1);
+            handlers.push(handle);
             join_all_threads(handlers);
         }
         Err(e) => println!(

@@ -63,7 +63,6 @@ fn main() -> Result<(), Error>{
     let client_id = get_formatted_app_id();
     let will_msg_content = get_app_will_msg_content();
     match MQTTClient::mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(), qos) {
-    //match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(), qos) {
         Ok((mqtt_client, publish_message_rx, handle)) => {            
             println!("Cliente: Conectado al broker MQTT.");
 

@@ -44,11 +44,8 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id(id);
     let will_msg_content = get_app_will_msg_content(id);
-    match mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, AppsMqttTopics::DescTopic.to_str(), qos){
-        Ok(stream) => {
-            let mut mqtt_client_listener =
-                MQTTClientListener::new(stream.try_clone()?, publish_message_tx);
-            let mut mqtt_client: MQTTClient = MQTTClient::new(stream, mqtt_client_listener.clone());
+    match MQTTClient::mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, rustx::apps::apps_mqtt_topics::AppsMqttTopics::DescTopic.to_str(), qos) {
+        Ok((mut mqtt_client, publish_message_rx, handle)) => {            
             println!("Cliente: Conectado al broker MQTT.");
 
             let mut dron = Dron::new(id, lat, lon, logger)?; //
@@ -66,14 +63,9 @@ fn main() -> Result<(), Error> {
                 )?;
             };
 
-            let handler_1 = thread::spawn(move || {
-                // []
-                let _ = mqtt_client_listener.read_from_server();
-            });
-
             let mut handlers = dron.spawn_threads(mqtt_client, publish_message_rx)?;
 
-            handlers.push(handler_1);
+            handlers.push(handle);
 
             join_all_threads(handlers);
             //}
