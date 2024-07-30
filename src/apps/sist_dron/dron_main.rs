@@ -5,7 +5,7 @@ use rustx::mqtt::client::mqtt_client::MQTTClient;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
 use rustx::apps::{
         apps_mqtt_topics::AppsMqttTopics,
-        common_clients::join_all_threads,
+        common_clients::{get_app_will_topic, join_all_threads},
         sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},    
 };
 
@@ -27,7 +27,7 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id(id);
     let will_msg_content = get_app_will_msg_content(id);
-    match MQTTClient::mqtt_connect_to_broker(client_id.as_str(), &broker_addr, will_msg_content, AppsMqttTopics::DescTopic.to_str(), qos) {
+    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, will_msg_content.to_str(), get_app_will_topic(), qos) {
         Ok((mut mqtt_client, publish_message_rx, handle)) => {            
             println!("Cliente: Conectado al broker MQTT.");
 

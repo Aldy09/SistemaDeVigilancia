@@ -3,7 +3,6 @@ use crate::mqtt::client::{
     mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
 };
 use crate::mqtt::messages::publish_message::PublishMessage;
-use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use std::io::Error;
 use std::net::SocketAddr;
 use std::{sync::mpsc::{self, Receiver}, thread::{self, JoinHandle}};
@@ -19,10 +18,10 @@ impl MQTTClient {
     /// Devuelve el MQTTClient al que solicitarle los demás métodos, un rx por el que recibir los PublishMessages que
     /// se publiquen a los topics a los que nos suscribamos, y un joinhandle que debe ser 'esperado' para finalizar correctamente la ejecución.
     pub fn mqtt_connect_to_broker(
-        client_id: &str,
+        client_id: String,
         addr: &SocketAddr,
-        will_msg_content: WillContent,
-        will_topic: &str,
+        will_msg_content: String,
+        will_topic: String,
         will_qos: u8,
     ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
         // Efectúa la conexión al server

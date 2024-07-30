@@ -7,6 +7,8 @@ use std::{
 
 use crate::mqtt::client::mqtt_client::MQTTClient;
 
+use super::apps_mqtt_topics::AppsMqttTopics;
+
 /// Lee el IP del cliente y el puerto en el que el cliente se va a conectar al servidor.
 fn load_ip_and_port() -> Result<(String, u16), Box<Error>> {
     let argv = std::env::args().collect::<Vec<String>>();
@@ -39,6 +41,11 @@ pub fn get_broker_address() -> SocketAddr {
 
     let broker_addr: String = format!("{}:{}", ip, port);
     broker_addr.parse().expect("Dirección no válida")
+}
+
+pub fn get_app_will_topic() -> String {
+    let will_topic = AppsMqttTopics::DescTopic.to_str();
+    String::from(will_topic)
 }
 
 pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
