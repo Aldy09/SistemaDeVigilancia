@@ -91,7 +91,8 @@ impl ClickWatcher {
                 .title_bar(false)
                 .anchor(egui::Align2::CENTER_BOTTOM, [0., -10.])
                 .show(ui.ctx(), |ui| {
-                    ui.label(format!("{:.04} {:.04}", clicked_at.lon(), clicked_at.lat()))
+                    // Muestro la posicion seleccionada como latitud y longitud.
+                    ui.label(format!("{:.04} {:.04}", clicked_at.lat(), clicked_at.lon()))
                         .on_hover_text("last clicked position");
                 });
         }
