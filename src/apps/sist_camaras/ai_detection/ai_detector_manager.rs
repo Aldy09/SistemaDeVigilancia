@@ -42,45 +42,49 @@ impl AIDetectorManager {
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
         let path = Path::new(properties.get_base_dir());
         self.create_dirs_tree(path)?;
-
+    
         let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         watcher.watch(path, RecursiveMode::Recursive)?;
         println!("Detector: Monitoreando subdirs.");
         self.logger.log("Detector: Monitoreando subdirs".to_string());
-
+    
         // Se inicializa el detector
         let logger_ai = self.logger.clone_ref();
         let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties, logger_ai);
-
+    
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
-
+    
         for event_res in rx_fs {
             let event = event_res?;
-
+    
             // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
             if let EventKind::Create(_) = event.kind {
                 self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
                     if path.is_file() {
                         let image_path = path.clone();
-                        // Lanza un hilo por cada imagen a procesar []
-                        let mut aidetector = ai_detector.clone_refs();
-                        pool.spawn(move || {
-
-                            match read_image(&image_path) {
-                                Ok(image) => {
-                                    if let Some(cam_id) = extract_camera_id(&image_path){
-                                        if aidetector.process_image(image, cam_id).is_err() {
-                                            println!("Detector: Error en process_image.");                                            
-                                        }
-                                    }
-                                },
-                                Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
-                            };
-                            
-                        });
+                        // Validar la extensión del archivo
+                        if let Some(extension) = image_path.extension() {
+                            // Si es jpg o jpeg, procesar
+                            if extension == "jpg" || extension == "jpeg" {
+                                // Lanza un hilo por cada imagen a procesar []
+                                let mut aidetector = ai_detector.clone_refs();
+                                pool.spawn(move || {
+                                    match read_image(&image_path) {
+                                        Ok(image) => {
+                                            if let Some(cam_id) = extract_camera_id(&image_path) {
+                                                if aidetector.process_image(image, cam_id).is_err() {
+                                                    println!("Detector: Error en process_image.");
+                                                }
+                                            }
+                                        },
+                                        Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
+                                    };
+                                });
+                            }
+                        }
                     }
                 }
             }
