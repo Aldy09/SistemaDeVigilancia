@@ -94,7 +94,7 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Remueve al usuario `username` del hashmap de usuarios conectados
+    /// Remueve al usuario `username` del hashmap de usuarios
     fn remove_user(&self, username: &str) {
         if let Ok(mut users) = self.connected_users.lock() {
             users.remove(username);
@@ -133,6 +133,7 @@ impl MQTTServer {
         // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
         if let Some(will_message) = will_message_option {
             //self.handle_publish_message(&will_message)?;
+            self.add_message_to_hashmap(will_message.clone());
             self.pop_and_write_2(will_message.get_topic())?;
         }
         Ok(())
@@ -154,8 +155,10 @@ impl MQTTServer {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             //if let Some(client) = connected_users_locked.remove(client_id) { // <-- aux: volver [].
             if let Some(client) = connected_users_locked.get_mut(client_id) {
+                println!("[DEBUG:] Analizando possible_reconnecting_or_duplicate_user, llega: {:?}, con estado: {:?}", client.get_username(), client.get_state());
                 match client.get_state() {
                     UserState::Active => {
+                        println!("[DEBUG:]   estado era active ==> es cliente duplicado.");
                         // disconnect_previous_client_if_already_connected:
                         let msg = DisconnectMessage::new();
                         let mut stream = client.get_stream()?; //
@@ -163,13 +166,18 @@ impl MQTTServer {
                         write_message_to_stream(&msg.to_bytes(), &mut stream)?;
                     }
                     UserState::TemporallyDisconnected => {
+                        println!("[DEBUG:]   estado era temporallyDisconnected ==> se está reconectando.");
                         // Vuelve a setearle estado activo, para que se le hagan los writes.
                         client.set_state(UserState::Active);
                         // Y acá iría la lógica para enviarle lo que pasó mientras no estuvo en línea.
                         // Le envía los mensajes que no recibió de todos los topics a los que está suscripto
                         let topics = client.get_topics().to_vec();
+                        println!("[DEBUG]:   y sus topics a los que estaba suscripto son: {:?}", topics);
                         for topic in topics {
-                            self.send_unreceived_messages(client, &topic)?;
+                            match self.send_unreceived_messages(client, &topic, "Reconectando"){
+                                Ok(_) => println!("DEBUGGUEANDO: SALIÓ OK AL RECONECTARSE\n   y su user last quedó como: {}", client.get_last_id_by_topic(&topic)),
+                                Err(e) => println!("DEBUGGUEANDO: SALIÓ ERROR!!! AL RECONECTARSE {:?}", e),
+                            }
                         }
                             
                         
@@ -211,6 +219,7 @@ impl MQTTServer {
             self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
         }
 
+        println!("[DEBUG:]   por enviar (write) el conn ack a: {:?}.", connect_msg.get_client_id());
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
         println!("   tipo connect: Enviado el ack: {:?}", connack_response);
 
@@ -568,7 +577,7 @@ impl MQTTServer {
 
     // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
-    fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
+    fn _handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
         // Inicio probando
         // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
         if let Ok(mut connected_users) = self.connected_users.lock() {
@@ -629,7 +638,7 @@ impl MQTTServer {
         // Recorremos todos los usuarios
         if let Ok(mut connected_users) = self.connected_users.lock() {
             for user in connected_users.values_mut() {
-                self.send_unreceived_messages(user, &topic)?;
+                self.send_unreceived_messages(user, &topic, "Hubo_un_Publish")?;
             }
         }
 
@@ -642,37 +651,50 @@ impl MQTTServer {
     // 1 last server
 
     // Aux: construyendo
-    fn send_unreceived_messages(&self, user: &mut User, topic: &String) -> Result<(), Error> {
-        println!("[DEBUG:] send_unreceived_messages");
+    /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
+    /// recibido. Si sí los contiene, entonces se los envía, actualizando el last_id del 'user' para ese 'topic'.
+    fn send_unreceived_messages(&self, user: &mut User, topic: &String, debug_string_origen: &str) -> Result<(), Error> {
+        println!("[DEBUG:] Entrando a send_unreceived_messages para username: {:?}, topic: {:?}, me llaman desde: {:?}", user.get_username(), topic, debug_string_origen);
         if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
             // Obtenemos el hashmap que tiene todos los PublishMessage del topic en cuestión
             if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
+                println!("[DEBUG]:   se encuentra el hashmap en server para el topic: {:?}, es de len: {}, user last: {}.", topic, topic_messages.len(),user.get_last_id_by_topic(topic));
 
                 // Si user está suscripto al topic en cuestión
-                let user_subscribed_topics = user.get_topics();         
+                let user_subscribed_topics = user.get_topics();
+                println!("[DEBUG]:   user topics: {:?}", user_subscribed_topics); //aux debug sospecho que se duplican al reconectarse y volver a suscribirse (igual no sería problema pero sí es raro).
                 if user_subscribed_topics.contains(&topic) {
 
                     // Calculamos la cantidad de mensajes de topic que a user le falta recibir
                     let last_id_topic_server = topic_messages.len() as u32;
                     let last_id_user = user.get_last_id_by_topic(topic);
+                    // aux check por las dudas:
+                    if last_id_topic_server < last_id_user { println!("Error?? Diff es negativo, y como es u32 overfloweará.")}; // debug
                     let diff = last_id_topic_server - last_id_user;
                     println!("DEBUG last_id_topic_server: {:?}, last_id_user: {:?}, diff: {:?}", last_id_topic_server, last_id_user, diff);
                     
-                    for i in 0..diff {
+                    for i in 0..diff { // de 0 a diff, sin incluir el diff, "[0, diff)";
                         let mut user_stream = user.get_stream()?;
-                        let next_message = user.get_last_id_by_topic(topic);
+                        let next_message = last_id_user; //user.get_last_id_by_topic(topic);
                         let msg =
                         topic_messages.get(&next_message).unwrap();
                         println!(" DEBUG VUELTA i: {} ", i);
-                        println!(" DEBUG Enviando mensaje: {:?} a user: {:?} ", msg, user.get_username());
+                        println!(" DEBUG por enviar mensaje: {:?} a user: {:?} si no está desconectado", msg, user.get_username());
                         println!("DEBUG next_message: {:?}", next_message);
                         if user.is_not_disconnected() {
+                            println!("[DEBUG]:   el msg se envía xq entra al if.");
                             write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;                    
                             user.update_last_id_by_topic(&topic, next_message + 1);
+                        } else {
+                            // rama else solamente para debug
+                            println!("[DEBUG]:   el msg NO se envía xq entra al if.");
                         }
                     }
                 }
 
+            } else {
+                // rama else solo para debug
+                println!("[DEBUG]:   NO se encuentra el hashmap en server para el topic: {:?}, user last: {}.", topic, user.get_last_id_by_topic(topic));
             }
         }
                

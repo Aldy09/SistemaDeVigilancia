@@ -93,7 +93,7 @@ impl User {
         if let Some(last_id) = self.last_id_by_topic.get(topic) {
             return *last_id;
         }
-        0
+        0 // <---. // Aux. Por qué podría no encontrarse el topic? xq no se insertó todavía.., pero si se está reconectando debería existir de la conexión anterior;
     }
 
     pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u32) {

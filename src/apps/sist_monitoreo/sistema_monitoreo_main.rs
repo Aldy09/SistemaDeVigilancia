@@ -22,11 +22,11 @@ fn main() -> Result<(), Error> {
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
     let client_id = get_formatted_app_id();
+    let sistema_monitoreo = SistemaMonitoreo::new(egui_tx, logger.clone_ref());
     match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, None) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
-            let sistema_monitoreo = SistemaMonitoreo::new(egui_tx, logger);
 
             let mut handles =
                 sistema_monitoreo.spawn_threads(publish_message_rx, egui_rx, mqtt_client);
