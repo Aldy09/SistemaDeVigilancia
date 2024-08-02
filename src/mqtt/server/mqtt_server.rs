@@ -447,10 +447,10 @@ impl MQTTServer {
 
                 if self.there_are_old_messages_to_send() { // []
                     // Obtiene el topic al que se está suscribiendo el user
-                    for topic in msg.get_topic_filters() {
+                    for (topic, _) in msg.get_topic_filters() {
                         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
                             if let Some(mut user) = connected_users_locked.get_mut(username) {
-                                self.send_unreceived_messages(&mut user, &topic.0)?; // []
+                                self.send_unreceived_messages(&mut user, &topic)?;
                             }
                         }
                     }
@@ -592,9 +592,8 @@ impl MQTTServer {
     }
 
     // (0,1,2,3,4,5) len = 6
-    // 0 este es mi last
-
-    // 1 last server
+    // server: 5 last server
+    // user: 3 este es mi last
 
     // Aux: construyendo
     /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
