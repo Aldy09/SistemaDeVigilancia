@@ -613,7 +613,7 @@ impl MQTTServer {
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
                         let mut user_stream = user.get_stream()?;
-                        let next_message = last_id_user; //user.get_last_id_by_topic(topic);
+                        let next_message = user.get_last_id_by_topic(topic);
                         let msg = topic_messages.get(&next_message).unwrap();
                         if user.is_not_disconnected() {
                             write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
