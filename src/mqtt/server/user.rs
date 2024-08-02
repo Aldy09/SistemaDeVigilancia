@@ -122,7 +122,7 @@ impl User {
 
     pub fn add_topic(&mut self, topic: String) {
         self.topics.push(topic.clone());
-        self.last_id_by_topic.insert(topic, 0);
+        self.last_id_by_topic.entry(topic).or_insert(0);
     }
 
 

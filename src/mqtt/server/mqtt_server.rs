@@ -609,6 +609,7 @@ impl MQTTServer {
                     let last_id_topic_server = topic_messages.len() as u32;
                     let last_id_user = user.get_last_id_by_topic(topic);
                     let diff = last_id_topic_server - last_id_user;
+                    println!("DEBUG: last server: {}, last_user: {}, diff: {}", last_id_topic_server, last_id_user, diff);
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
                         let mut user_stream = user.get_stream()?;
@@ -616,6 +617,7 @@ impl MQTTServer {
                         let msg = topic_messages.get(&next_message).unwrap();
                         if user.is_not_disconnected() {
                             write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                            println!("[DEBUG]:   el msg se envió.");
                             user.update_last_id_by_topic(&topic, next_message + 1);
                         } else {
                             // rama else solamente para debug
