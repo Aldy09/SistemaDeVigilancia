@@ -57,12 +57,6 @@ impl User {
         &self.state
     }
 
-    /*pub fn get_will_message(&self) -> PublishMessage {
-        self.will_msg;
-    }*/
-    /*pub fn get_will_message_and_topic(&self) -> Option<WillMessageAndTopic> {
-        self.will_message
-    }*/
     pub fn get_publish_message_with(&self, dup_flag: u8, packet_id: u16) -> Result<Option<PublishMessage>, Error> {
         if let Some(info) = &self.will_message {
             let flags = PublishFlags::new(dup_flag, info.get_qos(), info.get_will_retain())?;
@@ -102,6 +96,11 @@ impl User {
     
     pub fn get_topics(&self) -> &Vec<String> {
         &self.topics
+    }
+
+    /// Se guarda el nuevo stream, después de una reconexión.
+    pub fn update_stream_with(&mut self, new_stream: StreamType) {
+        self.stream = new_stream
     }
 
     pub fn get_hashmap_messages(&self) -> &ShareableMessageQueue {

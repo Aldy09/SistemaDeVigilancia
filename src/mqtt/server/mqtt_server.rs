@@ -71,8 +71,8 @@ impl MQTTServer {
         Ok(mqtt_server)
     }
 
-    /// Agrega un usuario al hashmap de usuarios conectados
-    fn add_user(
+    /// Agrega un usuario al hashmap de usuarios.
+    fn add_new_user(
         &self,
         stream: &StreamType,
         username: &str,
@@ -149,7 +149,8 @@ impl MQTTServer {
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
     /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
     /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
-    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str) -> Result<(), Error> {
+    /// Devuelve true si era reconexión, false si no era reconexión.
+    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str, new_stream_of_reconnected_user: &StreamType) -> Result<bool, Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             if let Some(mut client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
@@ -159,12 +160,14 @@ impl MQTTServer {
                     }
                     UserState::TemporallyDisconnected => {
                         // El cliente se encontraba temp desconectado ==> Se está reconectando.
-                        self.handle_reconnecting_user(&mut client)?;
+                        self.handle_reconnecting_user(&mut client, new_stream_of_reconnected_user)?;
+                        // Único caso en que devuelve true.
+                        return Ok(true);
                     }
                 }
             }
         }
-        Ok(())
+        Ok(false)
     }
 
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
@@ -175,12 +178,17 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Le envía al user los mensajes que no recibió por estar desconectado.
+    /// Actualiza el stream al nuevo stream que ahora tiene user luego de aberse reconectado; y 
+    /// le envía por ese nuevo stream a user los mensajes que no recibió por estar desconectado.
     fn handle_reconnecting_user(
         &self,
         client: &mut User,
+        new_stream_of_reconnected_user: &StreamType
     ) -> Result<(), Error> {
         client.set_state(UserState::Active);
+        client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
+        
+        // envía los mensajes que no recibió de todos los topics a los que está suscripto
         let topics = client.get_topics().to_vec();
         for topic in topics {
             self.send_unreceived_messages(client, &topic)?;
@@ -207,19 +215,25 @@ impl MQTTServer {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        //Busca en el hashmap, contempla casos si ya existía ese cliente:
-        //lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
-        if let Some(client_id) = connect_msg.get_client_id() {
-            self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
-        }
-
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
 
         // Si el cliente se autenticó correctamente y se conecta por primera vez,
-        // se agrega a la lista de usuarios conectados(add_user) y se maneja la conexión(handle_connection)
+        // se agrega a la lista de usuarios conectados y se maneja la conexión
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
-                self.add_user(&stream, username, &connect_msg)?;
+                // Busca en el hashmap, contempla casos si ya existía ese cliente:
+                // lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
+                let mut is_reconnection = false;
+                if let Some(client_id) = connect_msg.get_client_id() {
+                    is_reconnection = self.manage_possible_reconnecting_or_duplicate_user(client_id, &stream)?;
+                }
+
+                // Si es reconexión, no quiero add_new_user xq eso me crearía un User nuevo y yo ya tengo uno.
+                if !is_reconnection {
+                    self.add_new_user(&stream, username, &connect_msg)?;
+                }
+                
+                // Continuar la conexión, ya puede empezar a recibir otros tipos de mensaje (publish msg / subscribe msg / etc).
                 self.handle_connection(username, &mut stream)?;
             }
         } else {
