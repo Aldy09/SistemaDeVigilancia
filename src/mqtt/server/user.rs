@@ -81,7 +81,25 @@ impl User {
     }
 
 
+    pub fn is_last_outdated(&self, last_id_topic_server: u8, topic: &String) -> bool {
+        if let Some(last_id) = self.last_id_by_topic.get(topic) {
+            return *last_id < last_id_topic_server;
+        }
+        false // si no existe el topic, devuelve false, pero no deberia darse este caso
+    }
 
+
+    pub fn get_last_id_by_topic(&self, topic: &String) -> u8 {
+        if let Some(last_id) = self.last_id_by_topic.get(topic) {
+            return *last_id;
+        }
+        0
+    }
+
+    pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u8) {
+        self.last_id_by_topic.insert(topic.clone(), last_id);
+    }
+    
     pub fn get_topics(&self) -> &Vec<String> {
         &self.topics
     }
@@ -104,8 +122,11 @@ impl User {
     }
 
     pub fn add_topic(&mut self, topic: String) {
-        self.topics.push(topic);
+        self.topics.push(topic.clone());
+        self.last_id_by_topic.insert(topic, 0);
     }
+
+
 
     pub fn set_messages(&mut self, messages: ShareableMessageQueue) {
         self.messages = messages;

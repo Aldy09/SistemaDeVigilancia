@@ -1,3 +1,5 @@
+
+
 use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, connack_session_present::SessionPresent,
@@ -13,7 +15,7 @@ use crate::mqtt::mqtt_utils::utils::{
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
 use crate::mqtt::server::user_state::UserState;
-use crate::mqtt::server::{user::User, file_helper::read_lines};
+use crate::mqtt::server::{file_helper::read_lines, user::User};
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -541,10 +543,12 @@ impl MQTTServer {
         let topic = publish_msg.get_topic();
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
             // Accede o crea el HashMap<u8, PublishMessage> correspondiente al topic
-            let topic_messages = messages_by_topic_locked.entry(topic).or_insert_with(HashMap::new);
+            let topic_messages = messages_by_topic_locked
+                .entry(topic)
+                .or_insert_with(HashMap::new);
             let id = topic_messages.len() as u8;
             // Inserta el PublishMessage en el HashMap interno
-            topic_messages.insert(id , publish_msg);
+            topic_messages.insert(id, publish_msg);
         }
     }
 
@@ -571,12 +575,12 @@ impl MQTTServer {
 
         // Aux: se debe desencolar solamente cuando llega el ack. Por eso está en un for separado.
         // Envía
-        self.pop_and_write()?;
+        self.pop_and_write_2(msg.get_topic())?;
 
         Ok(())
     }
 
-    fn pop_and_write(&self) -> Result<(), Error> {
+    fn _pop_and_write(&self) -> Result<(), Error> {
         // Aux: esto recorre todos los users, todos los topic, y hace pop de un msg de la queue.
         // aux: eso era xq antes no sabía qué se insertó a cada queue, por hacerlo un hilo diferente;
         // aux: actualmente sabemos xq lo hace el mismo hilo, pero tiene sentido que quede en la queue x tema desconexiones.
@@ -597,6 +601,34 @@ impl MQTTServer {
                                     let msg_bytes = msg.to_bytes();
                                     write_message_to_stream(&msg_bytes, &mut user_stream)?;
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn pop_and_write_2(&self, topic: String) -> Result<(), Error> {
+        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
+            // Obtenemos el hashmap que tiene todos los PublishMessage de un topic
+            if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
+                // Recorremos todos los usuarios
+                if let Ok(mut connected_users) = self.connected_users.lock() {
+                    for user in connected_users.values_mut() {
+                        if user.is_not_disconnected() {
+                            let last_id_topic_server = topic_messages.len() - 1;
+                            let last_id_user = user.get_last_id_by_topic(&topic);
+                            let diff = last_id_topic_server as u8 - last_id_user;
+
+                            for _ in 0..diff {
+                                let mut user_stream = user.get_stream()?;
+                                let next_message = user.get_last_id_by_topic(&topic) + 1;
+                                let msg_bytes =
+                                    topic_messages.get(&next_message).unwrap().to_bytes();
+                                write_message_to_stream(&msg_bytes, &mut user_stream)?;
+                                user.update_last_id_by_topic(&topic, next_message);
                             }
                         }
                     }
