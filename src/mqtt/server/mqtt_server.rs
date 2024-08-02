@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
-type TopicMessages = HashMap<u8, PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
+type TopicMessages = HashMap<u32, PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
 
 fn clean_file(file_path: &str) -> Result<(), Error> {
     let mut file = File::create(file_path)?;
@@ -132,7 +132,8 @@ impl MQTTServer {
 
         // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
         if let Some(will_message) = will_message_option {
-            self.handle_publish_message(&will_message)?;
+            //self.handle_publish_message(&will_message)?;
+            self.pop_and_write_2(will_message.get_topic())?;
         }
         Ok(())
     }
@@ -165,6 +166,18 @@ impl MQTTServer {
                         // Vuelve a setearle estado activo, para que se le hagan los writes.
                         client.set_state(UserState::Active);
                         // Y acá iría la lógica para enviarle lo que pasó mientras no estuvo en línea.
+                        // Le envía los mensajes que no recibió de todos los topics a los que está suscripto
+                        let topics = client.get_topics().to_vec();
+                        for topic in topics {
+                            self.send_unreceived_messages(client, &topic)?;
+                        }
+                            
+                        
+
+
+
+
+
                     }
                 }
             }
@@ -413,7 +426,8 @@ impl MQTTServer {
                     ));
                 }*/
                 self.add_message_to_hashmap(msg.clone());
-                self.handle_publish_message(&msg)?;
+                self.pop_and_write_2(msg.get_topic())?;
+                //self.handle_publish_message(&msg)?;
             }
             PacketType::Subscribe => {
                 // Subscribe
@@ -546,7 +560,7 @@ impl MQTTServer {
             let topic_messages = messages_by_topic_locked
                 .entry(topic)
                 .or_insert_with(HashMap::new);
-            let id = topic_messages.len() as u8;
+            let id = topic_messages.len() as u32;
             // Inserta el PublishMessage en el HashMap interno
             topic_messages.insert(id, publish_msg);
         }
@@ -564,7 +578,7 @@ impl MQTTServer {
                 let user_topics = user.get_topics();
                 if user_topics.contains(&(msg.get_topic())) {
                     //si el usuario está suscrito al topic del mensaje
-                    user.add_message_to_queue(msg.clone());
+                    //user.add_message_to_queue(msg.clone());
                     // Aux: y acá mismo llamar al write que se lo mande.
                     // aux: el write actualmente hace pop. No tiene sentido hacer add message to queu
                     // aux: y en la línea siguiente hacerle pop, pero capaz sí tiene sentido que esté en la queue
@@ -610,39 +624,15 @@ impl MQTTServer {
         Ok(())
     }
 
+    // Aux: construyendo
     fn pop_and_write_2(&self, topic: String) -> Result<(), Error> {
-        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            // Obtenemos el hashmap que tiene todos los PublishMessage de un topic
-            if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
-                // Recorremos todos los usuarios
-                if let Ok(mut connected_users) = self.connected_users.lock() {
-                    for user in connected_users.values_mut() {
-                        if user.is_not_disconnected() {
-                            let last_id_topic_server = topic_messages.len();
-                            let last_id_user = user.get_last_id_by_topic(&topic);
-                            let diff = last_id_topic_server as u8 - last_id_user;
-                            let user_subscribed_topics = user.get_topics(); 
-
-                            if user_subscribed_topics.contains(&topic) {
-                                println!("DEBUG last_id_topic_server: {:?}, last_id_user: {:?}, diff: {:?}", last_id_topic_server, last_id_user, diff);
-                                for i in 0..diff {
-                                    let mut user_stream = user.get_stream()?;
-                                    let next_message = user.get_last_id_by_topic(&topic);
-                                    let msg =
-                                    topic_messages.get(&next_message).unwrap();
-                                    println!(" DEBUG VUELTA i: {} ", i);
-                                    println!(" DEBUG Enviando mensaje: {:?} a user: {:?} ", msg, user);
-                                    println!("DEBUG next_message: {:?}", next_message);
-    
-                                    write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
-                                    user.update_last_id_by_topic(&topic, next_message + 1);
-                                }
-                            }
-                        }
-                    }
-                }
+        // Recorremos todos los usuarios
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            for user in connected_users.values_mut() {
+                self.send_unreceived_messages(user, &topic)?;
             }
         }
+
         Ok(())
     }
 
@@ -650,6 +640,45 @@ impl MQTTServer {
     // 0 este es mi last
 
     // 1 last server
+
+    // Aux: construyendo
+    fn send_unreceived_messages(&self, user: &mut User, topic: &String) -> Result<(), Error> {
+        println!("[DEBUG:] send_unreceived_messages");
+        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
+            // Obtenemos el hashmap que tiene todos los PublishMessage del topic en cuestión
+            if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
+
+                // Si user está suscripto al topic en cuestión
+                let user_subscribed_topics = user.get_topics();         
+                if user_subscribed_topics.contains(&topic) {
+
+                    // Calculamos la cantidad de mensajes de topic que a user le falta recibir
+                    let last_id_topic_server = topic_messages.len() as u32;
+                    let last_id_user = user.get_last_id_by_topic(topic);
+                    let diff = last_id_topic_server - last_id_user;
+                    println!("DEBUG last_id_topic_server: {:?}, last_id_user: {:?}, diff: {:?}", last_id_topic_server, last_id_user, diff);
+                    
+                    for i in 0..diff {
+                        let mut user_stream = user.get_stream()?;
+                        let next_message = user.get_last_id_by_topic(topic);
+                        let msg =
+                        topic_messages.get(&next_message).unwrap();
+                        println!(" DEBUG VUELTA i: {} ", i);
+                        println!(" DEBUG Enviando mensaje: {:?} a user: {:?} ", msg, user.get_username());
+                        println!("DEBUG next_message: {:?}", next_message);
+                        if user.is_not_disconnected() {
+                            write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;                    
+                            user.update_last_id_by_topic(&topic, next_message + 1);
+                        }
+                    }
+                }
+
+            }
+        }
+               
+        Ok(())        
+
+    }
 
 }
 

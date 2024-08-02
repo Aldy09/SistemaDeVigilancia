@@ -25,7 +25,7 @@ pub struct User {
     will_message: Option<WillMessageData>,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
-    last_id_by_topic: HashMap<String, u8>, // por cada topic tiene el ultimo id de mensaje enviado
+    last_id_by_topic: HashMap<String, u32>, // por cada topic tiene el ultimo id de mensaje enviado
 }
 
 impl User {
@@ -81,7 +81,7 @@ impl User {
     }
 
 
-    pub fn is_last_outdated(&self, last_id_topic_server: u8, topic: &String) -> bool {
+    pub fn is_last_outdated(&self, last_id_topic_server: u32, topic: &String) -> bool {
         if let Some(last_id) = self.last_id_by_topic.get(topic) {
             return *last_id < last_id_topic_server;
         }
@@ -89,14 +89,14 @@ impl User {
     }
 
 
-    pub fn get_last_id_by_topic(&self, topic: &String) -> u8 {
+    pub fn get_last_id_by_topic(&self, topic: &String) -> u32 {
         if let Some(last_id) = self.last_id_by_topic.get(topic) {
             return *last_id;
         }
         0
     }
 
-    pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u8) {
+    pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u32) {
         self.last_id_by_topic.insert(topic.clone(), last_id);
     }
     
