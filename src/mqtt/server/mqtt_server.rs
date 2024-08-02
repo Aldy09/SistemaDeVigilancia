@@ -618,17 +618,25 @@ impl MQTTServer {
                 if let Ok(mut connected_users) = self.connected_users.lock() {
                     for user in connected_users.values_mut() {
                         if user.is_not_disconnected() {
-                            let last_id_topic_server = topic_messages.len() - 1;
+                            let last_id_topic_server = topic_messages.len();
                             let last_id_user = user.get_last_id_by_topic(&topic);
                             let diff = last_id_topic_server as u8 - last_id_user;
+                            let user_subscribed_topics = user.get_topics(); 
 
-                            for _ in 0..diff {
-                                let mut user_stream = user.get_stream()?;
-                                let next_message = user.get_last_id_by_topic(&topic) + 1;
-                                let msg_bytes =
-                                    topic_messages.get(&next_message).unwrap().to_bytes();
-                                write_message_to_stream(&msg_bytes, &mut user_stream)?;
-                                user.update_last_id_by_topic(&topic, next_message);
+                            if user_subscribed_topics.contains(&topic) {
+                                println!("DEBUG last_id_topic_server: {:?}, last_id_user: {:?}, diff: {:?}", last_id_topic_server, last_id_user, diff);
+                                for i in 0..diff {
+                                    let mut user_stream = user.get_stream()?;
+                                    let next_message = user.get_last_id_by_topic(&topic);
+                                    let msg =
+                                    topic_messages.get(&next_message).unwrap();
+                                    println!(" DEBUG VUELTA i: {} ", i);
+                                    println!(" DEBUG Enviando mensaje: {:?} a user: {:?} ", msg, user);
+                                    println!("DEBUG next_message: {:?}", next_message);
+    
+                                    write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                                    user.update_last_id_by_topic(&topic, next_message + 1);
+                                }
                             }
                         }
                     }
@@ -637,6 +645,12 @@ impl MQTTServer {
         }
         Ok(())
     }
+
+    // (0,1,2,3,4,5) len = 6
+    // 0 este es mi last
+
+    // 1 last server
+
 }
 
 /// Crea un servidor en la dirección ip y puerto especificados.
