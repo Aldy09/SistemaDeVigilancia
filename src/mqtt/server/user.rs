@@ -25,6 +25,7 @@ pub struct User {
     will_message: Option<WillMessageData>,
     topics: Vec<String>, //topics a los que esta suscripto
     messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
+    last_id_by_topic: HashMap<String, u8>, // por cada topic tiene el ultimo id de mensaje enviado
 }
 
 impl User {
@@ -36,6 +37,7 @@ impl User {
             will_message: will_msg_and_topic,
             topics: Vec::new(),
             messages: Arc::new(Mutex::new(HashMap::new())),
+            last_id_by_topic: HashMap::new(),
         }
     }
     // Getters
@@ -77,6 +79,8 @@ impl User {
         
         Ok(None)
     }
+
+
 
     pub fn get_topics(&self) -> &Vec<String> {
         &self.topics

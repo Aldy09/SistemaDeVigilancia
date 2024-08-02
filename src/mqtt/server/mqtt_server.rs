@@ -7,16 +7,17 @@ use crate::mqtt::messages::{
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
 // Add the missing import
+use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
     get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
 };
-use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::server::user_state::UserState;
-use crate::mqtt::server::{connected_user::User, file_helper::read_lines};
+use crate::mqtt::server::{user::User, file_helper::read_lines};
 
 use std::collections::HashMap;
 use std::fs::File;
+
 use std::io::{Error, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
@@ -24,6 +25,7 @@ use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
+type TopicMessages = HashMap<u8, PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
 
 fn clean_file(file_path: &str) -> Result<(), Error> {
     let mut file = File::create(file_path)?;
@@ -34,7 +36,8 @@ fn clean_file(file_path: &str) -> Result<(), Error> {
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
-    available_packet_id: u16, //
+    available_packet_id: u16,                                      //
+    messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
 }
 
 impl MQTTServer {
@@ -47,6 +50,7 @@ impl MQTTServer {
         let mqtt_server = Self {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
             available_packet_id: 0,
+            messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
         };
         let listener = create_server(ip, port)?;
 
@@ -68,11 +72,16 @@ impl MQTTServer {
     }
 
     /// Agrega un usuario al hashmap de usuarios conectados
-    fn add_user(&self, stream: &StreamType, username: &str, connect_msg: &ConnectMessage) -> Result<(), Error> {
+    fn add_user(
+        &self,
+        stream: &StreamType,
+        username: &str,
+        connect_msg: &ConnectMessage,
+    ) -> Result<(), Error> {
         // Obtiene el will_message con todos sus campos relacionados necesarios, y lo guarda en el user,
-        // para luego publicarlo al will_topic cuando user se desconecte                
+        // para luego publicarlo al will_topic cuando user se desconecte
         let will_msg_info = connect_msg.get_will_to_publish();
-        
+
         //[] Aux: Nos guardamos el stream, volver a ver esto.
         let user = User::new(stream.try_clone()?, username.to_string(), will_msg_info); //[]
         if let Ok(mut users) = self.connected_users.lock() {
@@ -94,11 +103,14 @@ impl MQTTServer {
 
     /// Cambia el estado del usuario del server con username `username` a TemporallyDisconnected,
     /// para que no se le envíen mensajes si se encuentra en dicho estado y de esa forma evitar errores en writes.
-    fn set_user_as_temporally_disconnected(&self, username: &str) -> Result<(), Error>{
+    fn set_user_as_temporally_disconnected(&self, username: &str) -> Result<(), Error> {
         if let Ok(mut users) = self.connected_users.lock() {
-            if let Some(user ) = users.get_mut(username){
+            if let Some(user) = users.get_mut(username) {
                 user.set_state(UserState::TemporallyDisconnected);
-                println!("Username seteado como temporalmente desconectado: {:?}", username);    
+                println!(
+                    "Username seteado como temporalmente desconectado: {:?}",
+                    username
+                );
             }
         }
         Ok(())
@@ -108,16 +120,16 @@ impl MQTTServer {
     fn publish_users_will_message(&self, username: &str) -> Result<(), Error> {
         let packet_id = 1000; // <-- aux: rever esto []: generate_packet_id requiere self mut, pero esto es multihilo, no tiene mucho sentido. Quizás un arc mutex u16, volver.
         let mut will_message_option = None;
-        
+
         // Obtengo el will_message, si había uno.
         if let Ok(users) = self.connected_users.lock() {
-            if let Some(user ) = users.get(username){
+            if let Some(user) = users.get(username) {
                 will_message_option = user.get_publish_message_with(0, packet_id)?;
             }
         }
 
         // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
-        if let Some(will_message) = will_message_option{
+        if let Some(will_message) = will_message_option {
             self.handle_publish_message(&will_message)?;
         }
         Ok(())
@@ -126,7 +138,8 @@ impl MQTTServer {
     /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
     /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
     /// en el envío para el cual fue llamada esta función.
-    fn _generate_packet_id(&mut self) -> u16 { // Aux: ToDo Ver []
+    fn _generate_packet_id(&mut self) -> u16 {
+        // Aux: ToDo Ver []
         self.available_packet_id += 1;
         self.available_packet_id
     }
@@ -134,10 +147,7 @@ impl MQTTServer {
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
     /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
     /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
-    fn manage_possible_reconnecting_or_duplicate_user(
-        &self,
-        client_id: &str,
-    ) -> Result<(), Error> {
+    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str) -> Result<(), Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             //if let Some(client) = connected_users_locked.remove(client_id) { // <-- aux: volver [].
             if let Some(client) = connected_users_locked.get_mut(client_id) {
@@ -148,12 +158,12 @@ impl MQTTServer {
                         let mut stream = client.get_stream()?; //
 
                         write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-                    },
+                    }
                     UserState::TemporallyDisconnected => {
                         // Vuelve a setearle estado activo, para que se le hagan los writes.
                         client.set_state(UserState::Active);
                         // Y acá iría la lógica para enviarle lo que pasó mientras no estuvo en línea.
-                    },
+                    }
                 }
             }
         }
@@ -194,8 +204,11 @@ impl MQTTServer {
         if is_authentic {
             if let Some(username) = connect_msg.get_client_id() {
                 self.add_user(&stream, username, &connect_msg)?;
-                self.handle_connection(username, &mut stream)?;                
-                println!("   se ha salido de la función, se deja de leer para el cliente: {}.", username); // debug
+                self.handle_connection(username, &mut stream)?;
+                println!(
+                    "   se ha salido de la función, se deja de leer para el cliente: {}.",
+                    username
+                ); // debug
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente."); //(ya se le envió el ack informando).
@@ -397,6 +410,7 @@ impl MQTTServer {
                         "Error al enviar el PublishMessage al hilo que los procesa.",
                     ));
                 }*/
+                self.add_message_to_hashmap(msg.clone());
                 self.handle_publish_message(&msg)?;
             }
             PacketType::Subscribe => {
@@ -451,6 +465,7 @@ impl MQTTServer {
         Self {
             connected_users: self.connected_users.clone(),
             available_packet_id: self.available_packet_id,
+            messages_by_topic: self.messages_by_topic.clone(),
         }
     }
 
@@ -521,6 +536,18 @@ impl MQTTServer {
         Ok(())
     }*/
 
+    /// Agrega un PublishMessage al Hashmap de su topic
+    fn add_message_to_hashmap(&self, publish_msg: PublishMessage) {
+        let topic = publish_msg.get_topic();
+        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+            // Accede o crea el HashMap<u8, PublishMessage> correspondiente al topic
+            let topic_messages = messages_by_topic_locked.entry(topic).or_insert_with(HashMap::new);
+            let id = topic_messages.len() as u8;
+            // Inserta el PublishMessage en el HashMap interno
+            topic_messages.insert(id , publish_msg);
+        }
+    }
+
     // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
     /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
@@ -563,7 +590,9 @@ impl MQTTServer {
                     if let Ok(mut hashmap_messages_locked) = hashmap_messages.lock() {
                         for topic in user_subscribed_topics {
                             // trae 1 cola de un topic y escribe los mensajes en el stream
-                            if let Some(messages_topic_queue) = hashmap_messages_locked.get_mut(topic) {
+                            if let Some(messages_topic_queue) =
+                                hashmap_messages_locked.get_mut(topic)
+                            {
                                 while let Some(msg) = messages_topic_queue.pop_front() {
                                     let msg_bytes = msg.to_bytes();
                                     write_message_to_stream(&msg_bytes, &mut user_stream)?;
