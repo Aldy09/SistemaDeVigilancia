@@ -149,15 +149,17 @@ impl MQTTServer {
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
     /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
     /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
-    fn manage_reconnected_user(&self, client_id: &str) -> Result<(), Error> {
+    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str) -> Result<(), Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             if let Some(mut client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
-                    UserState::Active => {
-                        let _ = handle_active_state(&mut client);
+                    UserState::Active => {   
+                        // El cliente ya se encontraba activo ==> Es duplicado.                     
+                        self.handle_duplicate_user(&mut client)?;
                     }
                     UserState::TemporallyDisconnected => {
-                        let _ = self.handle_temporarily_disconnected_state(&mut client);
+                        // El cliente se encontraba temp desconectado ==> Se está reconectando.
+                        self.handle_reconnecting_user(&mut client)?;
                     }
                 }
             }
@@ -165,11 +167,19 @@ impl MQTTServer {
         Ok(())
     }
 
-    // Function to handle the temporarily disconnected state
-    fn handle_temporarily_disconnected_state(
+    /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
+    fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
+        let msg = DisconnectMessage::new();
+        let mut stream = client.get_stream()?;
+        write_message_to_stream(&msg.to_bytes(), &mut stream)?;
+        Ok(())
+    }
+
+    /// Le envía al user los mensajes que no recibió por estar desconectado.
+    fn handle_reconnecting_user(
         &self,
         client: &mut User,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Error> {
         client.set_state(UserState::Active);
         let topics = client.get_topics().to_vec();
         for topic in topics {
@@ -200,7 +210,7 @@ impl MQTTServer {
         //Busca en el hashmap, contempla casos si ya existía ese cliente:
         //lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
         if let Some(client_id) = connect_msg.get_client_id() {
-            self.manage_reconnected_user(client_id)?;
+            self.manage_possible_reconnecting_or_duplicate_user(client_id)?;
         }
 
         write_message_to_stream(&connack_response.to_bytes(), &mut stream)?;
@@ -421,11 +431,12 @@ impl MQTTServer {
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
 
-                if self.there_are_old_messages_to_send() {
+                if self.there_are_old_messages_to_send() { // []
+                    // Obtiene el topic al que se está suscribiendo el user
                     for topic in msg.get_topic_filters() {
                         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
                             if let Some(mut user) = connected_users_locked.get_mut(username) {
-                                self.send_unreceived_messages(&mut user, &topic.0)?;
+                                self.send_unreceived_messages(&mut user, &topic.0)?; // []
                             }
                         }
                     }
@@ -516,7 +527,7 @@ impl MQTTServer {
     fn add_message_to_hashmap(&self, publish_msg: PublishMessage) {
         let topic = publish_msg.get_topic();
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-            // Accede o crea el HashMap<u8, PublishMessage> correspondiente al topic
+            // Obtiene o crea (si no existía) el HashMap<u8, PublishMessage> correspondiente al topic del publish message
             let topic_messages = messages_by_topic_locked
                 .entry(topic)
                 .or_insert_with(HashMap::new);
@@ -625,12 +636,4 @@ fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
         TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
     Ok(listener)
-}
-
-// Function to handle the active state
-fn handle_active_state(client: &mut User) -> Result<(), Box<dyn std::error::Error>> {
-    let msg = DisconnectMessage::new();
-    let mut stream = client.get_stream()?; // Assuming get_stream() returns a Result
-    write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-    Ok(())
 }
