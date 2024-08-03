@@ -108,7 +108,7 @@ pub fn get_whole_message_in_bytes_from_stream(
     // Siendo que ya hemos leído fixed_header, sabemos que el resto del mensaje está disponible para ser leído.
     let msg_rem_len: usize = fixed_header.get_rem_len();
     let rem_buf: Result<Vec<u8>, Error> = stream.bytes().take(msg_rem_len).collect();
-    println!("obteniendo mensaje completo");
+    //println!("obteniendo mensaje completo");
     match rem_buf {
         Ok(b) if b.len() == msg_rem_len => {
             let mut buf = fixed_header_bytes.to_vec();
@@ -165,4 +165,8 @@ pub fn get_fixed_header_from_stream_for_conn(
     let fixed_header = FixedHeader::from_bytes(fixed_header_buf.to_vec());
 
     Ok((fixed_header_buf, fixed_header))
+}
+
+pub fn display_debug_publish_msg(msg: &PublishMessage) {
+    println!("Publish recibido, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_identifier());
 }

@@ -9,8 +9,7 @@ use crate::mqtt::messages::{
 // Add the missing import
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::mqtt_utils::utils::{
-    get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
-    get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
+    display_debug_publish_msg, get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream
 };
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{file_helper::read_lines, user::User};
@@ -18,7 +17,7 @@ use crate::mqtt::server::{file_helper::read_lines, user::User};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 
-use std::io::{Error, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -229,6 +228,10 @@ impl MQTTServer {
 
                 // Continuar la conexión, ya puede empezar a recibir otros tipos de mensaje (publish msg / subscribe msg / etc).
                 self.handle_connection(username, &mut stream)?;
+                println!(
+                    "   se ha salido de la función, se deja de leer para el cliente: {}.",
+                    username
+                ); // debug
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente."); //(ya se le envió el ack informando).
@@ -398,9 +401,12 @@ impl MQTTServer {
             PacketType::Publish => {
                 // Publish
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
-                println!("   Mensaje publish completo recibido: {:?}", msg);
+                //println!("   Mensaje publish completo recibido: {:?}", msg);
+                display_debug_publish_msg(&msg);
                 self.send_puback(&msg, stream)?;
+                println!("DEBUG: justo antes del handle_publish_message, para user: {:?}", username);
                 self.handle_publish_message(&msg)?;
+                println!("DEBUG: justo dsp del handle_publish_message, para user: {:?}", username);
             }
             PacketType::Subscribe => {
                 // Subscribe
@@ -420,6 +426,7 @@ impl MQTTServer {
                 }
 
                 self.send_suback(return_codes, stream)?;
+                println!("DEBUG: terminado el subscribe, para user: {:?}", username);
             }
             PacketType::Puback => {
                 // PubAck
@@ -517,7 +524,11 @@ impl MQTTServer {
     /// que estén conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
         if self.check_capacity(msg.get_topic()) {
-            self.remove_old_messages(msg.get_topic());
+            
+            match self.remove_old_messages(msg.get_topic()) { // print para ver el error mientras debuggueamos
+                Ok(_) => {},
+                Err(e) => println!("DEBUG: Error al salir del remove_old_messages: {:?}", e),
+            };
         }
         self.add_message_to_hashmap(msg.clone());
         self.send_msgs_to_subscribers(msg.get_topic())?;
@@ -560,17 +571,22 @@ impl MQTTServer {
                     );
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
-                        let mut user_stream = user.get_stream()?;
-                        let next_message = user.get_last_id_by_topic(topic) as usize;
-                        let msg = topic_messages.get(next_message).unwrap();
-                        if user.is_not_disconnected() {
-                            write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
-                            println!("[DEBUG]:   el msg se envió.");
-                            user.update_last_id_by_topic(topic, (next_message + 1) as u32);
+                        let next_message = user.get_last_id_by_topic(topic) as usize;                        
+                        if let Some(msg) = topic_messages.get(next_message){
+                            
+                            let mut user_stream = user.get_stream()?;
+                            if user.is_not_disconnected() {
+                                write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                                println!("[DEBUG]:   el msg se envió.");
+                                user.update_last_id_by_topic(topic, (next_message + 1) as u32);
+                            } else {
+                                // rama else solamente para debug
+                                println!("[DEBUG]:   el msg NO se envía xq entra al if.");
+                            }
                         } else {
-                            // rama else solamente para debug
-                            println!("[DEBUG]:   el msg NO se envía xq entra al if.");
+                            println!("ERROR NO SE ENCUENTRA EL TOPIC_MSGS.GET(TOPIC) A ENVIAR!!!");
                         }
+                        
                     }
                 }
             } else {
@@ -595,63 +611,105 @@ impl MQTTServer {
     fn check_capacity(&self, topic: String) -> bool {
         if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
             if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
-                if topic_messages.len() > 100 {
+                if topic_messages.len() > 10 {
                     return true;
                 }
             }
         }
         false
     }
-
-    fn remove_old_messages(&self, topic: String) {
+    
+    /// .
+    fn remove_old_messages(&self, topic: String) -> Result<(), Error> {
+        let min_last_id = self.calculate_min_last_id_among_users_for(&topic)?;
+        println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
+        
+        self.remove_messages_until(min_last_id, &topic)?;
+        println!( "DEBUG: 2 _ min_last_id: {:?}", min_last_id);
+        
+        self.update_last_ids_for_users(&topic, min_last_id)?;
+        println!( "DEBUG: 3 _ min_last_id: {:?}", min_last_id);
+        Ok(())
+    }
+    
+    /// Recorre los users para devolver, para el topic `topic`, el mínimo last_id de entre los users suscriptos a él.
+    /// Devuelve el mínimo, o un error si no se pudo.
+    fn calculate_min_last_id_among_users_for(&self, topic: &String) -> Result<u32, Error> {
         let mut min_last_id = u32::MAX;
-        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-            if let Some( topic_messages) = messages_by_topic_locked.get_mut(&topic) {
-                println!( "DEBUG: COLA DE MENSAJES ANTES DEL REMOVE: {:?}", topic_messages);
-                // Recorro los usuarios
-                if let Ok(mut users) = self.connected_users.lock() {
-                    for user in users.values_mut() {
-                        // Si el usuario está suscripto al topic
-                        if user.get_topics().contains(&topic) {
-                            let last_id_user = user.get_last_id_by_topic(&topic);
-                            // Tomamos el mínimo de los last_id de los usuarios suscriptos al topic
-                            if last_id_user < min_last_id {
-                                min_last_id = last_id_user;
-                            }
-                            println!( "DEBUG: LAST ID USER: {:?} de USER: {:?} ", last_id_user, user.get_username());
-                            
-                        }
+        // Recorro los usuarios
+        if let Ok(mut users) = self.connected_users.lock() {
+            for user in users.values_mut() {
+                // Si el usuario está suscripto al topic
+                if user.get_topics().contains(topic) {
+                    let last_id_user = user.get_last_id_by_topic(topic);
+                    // Tomamos el mínimo de los last_id de los usuarios suscriptos al topic
+                    if last_id_user < min_last_id {
+                        min_last_id = last_id_user;
                     }
-                    println!( "DEBUG: MIN LAST ID: {:?}", min_last_id);
-                    remove_messages_until(min_last_id,topic_messages);
-                    println!( "DEBUG: COLA DE MENSAJES DESPUES DEL REMOVE: {:?}", topic_messages);
+                    println!( "DEBUG: LAST ID: {:?} de USER: {:?} ", last_id_user, user.get_username());
+                    
                 }
-                self.update_last_ids_for_users(&topic, min_last_id);
             }
+            Ok(min_last_id)
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a users para calcular el mínimo last_id."))
         }
     }
     
-    fn update_last_ids_for_users(&self, topic: &String, min_last_id: u32) {
+    /// Actualiza, ajusta el last_id para el topic `topic`, de todos sus User's suscriptores, para mantenerlos consistentes luego de
+    /// que se eliminen mensajes de la queue del topic `topic`.
+    fn update_last_ids_for_users(&self, topic: &String, min_last_id: u32) -> Result<(), Error> {
+        println!("DEBUG: Entrando a update_last_ids_for_users, min_last_id calculado fue: {}", min_last_id);
         if let Ok(mut users) = self.connected_users.lock() {
-            for user in users.values_mut() {
+            // Para cada user
+            for user in users.values_mut() {                
+                // Si está suscripto al topic en cuestión
                 if user.get_topics().contains(topic) {
                     let last_id = user.get_last_id_by_topic(topic);
                     let diff = last_id - min_last_id;
                     user.update_last_id_by_topic(topic, diff);
+                    println!("DEBUG: last_id anterior: {}, queda: {}, para user: {:?}.", last_id, diff, user.get_username());
                 }
             }
+            println!("DEBUG: Saliendo de update_last_ids_for_users."); // debug
+            
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a users para actualizar los last_id de users."))
         }
     }
 
+    /// Elimina todos los mensajes de la queue de `topic`, desde el principio hasta el `min_last_id` sin incluirlo.
+    fn remove_messages_until(&self, min_last_id: u32, topic: &String) -> Result<(), Error> {
+        println!("DEBUG: Entrando a remove_messages_until");
+        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+            if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
+                
+                println!("DEBUG: Cola de mensajes antes del remove: {:?}", topic_messages);
+                let mut i = 0;
+                while i < min_last_id { // [] sah, es un for
+                    topic_messages.pop_front();
+                    i += 1;
+                }
+
+                println!("DEBUG: Cola de mensajes después del remove: {:?}", topic_messages);
+                println!("DEBUG: Saliendo de remove_messages_until");
+            }
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a messages_by_topic para remover elementos de la estructura para un topic."))
+        }
+    }
+    
+
 }
 
-fn remove_messages_until(min_last_id: u32, topic_messages: &mut VecDeque<PublishMessage>) {
-        let mut i = 0;
-        while i < min_last_id {
-            topic_messages.pop_front();
-            i += 1;
-        }
-}
 /// Crea un servidor en la dirección ip y puerto especificados.
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
