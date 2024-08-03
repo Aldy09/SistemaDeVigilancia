@@ -319,7 +319,6 @@ impl UISistemaMonitoreo {
     /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
     fn handle_incident_message(&mut self, msg: PublishMessage) {
         if let Ok(inc) = Incident::from_bytes(msg.get_payload()){
-            println!("Recibo inc desde cámaras: {:?}", inc); // o desde 'self'.
             // Agregamos el incidente (add_incident) solamente si él no fue creado por sist monitoreo.
             if *inc.get_source() == IncidentSource::Automated && *inc.get_state() == IncidentState::ActiveIncident {
                 self.add_incident(&inc);

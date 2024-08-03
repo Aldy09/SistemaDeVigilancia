@@ -3,7 +3,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use std::error::Error;
 use std::io::ErrorKind;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
@@ -19,7 +19,7 @@ use super::properties::DetectorProperties;
 pub struct AutomaticIncidentDetector {
     cameras: ShCamerasType,
     tx: mpsc::Sender<Incident>,
-    last_incident_id: u8,
+    last_incident_id: Arc<Mutex<u8>>,
     properties: DetectorProperties,
     logger: StringLogger,
 }
@@ -29,7 +29,7 @@ impl AutomaticIncidentDetector {
         Self {
             cameras,
             tx,
-            last_incident_id: 0,
+            last_incident_id: Arc::new(Mutex::new(0)),
             properties,
             logger,
         }
@@ -39,7 +39,7 @@ impl AutomaticIncidentDetector {
         Self {
             cameras: self.cameras.clone(),
             tx: self.tx.clone(),
-            last_incident_id: self.last_incident_id,
+            last_incident_id: self.last_incident_id.clone(),
             properties: self.properties.clone(),
             logger: self.logger.clone_ref(),
         }
@@ -101,7 +101,7 @@ impl AutomaticIncidentDetector {
         // obtenemos la posición
         let incident_position: (f64, f64) = self.get_incident_position(cam_id)?;
         // creamos el incidente
-        let inc_id = self.get_next_incident_id();
+        let inc_id = self.get_next_incident_id()?;
         let incident = Incident::new(inc_id, incident_position, IncidentSource::Automated);
         
         println!("Detector: Incidente creado! {:?}", incident);
@@ -138,9 +138,13 @@ impl AutomaticIncidentDetector {
         
     }
 
-    fn get_next_incident_id(&mut self) -> u8 {
-        self.last_incident_id += 1;
-        self.last_incident_id
+    fn get_next_incident_id(&mut self) -> Result<u8, std::io::Error> {
+        if let Ok(mut last) = self.last_incident_id.lock() {
+            *last += 1;
+            return Ok(*last);
+
+        }
+        Err(std::io::Error::new(ErrorKind::Other, "Detector: Error al tomar el lock"))
     }
 
 }

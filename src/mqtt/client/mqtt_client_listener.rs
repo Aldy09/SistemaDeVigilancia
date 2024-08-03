@@ -39,6 +39,7 @@ impl MQTTClientListener {
 
                     // Caso se recibe un disconnect
                     if is_disconnect_msg(&fixed_header_info.1) {
+                        println!("Mqtt cliente leyendo: recibo disconnect");
                         shutdown(&self.stream);
                         break;
                     }

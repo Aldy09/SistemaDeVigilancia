@@ -1,8 +1,7 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     io::Error,
     net::TcpStream,
-    sync::{Arc, Mutex},
 };
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
@@ -12,55 +11,53 @@ use crate::mqtt::{messages::{publish_flags::PublishFlags, publish_message::Publi
 
 use super::user_state::UserState;
 
-type ShareableMessageQueue = Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>;
-
 /// Representa a un usuario (cliente) conectado al MQTTServer, del lado del servidor.
 #[derive(Debug)]
 #[allow(dead_code)]
 
 pub struct User {
+    username: String, // se identifica por el username.
     stream: StreamType,
-    username: String,
     state: UserState,
     will_message: Option<WillMessageData>,
-    topics: Vec<String>, //topics a los que esta suscripto
-    messages: Arc<Mutex<HashMap<String, VecDeque<PublishMessage>>>>, // por cada topic tiene una cola de mensajes tipo publish
+    topics: Vec<String>, // topics a los que esta suscripto
+    last_id_by_topic: HashMap<String, u32>, // por cada topic tiene el ultimo id de mensaje enviado.
 }
 
 impl User {
+    /// Crea un User.
     pub fn new(stream: StreamType, username: String, will_msg_and_topic: Option<WillMessageData>) -> Self {
         User {
-            stream,
             username,
+            stream,
             state: UserState::Active,
             will_message: will_msg_and_topic,
             topics: Vec::new(),
-            messages: Arc::new(Mutex::new(HashMap::new())),
+            last_id_by_topic: HashMap::new(),
         }
     }
-    // Getters
+    
+    /// Devuelve el stream del user.
     pub fn get_stream(&self) -> Result<StreamType, Error> {
         self.stream.try_clone()
     }
 
+    /// Devuelve el username del user.
     pub fn get_username(&self) -> String {
         self.username.to_string()
     }
     
+    /// Devuelve si el user no está desconectado.
     pub fn is_not_disconnected(&self) -> bool {
         self.state != UserState::TemporallyDisconnected
     }
     
+    /// Devuelve el estado del user.
     pub fn get_state(&self) -> &UserState {
         &self.state
     }
 
-    /*pub fn get_will_message(&self) -> PublishMessage {
-        self.will_msg;
-    }*/
-    /*pub fn get_will_message_and_topic(&self) -> Option<WillMessageAndTopic> {
-        self.will_message
-    }*/
+    /// Crea el PublishMessage necesario para publicar el will message que User tiene almacenado desde el principio de la conexión.
     pub fn get_publish_message_with(&self, dup_flag: u8, packet_id: u16) -> Result<Option<PublishMessage>, Error> {
         if let Some(info) = &self.will_message {
             let flags = PublishFlags::new(dup_flag, info.get_qos(), info.get_will_retain())?;
@@ -78,45 +75,38 @@ impl User {
         Ok(None)
     }
 
+    /// Devuelve el last_id para el topic `topic`.
+    pub fn get_last_id_by_topic(&self, topic: &String) -> u32 {
+        if let Some(last_id) = self.last_id_by_topic.get(topic) {
+            return *last_id;
+        }
+        0 // <---. // Aux. Por qué podría no encontrarse el topic? xq no se insertó todavía.., pero si se está reconectando debería existir de la conexión anterior;
+    }
+
+    /// Actualiza el `last_id` del topic `topic`, con el recibido por parámetro.
+    pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u32) {
+        self.last_id_by_topic.insert(topic.to_owned(), last_id);
+    }
+    
+    /// Devuelve los topics a los que el user está suscripto.
     pub fn get_topics(&self) -> &Vec<String> {
         &self.topics
     }
 
-    pub fn get_hashmap_messages(&self) -> &ShareableMessageQueue {
-        &self.messages
+    /// Se guarda el nuevo stream, después de una reconexión.
+    pub fn update_stream_with(&mut self, new_stream: StreamType) {
+        self.stream = new_stream
     }
 
-    // Setters
-    pub fn set_stream(&mut self, stream: StreamType) {
-        self.stream = stream;
-    }
-    
+    /// Setea el estado del user.
     pub fn set_state(&mut self, state: UserState) {
         self.state = state;
     }
 
-    pub fn set_username(&mut self, username: String) {
-        self.username = username;
-    }
-
+    /// Agrega el topic a los topics a los que user está suscripto.
     pub fn add_topic(&mut self, topic: String) {
-        self.topics.push(topic);
-    }
-
-    pub fn set_messages(&mut self, messages: ShareableMessageQueue) {
-        self.messages = messages;
-    }
-
-    /// Agrega el mensaje a la cola del usuario
-    pub fn add_message_to_queue(&mut self, message: PublishMessage) {
-        let topic = message.get_topic();
-        if let Ok(mut messages_locked) = self.messages.lock() {
-            messages_locked
-                .entry(topic)
-                .or_default() //si no existe el topic, lo crea con el valor: ""VecDeque::new()"" a checkear
-                //.or_insert_with(VecDeque::new)
-                .push_back(message);
-        }
+        self.topics.push(topic.clone());
+        self.last_id_by_topic.entry(topic).or_insert(0);
     }
     
 }
