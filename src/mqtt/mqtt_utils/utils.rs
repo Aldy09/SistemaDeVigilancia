@@ -142,7 +142,6 @@ pub fn is_disconnect_msg(fixed_header: &FixedHeader) -> bool {
 
 /// Cerramos la conexión por el stream recibido.
 pub fn shutdown(stream: &StreamType) {
-    println!("Mqtt cliente leyendo: recibo disconnect");
     match stream.shutdown(Shutdown::Both) {
         Ok(_) => println!("Conexión terminada con éxito"),
         Err(e) => println!("Error al terminar la conexión: {:?}", e),

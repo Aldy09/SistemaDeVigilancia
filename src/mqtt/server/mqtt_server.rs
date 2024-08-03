@@ -130,20 +130,9 @@ impl MQTTServer {
 
         // Suelto el lock, para que pueda tomarlo la función a la que estoy a punto de llamar.
         if let Some(will_message) = will_message_option {
-            //self.handle_publish_message(&will_message)?;
-            self.add_message_to_hashmap(will_message.clone());
-            self.pop_and_write_2(will_message.get_topic())?;
+            self.handle_publish_message(&will_message)?;
         }
         Ok(())
-    }
-
-    /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
-    /// Incrementa en 1 el atributo correspondiente, debido a la llamada anterior, y devuelve el valor a ser usado
-    /// en el envío para el cual fue llamada esta función.
-    fn _generate_packet_id(&mut self) -> u16 {
-        // Aux: ToDo Ver []
-        self.available_packet_id += 1;
-        self.available_packet_id
     }
 
     /// Busca al client_id en el hashmap de conectados, si ya existía analiza su estado:
@@ -152,15 +141,15 @@ impl MQTTServer {
     /// Devuelve true si era reconexión, false si no era reconexión.
     fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str, new_stream_of_reconnected_user: &StreamType) -> Result<bool, Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-            if let Some(mut client) = connected_users_locked.get_mut(client_id) {
+            if let Some(client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
                     UserState::Active => {   
                         // El cliente ya se encontraba activo ==> Es duplicado.                     
-                        self.handle_duplicate_user(&mut client)?;
+                        self.handle_duplicate_user(client)?;
                     }
                     UserState::TemporallyDisconnected => {
                         // El cliente se encontraba temp desconectado ==> Se está reconectando.
-                        self.handle_reconnecting_user(&mut client, new_stream_of_reconnected_user)?;
+                        self.handle_reconnecting_user(client, new_stream_of_reconnected_user)?;
                         // Único caso en que devuelve true.
                         return Ok(true);
                     }
@@ -310,6 +299,7 @@ impl MQTTServer {
                     if is_disconnect_msg(&fixed_header_info.1) {
                         self.publish_users_will_message(username)?;
                         self.remove_user(username);
+                        println!("Mqtt cliente leyendo: recibo disconnect");
                         shutdown(stream);
                         break;
                     }
@@ -340,25 +330,6 @@ impl MQTTServer {
         let ack_msg_bytes = ack.to_bytes();
         write_message_to_stream(&ack_msg_bytes, stream)?;
         println!("   tipo publish: Enviado el ack: {:?}", ack);
-        Ok(())
-    }
-
-    ///Agrega el mensaje a la cola de mensajes de los usuarios suscritos al topic del mensaje
-    fn _add_message_to_subscribers_queue(&self, msg: &PublishMessage) -> Result<(), Error> {
-        // inicio probando
-        //self.publish_msgs_tx.send(*msg); // pero cómo le digo de qué user y topic es
-        // dicen mis notas "y que el hilo ppal, que el pcsamiento de iterar x user lo haga el hilo que escribe.
-        // fin probando
-        if let Ok(mut connected_users) = self.connected_users.lock() {
-            for user in connected_users.values_mut() {
-                //connected_users es un hashmap con key=username y value=user
-                let user_topics = user.get_topics();
-                if user_topics.contains(&(msg.get_topic())) {
-                    //si el usuario está suscrito al topic del mensaje
-                    user.add_message_to_queue(msg.clone());
-                }
-            }
-        }
         Ok(())
     }
 
@@ -423,41 +394,28 @@ impl MQTTServer {
                 // Publish
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
                 println!("   Mensaje publish completo recibido: {:?}", msg);
-
-                //self.send_puback_to_outgoing(&msg, stream)?; // Lo envía por un channel, hacia el lhilo outgoing.
                 self.send_puback(&msg, stream)?;
-
-                // Si llega un publish, lo mando por el channel, del otro lado (el hilo que llama a handle_outgoing_connections)
-                // se encargará de enviarlo al/los suscriptor/es que tenga el topic del mensaje en cuestión.
-                /*if self.publish_msgs_tx.send(Box::new(msg)).is_err() {
-                    //println!("Error al enviar el PublishMessage al hilo que los procesa.");
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        "Error al enviar el PublishMessage al hilo que los procesa.",
-                    ));
-                }*/
-                self.add_message_to_hashmap(msg.clone());
-                self.pop_and_write_2(msg.get_topic())?;
-                //self.handle_publish_message(&msg)?;
+                self.handle_publish_message(&msg)?;
             }
             PacketType::Subscribe => {
                 // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
 
-                if self.there_are_old_messages_to_send() { // []
-                    // Obtiene el topic al que se está suscribiendo el user
-                    for (topic, _) in msg.get_topic_filters() {
+                // Obtiene el topic al que se está suscribiendo el user
+                for (topic, _) in msg.get_topic_filters() {
+                    if self.there_are_old_messages_to_send(topic) {
+                        // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
                         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-                            if let Some(mut user) = connected_users_locked.get_mut(username) {
-                                self.send_unreceived_messages(&mut user, &topic)?;
+                            if let Some(user) = connected_users_locked.get_mut(username) {
+                                self.send_unreceived_messages(user, topic)?;
                             }
                         }
                     }
-                }
 
-                //self.send_suback_to_outgoing(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
-                self.send_suback(return_codes, stream)?; // Lo manda por un channel, hacia hilo outgoinf.
+                }
+                
+                self.send_suback(return_codes, stream)?;
             }
             PacketType::Puback => {
                 // PubAck
@@ -493,7 +451,8 @@ impl MQTTServer {
             _ => {
                 println!("Error, el primer mensaje recibido DEBE ser un connect.");
                 println!("   recibido: {:?}", fixed_header);
-                // ToDo: Leer de la doc qué hacer en este caso, o si solo ignoramos. []
+                println!("Cerrando la conexión.");
+                shutdown(&stream);
             }
         };
         Ok(())
@@ -551,36 +510,17 @@ impl MQTTServer {
         }
     }
 
-    // Aux: el lock actualmente lo usa solo este hilo, por lo que "sobra". Ver más adelante si lo borramos (hacer tmb lo de los acks).
-    /// Maneja los mensajes salientes, envía los mensajes a los usuarios conectados.
-    fn _handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
-        // Inicio probando
-        // Acá debemos procesar el publish message: determinar a quiénes se lo debo enviar, agregarlo a su queue, y enviarlo.
-        if let Ok(mut connected_users) = self.connected_users.lock() {
-            for user in connected_users.values_mut() {
-                //connected_users es un hashmap con key=username y value=user
-                // User/s que se suscribió/eron al topic del PublishMessage:
-                let user_topics = user.get_topics();
-                if user_topics.contains(&(msg.get_topic())) {
-                    //si el usuario está suscrito al topic del mensaje
-                    //user.add_message_to_queue(msg.clone());
-                    // Aux: y acá mismo llamar al write que se lo mande.
-                    // aux: el write actualmente hace pop. No tiene sentido hacer add message to queu
-                    // aux: y en la línea siguiente hacerle pop, pero capaz sí tiene sentido que esté en la queue
-                    // aux: por tema desconexiones. Ver [].
-                }
-            }
-        }
-
-        // Aux: se debe desencolar solamente cuando llega el ack. Por eso está en un for separado.
-        // Envía
-        self.pop_and_write_2(msg.get_topic())?;
+    /// Procesa el PublishMessage: lo agrega al hashmap de su topic, y luego lo envía a los suscriptores de ese topic
+    /// que estén conectados.
+    fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
+        self.add_message_to_hashmap(msg.clone());
+        self.send_msgs_to_subscribers(msg.get_topic())?;
 
         Ok(())
     }
 
-    // Aux: construyendo
-    fn pop_and_write_2(&self, topic: String) -> Result<(), Error> {
+    /// Envía a todos los suscriptores del topic `topic`, los mensajes que todavía no hayan recibido.
+    fn send_msgs_to_subscribers(&self, topic: String) -> Result<(), Error> {
         // Recorremos todos los usuarios
         if let Ok(mut connected_users) = self.connected_users.lock() {
             for user in connected_users.values_mut() {
@@ -595,7 +535,6 @@ impl MQTTServer {
     // server: 5 last server
     // user: 3 este es mi last
 
-    // Aux: construyendo
     /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
     /// recibido. Si sí los contiene, entonces se los envía, actualizando el last_id del 'user' para ese 'topic'.
     fn send_unreceived_messages(&self, user: &mut User, topic: &String) -> Result<(), Error> {
@@ -604,7 +543,7 @@ impl MQTTServer {
             if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
                 // Si user está suscripto al topic en cuestión
                 let user_subscribed_topics = user.get_topics();
-                if user_subscribed_topics.contains(&topic) {
+                if user_subscribed_topics.contains(topic) {
                     // Calculamos la cantidad de mensajes de topic que a user le falta recibir
                     let last_id_topic_server = topic_messages.len() as u32;
                     let last_id_user = user.get_last_id_by_topic(topic);
@@ -618,7 +557,7 @@ impl MQTTServer {
                         if user.is_not_disconnected() {
                             write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
                             println!("[DEBUG]:   el msg se envió.");
-                            user.update_last_id_by_topic(&topic, next_message + 1);
+                            user.update_last_id_by_topic(topic, next_message + 1);
                         } else {
                             // rama else solamente para debug
                             println!("[DEBUG]:   el msg NO se envía xq entra al if.");
@@ -634,9 +573,9 @@ impl MQTTServer {
         Ok(())
     }
 
-    fn there_are_old_messages_to_send(&self) -> bool {
+    fn there_are_old_messages_to_send(&self, topic: &String) -> bool {
         if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            for topic_messages in messages_by_topic_locked.values() {
+            if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
                 if !topic_messages.is_empty() {
                     return true;
                 }
