@@ -9,7 +9,7 @@ use crate::mqtt::messages::{
 // Add the missing import
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::mqtt_utils::utils::{
-    display_debug_publish_msg, get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream
+    display_debug_puback_msg, display_debug_publish_msg, get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream
 };
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{file_helper::read_lines, user::User};
@@ -337,7 +337,7 @@ impl MQTTServer {
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
         write_message_to_stream(&ack_msg_bytes, stream)?;
-        println!("   tipo publish: Enviado el ack: {:?}", ack);
+        println!("   tipo publish: Enviado el ack para packet_id: {:?}", ack.get_packet_id());
         Ok(())
     }
 
@@ -415,7 +415,7 @@ impl MQTTServer {
 
                 // Obtiene el topic al que se está suscribiendo el user
                 for (topic, _) in msg.get_topic_filters() {
-                    if self.there_are_old_messages_to_send(topic) {
+                    if self.there_are_old_messages_to_send_for(topic) {
                         // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
                         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
                             if let Some(user) = connected_users_locked.get_mut(username) {
@@ -430,10 +430,8 @@ impl MQTTServer {
             }
             PacketType::Puback => {
                 // PubAck
-                println!("Recibo mensaje tipo PubAck");
-                // Entonces tengo el mensaje completo
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
-                println!("   Mensaje pub ack completo recibido: {:?}", msg);
+                display_debug_puback_msg(&msg);
             }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",
@@ -562,12 +560,12 @@ impl MQTTServer {
                 let user_subscribed_topics = user.get_topics();
                 if user_subscribed_topics.contains(topic) {
                     // Calculamos la cantidad de mensajes de topic que a user le falta recibir
-                    let last_id_topic_server = topic_messages.len() as u32;
-                    let last_id_user = user.get_last_id_by_topic(topic);
-                    let diff = last_id_topic_server - last_id_user;
+                    let topic_server_last_id = topic_messages.len() as u32;
+                    let user_last_id = user.get_last_id_by_topic(topic);
+                    let diff = topic_server_last_id - user_last_id; // Debug: Panic! Xq overflow, da negativo. Hola lock envenenado.
                     println!(
                         "DEBUG: last server: {}, last_user: {}, diff: {}",
-                        last_id_topic_server, last_id_user, diff
+                        topic_server_last_id, user_last_id, diff
                     );
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
@@ -597,7 +595,8 @@ impl MQTTServer {
         Ok(())
     }
 
-    fn there_are_old_messages_to_send(&self, topic: &String) -> bool {
+    /// Devuelve si la estructura del topic contiene `PublishMessage`s.
+    fn there_are_old_messages_to_send_for(&self, topic: &String) -> bool {
         if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
             if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
                 if !topic_messages.is_empty() {
@@ -641,15 +640,16 @@ impl MQTTServer {
             for user in users.values_mut() {
                 // Si el usuario está suscripto al topic
                 if user.get_topics().contains(topic) {
-                    let last_id_user = user.get_last_id_by_topic(topic);
+                    let user_last_id = user.get_last_id_by_topic(topic);
                     // Tomamos el mínimo de los last_id de los usuarios suscriptos al topic
-                    if last_id_user < min_last_id {
-                        min_last_id = last_id_user;
+                    if user_last_id < min_last_id {
+                        min_last_id = user_last_id;
                     }
-                    println!( "DEBUG: LAST ID: {:?} de USER: {:?} ", last_id_user, user.get_username());
+                    println!( "DEBUG: LAST ID: {:?} de USER: {:?} ", user_last_id, user.get_username());
                     
                 }
             }
+            // Aux: entre todos ellos, algún mínimo sí o sí hay. Si todos tienen 0, el mínimo será 0.
             Ok(min_last_id)
         } else {
             Err(Error::new(
