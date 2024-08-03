@@ -139,12 +139,16 @@ impl MQTTServer {
     /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
     /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
     /// Devuelve true si era reconexión, false si no era reconexión.
-    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str, new_stream_of_reconnected_user: &StreamType) -> Result<bool, Error> {
+    fn manage_possible_reconnecting_or_duplicate_user(
+        &self,
+        client_id: &str,
+        new_stream_of_reconnected_user: &StreamType,
+    ) -> Result<bool, Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             if let Some(client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
-                    UserState::Active => {   
-                        // El cliente ya se encontraba activo ==> Es duplicado.                     
+                    UserState::Active => {
+                        // El cliente ya se encontraba activo ==> Es duplicado.
                         self.handle_duplicate_user(client)?;
                     }
                     UserState::TemporallyDisconnected => {
@@ -167,16 +171,16 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Actualiza el stream al nuevo stream que ahora tiene user luego de aberse reconectado; y 
+    /// Actualiza el stream al nuevo stream que ahora tiene user luego de aberse reconectado; y
     /// le envía por ese nuevo stream a user los mensajes que no recibió por estar desconectado.
     fn handle_reconnecting_user(
         &self,
         client: &mut User,
-        new_stream_of_reconnected_user: &StreamType
+        new_stream_of_reconnected_user: &StreamType,
     ) -> Result<(), Error> {
         client.set_state(UserState::Active);
         client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
-        
+
         // envía los mensajes que no recibió de todos los topics a los que está suscripto
         let topics = client.get_topics().to_vec();
         for topic in topics {
@@ -214,14 +218,15 @@ impl MQTTServer {
                 // lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
                 let mut is_reconnection = false;
                 if let Some(client_id) = connect_msg.get_client_id() {
-                    is_reconnection = self.manage_possible_reconnecting_or_duplicate_user(client_id, &stream)?;
+                    is_reconnection =
+                        self.manage_possible_reconnecting_or_duplicate_user(client_id, &stream)?;
                 }
 
                 // Si es reconexión, no quiero add_new_user xq eso me crearía un User nuevo y yo ya tengo uno.
                 if !is_reconnection {
                     self.add_new_user(&stream, username, &connect_msg)?;
                 }
-                
+
                 // Continuar la conexión, ya puede empezar a recibir otros tipos de mensaje (publish msg / subscribe msg / etc).
                 self.handle_connection(username, &mut stream)?;
             }
@@ -412,9 +417,8 @@ impl MQTTServer {
                             }
                         }
                     }
-
                 }
-                
+
                 self.send_suback(return_codes, stream)?;
             }
             PacketType::Puback => {
@@ -514,6 +518,9 @@ impl MQTTServer {
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
         self.add_message_to_hashmap(msg.clone());
         self.send_msgs_to_subscribers(msg.get_topic())?;
+        if self.check_capacity(msg.get_topic()) {
+            self.remove_old_messages(msg.get_topic());
+        }
 
         Ok(())
     }
@@ -547,7 +554,10 @@ impl MQTTServer {
                     let last_id_topic_server = topic_messages.len() as u32;
                     let last_id_user = user.get_last_id_by_topic(topic);
                     let diff = last_id_topic_server - last_id_user;
-                    println!("DEBUG: last server: {}, last_user: {}, diff: {}", last_id_topic_server, last_id_user, diff);
+                    println!(
+                        "DEBUG: last server: {}, last_user: {}, diff: {}",
+                        last_id_topic_server, last_id_user, diff
+                    );
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
                         let mut user_stream = user.get_stream()?;
@@ -581,8 +591,67 @@ impl MQTTServer {
         }
         false
     }
+
+    fn check_capacity(&self, topic: String) -> bool {
+        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
+            if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
+                if topic_messages.len() > 600 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn remove_old_messages(&self, topic: String) {
+        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+            if let Some( topic_messages) = messages_by_topic_locked.get_mut(&topic) {
+                println!( "DEBUG: COLA DE MENSAJES ANTES DEL REMOVE: {:?}", topic_messages);
+                // Recorro los usuarios
+                if let Ok(mut users) = self.connected_users.lock() {
+                    let mut min_last_id = u32::MAX;
+                    for user in users.values_mut() {
+                        // Si el usuario está suscripto al topic
+                        if user.get_topics().contains(&topic) {
+                            let last_id_user = user.get_last_id_by_topic(&topic);
+                            // Tomamos el mínimo de los last_id de los usuarios suscriptos al topic
+                            if last_id_user < min_last_id {
+                                min_last_id = last_id_user;
+                            }
+                            println!( "DEBUG: LAST ID USER: {:?} de USER: {:?} ", last_id_user, user.get_username());
+                            
+                        }
+                    }
+                    println!( "DEBUG: MIN LAST ID: {:?}", min_last_id);
+                    remove_messages_until(min_last_id,topic_messages);
+                    println!( "DEBUG: COLA DE MENSAJES DESPUES DEL REMOVE: {:?}", topic_messages);
+                    self.update_last_ids_for_users(&topic, min_last_id);
+                }
+            }
+        }
+    }
+    
+    fn update_last_ids_for_users(&self, topic: &String, min_last_id: u32) {
+        if let Ok(mut users) = self.connected_users.lock() {
+            for user in users.values_mut() {
+                if user.get_topics().contains(topic) {
+                    let last_id = user.get_last_id_by_topic(topic);
+                    let diff = last_id - min_last_id;
+                    user.update_last_id_by_topic(topic, diff);
+                }
+            }
+        }
+    }
+
 }
 
+fn remove_messages_until(min_last_id: u32, topic_messages: &mut VecDeque<PublishMessage>) {
+        let mut i = 0;
+        while i < min_last_id {
+            topic_messages.pop_front();
+            i += 1;
+        }
+}
 /// Crea un servidor en la dirección ip y puerto especificados.
 fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     let listener =
