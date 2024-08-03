@@ -534,7 +534,8 @@ impl MQTTServer {
         // Obtiene o crea (si no existía) el VeqDequeue<PublishMessage> correspondiente al topic del publish message
         let topic_messages = msgs_by_topic_l
             .entry(topic)
-            .or_insert_with(VecDeque::new);
+            //.or_insert_with(VecDeque::new);
+            .or_default(); // clippy.
         // Inserta el PublishMessage en el HashMap interno
         topic_messages.push_back(publish_msg);        
     }
@@ -542,13 +543,13 @@ impl MQTTServer {
     /// Procesa el PublishMessage: lo agrega al hashmap de su topic, y luego lo envía a los suscriptores de ese topic
     /// que estén conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
-        if self.check_capacity(msg.get_topic()) {
+        //if self.check_capacity(msg.get_topic()) { // <--- aux: se mueve para adentro del remove_old_messages.
             
-            match self.remove_old_messages(msg.get_topic()) { // print para ver el error mientras debuggueamos
-                Ok(_) => {},
-                Err(e) => println!("DEBUG: Error al salir del remove_old_messages: {:?}", e),
-            };
-        }
+        match self.remove_old_messages(msg.get_topic()) { // print para ver el error mientras debuggueamos
+            Ok(_) => {},
+            Err(e) => println!("DEBUG: Error al salir del remove_old_messages: {:?}", e),
+        };
+        //}
 
         self.store_and_distribute_publish_msg(msg)?; //
 
@@ -561,10 +562,10 @@ impl MQTTServer {
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
             self.add_message_to_hashmap(msg.clone(), &mut messages_by_topic_locked); // workaround, la ubico acá por ahora xq adentro del if ya es otro tipo de dato y cambiaría implementación.
             
-            if let Some(mut topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {                
+            if let Some(topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {                
                 
                 // Sin soltar el lock, también necesitamos los users
-                self.send_msgs_to_subscribers(msg.get_topic(), &mut topic_messages)?;
+                self.send_msgs_to_subscribers(msg.get_topic(), topic_messages)?;
 
             }
 
@@ -665,19 +666,21 @@ impl MQTTServer {
             let mut users = users_locked.values_mut();
             // Necesitamos también los mensajes
             if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-                if let Some(mut topic_messages) = messages_by_topic_locked.get_mut(&topic) {
+                if let Some(topic_messages) = messages_by_topic_locked.get_mut(&topic) {
+                    if topic_messages.len() > 10 {
                 
 
-                    let min_last_id = self.calculate_min_last_id_among_users_for(&topic, &mut users)?;
-                    //println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
+                        let min_last_id = self.calculate_min_last_id_among_users_for(&topic, &mut users)?;
+                        //println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
 
-                    self.remove_messages_until(min_last_id, &topic, &mut topic_messages)?;
-                    //println!( "DEBUG: 2 _ min_last_id: {:?}", min_last_id);
+                        self.remove_messages_until(min_last_id, topic_messages)?;
+                        //println!( "DEBUG: 2 _ min_last_id: {:?}", min_last_id);
 
-                    let mut users = users_locked.values_mut(); // aux []
+                        let mut users = users_locked.values_mut(); // aux []
 
-                    self.update_last_ids_for_users(&topic, min_last_id, &mut users)?;
-                    //println!( "DEBUG: 3 _ min_last_id: {:?}", min_last_id);
+                        self.update_last_ids_for_users(&topic, min_last_id, &mut users)?;
+                        //println!( "DEBUG: 3 _ min_last_id: {:?}", min_last_id);
+                    }
                 }
             } else {
                 return Err(Error::new(
@@ -691,7 +694,7 @@ impl MQTTServer {
                 ErrorKind::Other,
                 "Error: no se pudo tomar lock a users para recortar estructura de mensajes."))
         }
-        println!("DEBUG: saliendo de remove_old_messages, por tomar lock");
+        println!("DEBUG: saliendo de remove_old_messages");
         /*
         // Aux: así estaba antes:
         let min_last_id = self.calculate_min_last_id_among_users_for(&topic)?;
@@ -748,8 +751,9 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Elimina todos los mensajes de la queue de `topic`, desde el principio hasta el `min_last_id` sin incluirlo.
-    fn remove_messages_until(&self, min_last_id: u32, _topic: &String, topic_messages: &mut VecDeque<PublishMessage>) -> Result<(), Error> {
+    /// Elimina todos los mensajes de la queue `topic_messages` que contiene los `PublishMessage`s deñ topic en cuestión,
+    /// desde el principio hasta el `min_last_id` sin incluirlo.
+    fn remove_messages_until(&self, min_last_id: u32, topic_messages: &mut VecDeque<PublishMessage>) -> Result<(), Error> {
         println!("DEBUG: Entrando a remove_messages_until");
         
                 
