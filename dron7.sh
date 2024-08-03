@@ -1,1 +1,1 @@
-cargo run --bin dron_main 7 -34.59664 -58.38730 127.0.0.1 9090
+cargo run --bin dron_main 7 -34.60120 -58.37610 127.0.0.1 9090
