@@ -516,11 +516,11 @@ impl MQTTServer {
     /// Procesa el PublishMessage: lo agrega al hashmap de su topic, y luego lo envía a los suscriptores de ese topic
     /// que estén conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
-        self.add_message_to_hashmap(msg.clone());
-        self.send_msgs_to_subscribers(msg.get_topic())?;
         if self.check_capacity(msg.get_topic()) {
             self.remove_old_messages(msg.get_topic());
         }
+        self.add_message_to_hashmap(msg.clone());
+        self.send_msgs_to_subscribers(msg.get_topic())?;
 
         Ok(())
     }
@@ -595,7 +595,7 @@ impl MQTTServer {
     fn check_capacity(&self, topic: String) -> bool {
         if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
             if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
-                if topic_messages.len() > 600 {
+                if topic_messages.len() > 100 {
                     return true;
                 }
             }
@@ -604,12 +604,12 @@ impl MQTTServer {
     }
 
     fn remove_old_messages(&self, topic: String) {
+        let mut min_last_id = u32::MAX;
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
             if let Some( topic_messages) = messages_by_topic_locked.get_mut(&topic) {
                 println!( "DEBUG: COLA DE MENSAJES ANTES DEL REMOVE: {:?}", topic_messages);
                 // Recorro los usuarios
                 if let Ok(mut users) = self.connected_users.lock() {
-                    let mut min_last_id = u32::MAX;
                     for user in users.values_mut() {
                         // Si el usuario está suscripto al topic
                         if user.get_topics().contains(&topic) {
@@ -625,8 +625,8 @@ impl MQTTServer {
                     println!( "DEBUG: MIN LAST ID: {:?}", min_last_id);
                     remove_messages_until(min_last_id,topic_messages);
                     println!( "DEBUG: COLA DE MENSAJES DESPUES DEL REMOVE: {:?}", topic_messages);
-                    self.update_last_ids_for_users(&topic, min_last_id);
                 }
+                self.update_last_ids_for_users(&topic, min_last_id);
             }
         }
     }
