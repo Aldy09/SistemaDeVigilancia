@@ -15,7 +15,7 @@ use crate::mqtt::mqtt_utils::utils::{
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{file_helper::read_lines, user::User};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 
 use std::io::{Error, Write};
@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
-type TopicMessages = HashMap<u32, PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
+type TopicMessages = VecDeque<PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
 
 fn clean_file(file_path: &str) -> Result<(), Error> {
     let mut file = File::create(file_path)?;
@@ -500,13 +500,12 @@ impl MQTTServer {
     fn add_message_to_hashmap(&self, publish_msg: PublishMessage) {
         let topic = publish_msg.get_topic();
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-            // Obtiene o crea (si no existía) el HashMap<u8, PublishMessage> correspondiente al topic del publish message
+            // Obtiene o crea (si no existía) el VeqDequeue<PublishMessage> correspondiente al topic del publish message
             let topic_messages = messages_by_topic_locked
                 .entry(topic)
-                .or_insert_with(HashMap::new);
-            let id = topic_messages.len() as u32;
+                .or_insert_with(VecDeque::new);
             // Inserta el PublishMessage en el HashMap interno
-            topic_messages.insert(id, publish_msg);
+            topic_messages.push_back(publish_msg);
         }
     }
 
@@ -552,12 +551,12 @@ impl MQTTServer {
                     for _ in 0..diff {
                         // de 0 a diff, sin incluir el diff, "[0, diff)";
                         let mut user_stream = user.get_stream()?;
-                        let next_message = user.get_last_id_by_topic(topic);
-                        let msg = topic_messages.get(&next_message).unwrap();
+                        let next_message = user.get_last_id_by_topic(topic) as usize;
+                        let msg = topic_messages.get(next_message).unwrap();
                         if user.is_not_disconnected() {
                             write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
                             println!("[DEBUG]:   el msg se envió.");
-                            user.update_last_id_by_topic(topic, next_message + 1);
+                            user.update_last_id_by_topic(topic, (next_message + 1) as u32);
                         } else {
                             // rama else solamente para debug
                             println!("[DEBUG]:   el msg NO se envía xq entra al if.");
@@ -569,7 +568,6 @@ impl MQTTServer {
                 println!("[DEBUG]:   NO se encuentra el hashmap en server para el topic: {:?}, user last: {}.", topic, user.get_last_id_by_topic(topic));
             }
         }
-
         Ok(())
     }
 
