@@ -1,21 +1,18 @@
-use crate::mqtt::messages::packet_type::PacketType;
+
+use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::{
-    connack_message::ConnackMessage, connack_session_present::SessionPresent,
-    connect_message::ConnectMessage, connect_return_code::ConnectReturnCode,
+    connack_message::ConnackMessage, 
     disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
     publish_message::PublishMessage, suback_message::SubAckMessage,
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
 // Add the missing import
-use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::mqtt_utils::utils::{
-    display_debug_puback_msg, display_debug_publish_msg, get_fixed_header_from_stream,
-    get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream,
-    is_disconnect_msg, shutdown, write_message_to_stream,
-};
-use crate::mqtt::server::{file_helper::read_lines, user::User};
-use std::net::{TcpListener, TcpStream};
-use std::path::Path;
+
+// use crate::mqtt::mqtt_utils::utils::
+//   write_message_to_stream;
+use crate::mqtt::server::user::User;
+use std::net::TcpStream;
+
 
 use crate::mqtt::server::user_state::UserState;
 use std::collections::hash_map::ValuesMut;
@@ -107,9 +104,9 @@ impl MQTTServer {
     }
 
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
-    fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
+    fn handle_duplicate_user(&self, _client: &mut User) -> Result<(), Error> {
         let msg = DisconnectMessage::new();
-        let mut stream = client.get_stream()?;
+        //let mut stream = client.get_stream()?;
         //write_message_to_stream(&msg.to_bytes(), &mut stream)?;
         self.write_to_client(msg.to_bytes());
         Ok(())
@@ -120,10 +117,10 @@ impl MQTTServer {
     fn handle_reconnecting_user(
         &self,
         client: &mut User,
-        new_stream_of_reconnected_user: &StreamType,
+        _new_stream_of_reconnected_user: &StreamType,
     ) -> Result<(), Error> {
         client.set_state(UserState::Active);
-        client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
+        //client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
 
         // Envía los mensajes que no recibió de todos los topics a los que está suscripto
         let topics = client.get_topics().to_vec();
@@ -162,9 +159,13 @@ impl MQTTServer {
                 // de 0 a diff, sin incluir el diff, "[0, diff)";
                 let next_message = user.get_last_id_by_topic(topic) as usize;
                 if let Some(msg) = topic_messages.get(next_message) {
-                    let mut user_stream = user.get_stream()?;
+                    //let mut user_stream = user.get_stream()?;
+                    println!("DEBUG: ANTES DEL IF IS DISCONNECTED");
+
                     if user.is_not_disconnected() {
-                        write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                        println!("DEBUG: DENTRO DEL IF IS DISCONNECTED");
+                        //write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                        self.write_to_client(msg.to_bytes());
                         println!("[DEBUG]:   el msg se envió.");
                         user.update_last_id_by_topic(topic, (next_message + 1) as u32);
                     } else {
@@ -200,8 +201,8 @@ impl MQTTServer {
         Ok(())
     }
 
-    pub fn write_connack_to_stream(&self, connack: ConnackMessage, stream: &mut StreamType) {
-        write_message_to_stream(&connack.to_bytes(), stream);
+    pub fn send_connack(&self, connack: ConnackMessage) {
+        self.write_to_client(connack.to_bytes());
     }
 
     pub fn clone_ref(&self) -> Self {
@@ -274,10 +275,7 @@ impl MQTTServer {
     }
 
     /// Envía un mensaje de tipo SubAck al cliente.
-    pub fn send_suback(
-        &self,
-        return_codes: Vec<SubscribeReturnCode>,
-    ) -> Result<(), Error> {
+    pub fn send_suback(&self, return_codes: Vec<SubscribeReturnCode>) -> Result<(), Error> {
         let ack = SubAckMessage::new(0, return_codes);
         let ack_msg_bytes = ack.to_bytes();
 
@@ -329,6 +327,7 @@ impl MQTTServer {
         if let Ok(mut connected_users) = self.connected_users.lock() {
             for user in connected_users.values_mut() {
                 self.send_unreceived_messages(user, &topic, topic_messages)?;
+                println!("DEBUG: Enviando mensajes a suscriptores del topic: {:?}. Estoy en: send_msgs_to_subscribers", topic);
             }
         }
 
@@ -502,7 +501,7 @@ impl MQTTServer {
         Ok(())
     }
 
-    pub fn set_tx_sender(&mut self, tx: Sender<Vec<u8>>) {
+    pub fn set_tx(&mut self, tx: Sender<Vec<u8>>) {
         self.tx_2 = Some(tx);
     }
 
@@ -526,7 +525,38 @@ impl MQTTServer {
         let ack_msg_bytes = ack.to_bytes();
         //write_message_to_stream(&ack_msg_bytes, stream)?;
         self.write_to_client(ack_msg_bytes);
-        println!("   tipo publish: Enviado el ack para packet_id: {:?}", ack.get_packet_id());
+        println!(
+            "   tipo publish: Enviado el ack para packet_id: {:?}",
+            ack.get_packet_id()
+        );
+        Ok(())
+    }
+
+    pub fn handle_subscribe_message(
+        &self,
+        msg: &SubscribeMessage,
+        username: &str,
+    ) -> Result<(), Error> {
+        // Obtiene el topic al que se está suscribiendo el user
+        for (topic, _) in msg.get_topic_filters() {
+            if self.there_are_old_messages_to_send_for(topic) {
+                // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
+                if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+                    if let Some(user) = connected_users_locked.get_mut(username) {
+                        // Necesitamos también los mensajes
+                        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                            if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
+                                self.send_unreceived_messages(user, topic, topic_messages)?;
+                            }
+                        } else {
+                            return Err(Error::new(
+                                    ErrorKind::Other,
+                                    "Error: no se pudo tomar lock a messages_by_topic para enviar Publish durante un Subscribe."));
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }

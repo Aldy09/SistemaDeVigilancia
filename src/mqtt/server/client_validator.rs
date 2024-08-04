@@ -6,6 +6,7 @@ use crate::mqtt::messages::connack_message::ConnackMessage;
 use crate::mqtt::messages::connack_session_present::SessionPresent;
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::connect_return_code::ConnectReturnCode;
+use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
 
 use super::file_helper::read_lines;
 use super::mqtt_server_2::MQTTServer;
@@ -30,7 +31,8 @@ impl AuthenticateClient {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        mqtt_server.write_connack_to_stream(connack_response, stream);
+        //mqtt_server.send_connack(connack_response);
+        write_message_to_stream(&connack_response.to_bytes(), stream)?;
 
         // Si el cliente se autenticó correctamente y se conecta por primera vez,
         // se agrega a la lista de usuarios conectados y se maneja la conexión

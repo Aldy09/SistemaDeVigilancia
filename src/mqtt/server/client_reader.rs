@@ -8,9 +8,9 @@ use crate::mqtt::mqtt_utils::utils::{
 };
 
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::server::packet::{self, Packet};
+use crate::mqtt::server::packet::Packet;
 
-use std::io::{Error, Read};
+use std::io::Error;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
@@ -75,7 +75,7 @@ impl ClientReader {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
         let (tx_2, rx_2) = std::sync::mpsc::channel::<Vec<u8>>();
 
-        let message_processor = MessageProcessor::new(self.mqtt_server.clone_ref(), tx_2)?;
+        let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref(), tx_2)?;
         let mut client_writer = ClientWriter::new(self.stream.try_clone()?)?;
         let mut handlers = Vec::<JoinHandle<()>>::new();
         let mut self_clone = self.clone_ref();
@@ -86,13 +86,13 @@ impl ClientReader {
             let _ = self_clone.handle_stream(username_clone.as_str(), tx_1);
         }));
 
-        // Recibe los mensajes en bytes para posteriormente decodificarlos
+        // Recibe los mensajes en bytes para posteriormente procesarlos
         handlers.push(std::thread::spawn(move || {
             let _ = message_processor.handle_packets(rx_1);
         }));
 
         // Espera por paquetes que se necesiten escribir en el stream del cliente.
-        // Por ejemplo, un mensaje de CONNACK, o un mensaje de un cierto topic al que se suscribió.
+        // Por ejemplo, un mensaje de CONNACK, o un mensaje de un cierto topic al que se suscribió el cliente.
         handlers.push(std::thread::spawn(move || {
             let _ = client_writer.send_packets_to_client(rx_2);
         }));
