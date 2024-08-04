@@ -355,7 +355,7 @@ impl MQTTServer {
             // Necesitamos también los mensajes
             if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
                 if let Some(topic_messages) = messages_by_topic_locked.get_mut(&topic) {
-                    if topic_messages.len() > 10 {
+                    if topic_messages.len() > 50 {
                         let min_last_id =
                             self.calculate_min_last_id_among_users_for(&topic, &mut users)?;
                         //println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
