@@ -45,7 +45,8 @@ fn main() -> Result<(), Error> {
     let qos = 1; // []
     let client_id = get_formatted_app_id();
     let will_msg_content = get_app_will_msg_content();
-    let will_msg_data = WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
+    let will_msg_data =
+        WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
     match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data)) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
             println!("Conectado al broker MQTT.");

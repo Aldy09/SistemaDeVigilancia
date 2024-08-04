@@ -1,12 +1,15 @@
 use std::{sync::mpsc, thread};
 
-use rustx::{apps::{
-    incident_data::incident::Incident,
-    sist_camaras::{
-        ai_detection::ai_detector_manager::AIDetectorManager, manage_stored_cameras::create_cameras,
-        shareable_cameras_type::ShCamerasType,
+use rustx::{
+    apps::{
+        incident_data::incident::Incident,
+        sist_camaras::{
+            ai_detection::ai_detector_manager::AIDetectorManager,
+            manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType,
+        },
     },
-}, logging::string_logger::StringLogger};
+    logging::string_logger::StringLogger,
+};
 
 /// Este main está para llamarlo con el cargo run sin tener que levantar server monitoreo y cámaras.
 fn main() {
@@ -40,5 +43,4 @@ fn main() {
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
-
 }
