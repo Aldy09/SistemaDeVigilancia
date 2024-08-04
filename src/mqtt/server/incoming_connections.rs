@@ -39,6 +39,7 @@ impl ClientListener {
         stream: TcpStream,
         mqtt_server: MQTTServer,
     ) -> Result<JoinHandle<()>, Error> {
+        println!("DEBUG: CREANDO NUEVO CLIENT READER");
         let mut client_reader = ClientReader::new(stream, mqtt_server)?;
 
         // Hilo para cada cliente

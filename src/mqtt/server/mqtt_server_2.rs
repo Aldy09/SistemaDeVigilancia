@@ -1,13 +1,13 @@
 
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::{
-    connack_message::ConnackMessage, 
     disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
     publish_message::PublishMessage, suback_message::SubAckMessage,
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
 // Add the missing import
 
+use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
 // use crate::mqtt::mqtt_utils::utils::
 //   write_message_to_stream;
 use crate::mqtt::server::user::User;
@@ -20,7 +20,6 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 
 use std::io::{Error, ErrorKind, Write};
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
@@ -38,7 +37,7 @@ pub struct MQTTServer {
     connected_users: ShareableUsers,
     available_packet_id: u16,                                      //
     messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
-    tx_2: Option<Sender<Vec<u8>>>,
+    //tx_2: Option<Sender<Vec<u8>>>,
 }
 
 impl MQTTServer {
@@ -52,7 +51,7 @@ impl MQTTServer {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
             available_packet_id: 0,
             messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
-            tx_2: None,
+            //tx_2: None,
         };
 
         Ok(mqtt_server)
@@ -104,11 +103,11 @@ impl MQTTServer {
     }
 
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
-    fn handle_duplicate_user(&self, _client: &mut User) -> Result<(), Error> {
+    fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
         let msg = DisconnectMessage::new();
-        //let mut stream = client.get_stream()?;
-        //write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-        self.write_to_client(msg.to_bytes());
+        let mut stream = client.get_stream()?;
+        write_message_to_stream(&msg.to_bytes(), &mut stream)?;
+        //self.write_to_client(msg.to_bytes());
         Ok(())
     }
 
@@ -148,25 +147,29 @@ impl MQTTServer {
         topic: &String,
         topic_messages: &VecDeque<PublishMessage>,
     ) -> Result<(), Error> {
+        println!("DEBUG: ADENTRO DE send_unreceived_messages");
         // Si user está suscripto al topic en cuestión
         let user_subscribed_topics = user.get_topics();
+        println!("LOS TOPICS DEL USER {:?} SON: {:?}", user.get_username(), user_subscribed_topics);
         if user_subscribed_topics.contains(topic) {
             // Calculamos la cantidad de mensajes de topic que a user le falta recibir
+            println!("DEBUG: DESPUES DEL IF CONTAINS, del user {:?} y el topic {:?}", user.get_username(), topic);
             let topic_server_last_id = topic_messages.len() as u32;
             let user_last_id = user.get_last_id_by_topic(topic);
             let diff = topic_server_last_id - user_last_id; // Debug: Panic! Xq overflow, da negativo. Hola lock envenenado.
+            println!("DEBUG: ANTES DEL FOR DEL DIFF");
             for _ in 0..diff {
                 // de 0 a diff, sin incluir el diff, "[0, diff)";
                 let next_message = user.get_last_id_by_topic(topic) as usize;
                 if let Some(msg) = topic_messages.get(next_message) {
-                    //let mut user_stream = user.get_stream()?;
+                    let mut user_stream = user.get_stream()?;
                     println!("DEBUG: ANTES DEL IF IS DISCONNECTED");
 
                     if user.is_not_disconnected() {
                         println!("DEBUG: DENTRO DEL IF IS DISCONNECTED");
-                        //write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
-                        self.write_to_client(msg.to_bytes());
-                        println!("[DEBUG]:   el msg se envió.");
+                        write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                        //self.write_to_client(msg.to_bytes());
+                        println!("[DEBUG]:  el MENSAJE PUBLISH {:?} se envió AL CLIENTE {:?} ", msg, user.get_username());
                         user.update_last_id_by_topic(topic, (next_message + 1) as u32);
                     } else {
                         // rama else solamente para debug
@@ -201,16 +204,16 @@ impl MQTTServer {
         Ok(())
     }
 
-    pub fn send_connack(&self, connack: ConnackMessage) {
-        self.write_to_client(connack.to_bytes());
-    }
+    // pub fn send_connack(&self, connack: ConnackMessage) {
+    //     self.write_to_client(connack.to_bytes());
+    // }
 
     pub fn clone_ref(&self) -> Self {
         Self {
             connected_users: self.connected_users.clone(),
             available_packet_id: self.available_packet_id,
             messages_by_topic: self.messages_by_topic.clone(),
-            tx_2: self.tx_2.clone(),
+            //tx_2: self.tx_2.clone(),
         }
     }
 
@@ -237,7 +240,7 @@ impl MQTTServer {
     /// que estén conectados.
     pub fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
         //if self.check_capacity(msg.get_topic()) { // <--- aux: se mueve para adentro del remove_old_messages.
-
+        println!("DEBUG: ADENTRO DE handle_publish_message");
         match self.remove_old_messages(msg.get_topic()) {
             // print para ver el error mientras debuggueamos
             Ok(_) => {}
@@ -257,11 +260,14 @@ impl MQTTServer {
         msg: &SubscribeMessage,
     ) -> Result<Vec<SubscribeReturnCode>, Error> {
         let mut return_codes = vec![];
-
+        println!("DEBUG: entrando a add_topics_to_subscriber para el usuario {:?} ", username);
         // Agrega los topics a los que se suscribió el usuario
         if let Ok(mut connected_users) = self.connected_users.lock() {
+            println!("DEBUG: ANTES DEL IF GET MUT para el usuario {:?} ", username);
             if let Some(user) = connected_users.get_mut(username) {
+                println!("DEBUG: DESPUES DEL IF GET MUT para el usuario {:?} ", username);
                 for (topic, _qos) in msg.get_topic_filters() {
+                    println!("DEBUG: Agregando el topic: {:?} al usuario {:?} ", topic, username);
                     user.add_topic(topic.to_string());
                     return_codes.push(SubscribeReturnCode::QoS1);
                     println!(
@@ -275,14 +281,19 @@ impl MQTTServer {
     }
 
     /// Envía un mensaje de tipo SubAck al cliente.
-    pub fn send_suback(&self, return_codes: Vec<SubscribeReturnCode>) -> Result<(), Error> {
-        let ack = SubAckMessage::new(0, return_codes);
-        let ack_msg_bytes = ack.to_bytes();
-
-        //write_message_to_stream(&ack_msg_bytes, stream)?;
-        self.write_to_client(ack_msg_bytes);
-        println!("   tipo subscribe: Enviando el ack: {:?}", ack);
-
+    pub fn send_suback(&self, return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>, stream: &mut TcpStream) -> Result<(), Error> {
+        match return_codes_res {
+            Ok(return_codes) => {
+                let ack = SubAckMessage::new(0, return_codes.clone());
+                let ack_msg_bytes = ack.to_bytes();
+                write_message_to_stream(&ack_msg_bytes, stream)?;
+                //self.write_to_client(ack_msg_bytes);
+                println!("   tipo subscribe: Enviando el ack: {:?}", ack);
+            }
+            Err(e) => {
+                println!("   ERROR: {:?}", e);
+            }
+        }
         Ok(())
     }
 
@@ -291,8 +302,9 @@ impl MQTTServer {
         println!("DEBUG: entrando a store_and_distribute_publish_msg, por tomar lock");
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
             self.add_message_to_hashmap(msg.clone(), &mut messages_by_topic_locked); // workaround, la ubico acá por ahora xq adentro del if ya es otro tipo de dato y cambiaría implementación.
-
+            println!("DEBUG: ADENTRO DE store_and_distribute_publish_msg, después de add_message_to_hashmap");
             if let Some(topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {
+                println!("DEBUG: ANTES DEL SEND MSGS TO SUBSCRIBERS");
                 // Sin soltar el lock, también necesitamos los users
                 self.send_msgs_to_subscribers(msg.get_topic(), topic_messages)?;
             }
@@ -326,8 +338,8 @@ impl MQTTServer {
         // Recorremos todos los usuarios
         if let Ok(mut connected_users) = self.connected_users.lock() {
             for user in connected_users.values_mut() {
+                println!("DEBUG: Enviando mensajes a suscriptores del topic: {:?}. Estoy en: send_msgs_to_subscribers, al user: {:?} ", topic, user.get_username());
                 self.send_unreceived_messages(user, &topic, topic_messages)?;
-                println!("DEBUG: Enviando mensajes a suscriptores del topic: {:?}. Estoy en: send_msgs_to_subscribers", topic);
             }
         }
 
@@ -501,30 +513,30 @@ impl MQTTServer {
         Ok(())
     }
 
-    pub fn set_tx(&mut self, tx: Sender<Vec<u8>>) {
-        self.tx_2 = Some(tx);
-    }
+    // pub fn set_tx(&mut self, tx: Sender<Vec<u8>>) {
+    //     self.tx_2 = Some(tx);
+    // }
 
-    pub fn write_to_client(&self, msg: Vec<u8>) {
-        if let Some(tx) = &self.tx_2 {
-            let send_res = tx.send(msg);
-            match send_res {
-                Ok(_) => println!("Mensaje enviado exitosamente al cliente."),
-                Err(_) => println!("Error al enviar mensaje al cliente."),
-            }
-        }
-    }
+    // pub fn write_to_client(&self, msg: Vec<u8>) {
+    //     if let Some(tx) = &self.tx_2 {
+    //         let send_res = tx.send(msg);
+    //         match send_res {
+    //             Ok(_) => println!("Mensaje enviado exitosamente al cliente."),
+    //             Err(_) => println!("Error al enviar mensaje al cliente."),
+    //         }
+    //     }
+    // }
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
-    pub fn send_puback(&self, msg: &PublishMessage) -> Result<(), Error> {
+    pub fn send_puback(&self, msg: &PublishMessage, stream:&mut TcpStream) -> Result<(), Error> {
         let option_packet_id = msg.get_packet_identifier();
         let packet_id = option_packet_id.unwrap_or(0);
 
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
-        //write_message_to_stream(&ack_msg_bytes, stream)?;
-        self.write_to_client(ack_msg_bytes);
+        write_message_to_stream(&ack_msg_bytes, stream)?;
+        //self.write_to_client(ack_msg_bytes);
         println!(
             "   tipo publish: Enviado el ack para packet_id: {:?}",
             ack.get_packet_id()
@@ -535,17 +547,21 @@ impl MQTTServer {
     pub fn handle_subscribe_message(
         &self,
         msg: &SubscribeMessage,
-        username: &str,
+        username: &str
     ) -> Result<(), Error> {
         // Obtiene el topic al que se está suscribiendo el user
+        println!("DEBUG: entrando a handle_subscribe_message");
+        println!("DEBUG: los topics del mensaje Subscribe son: {:?}", msg.get_topic_filters());
         for (topic, _) in msg.get_topic_filters() {
             if self.there_are_old_messages_to_send_for(topic) {
+                println!("DEBUG: DENTRO DEL THERE ARE OLD MESSAGES TO SEND");
                 // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
                 if let Ok(mut connected_users_locked) = self.connected_users.lock() {
                     if let Some(user) = connected_users_locked.get_mut(username) {
                         // Necesitamos también los mensajes
                         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
                             if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
+                                println!("DEBUG: DENTRO DEL THERE ARE OLD MESSAGES TO SEND , ANTES DEL SEND UNRECEIVED MESSAGES");
                                 self.send_unreceived_messages(user, topic, topic_messages)?;
                             }
                         } else {
@@ -557,6 +573,11 @@ impl MQTTServer {
                 }
             }
         }
+        
         Ok(())
+    }
+    
+    pub fn get_connected_users(&self) -> ShareableUsers {
+        self.connected_users.clone()
     }
 }

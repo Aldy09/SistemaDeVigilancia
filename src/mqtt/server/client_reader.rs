@@ -16,7 +16,6 @@ use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 
 use super::client_validator::AuthenticateClient;
-use super::client_writer::ClientWriter;
 use super::message_processor::MessageProcessor;
 use super::mqtt_server_2::MQTTServer;
 
@@ -55,8 +54,8 @@ impl ClientReader {
                     &mut self.stream,
                     &self.mqtt_server,
                 )? {
-                    if let Some(username) = connect_msg.get_user() {
-                        self.handle_packets(username)?;
+                    if let Some(client_id) = connect_msg.get_client_id() {
+                        self.handle_packets(client_id)?;
                     }
                 }
             }
@@ -71,19 +70,20 @@ impl ClientReader {
     }
 
     // recibe paquetes del broker para enviarlos a su TcpStream y viceversa
-    pub fn handle_packets(&mut self, username: &String) -> Result<(), Error> {
-        let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
-        let (tx_2, rx_2) = std::sync::mpsc::channel::<Vec<u8>>();
+    pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
 
-        let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref(), tx_2)?;
-        let mut client_writer = ClientWriter::new(self.stream.try_clone()?)?;
+        println!("MANEJANDO PAQUETES EN CLIENT READER para el usuario {:?}", client_id);
+        let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
+
+        let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref())?;
+        //let mut client_writer = ClientWriter::new(self.stream.try_clone()?, &client_id)?;
         let mut handlers = Vec::<JoinHandle<()>>::new();
         let mut self_clone = self.clone_ref();
-        let username_clone = username.to_owned();
+        let client_id_clone = client_id.to_owned();
 
         // Envia al hilo de abajo los mensajes (en bytes) que llegan al servidor
         handlers.push(std::thread::spawn(move || {
-            let _ = self_clone.handle_stream(username_clone.as_str(), tx_1);
+            let _ = self_clone.handle_stream(client_id_clone.as_str(), tx_1);
         }));
 
         // Recibe los mensajes en bytes para posteriormente procesarlos
@@ -93,9 +93,9 @@ impl ClientReader {
 
         // Espera por paquetes que se necesiten escribir en el stream del cliente.
         // Por ejemplo, un mensaje de CONNACK, o un mensaje de un cierto topic al que se suscribió el cliente.
-        handlers.push(std::thread::spawn(move || {
-            let _ = client_writer.send_packets_to_client(rx_2);
-        }));
+        // handlers.push(std::thread::spawn(move || {
+        //     let _ = client_writer.send_packets_to_client(rx_2);
+        // }));
 
         for h in handlers {
             let _ = h.join();
@@ -105,11 +105,7 @@ impl ClientReader {
     }
 
     // Espera por paquetes que llegan desde su TcpStream y los envía al Broker
-    pub fn handle_stream(
-        &mut self,
-        username: &str,
-        tx_1: Sender<Packet>,
-    ) -> Result<(), Error> {
+    pub fn handle_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
         let mut fixed_header_info: ([u8; 2], FixedHeader);
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
@@ -120,22 +116,23 @@ impl ClientReader {
 
                     // Caso se recibe un disconnect
                     if is_disconnect_msg(&fixed_header_info.1) {
-                        self.mqtt_server.publish_users_will_message(username)?;
-                        self.mqtt_server.remove_user(username);
+                        self.mqtt_server.publish_users_will_message(client_id)?;
+                        self.mqtt_server.remove_user(client_id);
                         println!("Mqtt cliente leyendo: recibo disconnect");
                         shutdown(&self.stream);
                         break;
                     }
 
-                    let packet = create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, username)?;
+                    let packet =
+                        create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, client_id)?;
 
                     tx_1.send(packet).unwrap();
                 }
                 Ok(None) => {
-                    println!("Se desconectó el cliente: {:?}.", username);
+                    println!("Se desconectó el cliente: {:?}.", client_id);
                     self.mqtt_server
-                        .set_user_as_temporally_disconnected(username)?;
-                    self.mqtt_server.publish_users_will_message(username)?;
+                        .set_user_as_temporally_disconnected(client_id)?;
+                    self.mqtt_server.publish_users_will_message(client_id)?;
                     // Acá se manejaría para recuperar la sesión cuando se reconecte.
                     break;
                 }
@@ -153,12 +150,15 @@ impl ClientReader {
     }
 }
 
-fn create_packet(fixed_header: &FixedHeader,
-        stream: &mut TcpStream,
-        fixed_header_buf: &[u8; 2], username: &str) -> Result<Packet, Error> {
+fn create_packet(
+    fixed_header: &FixedHeader,
+    stream: &mut TcpStream,
+    fixed_header_buf: &[u8; 2],
+    client_id: &str,
+) -> Result<Packet, Error> {
     let msg_bytes = get_message_in_bytes(fixed_header, stream, fixed_header_buf)?;
     let message_type = fixed_header.get_message_type();
-    Ok(Packet::new(message_type, msg_bytes,username.to_string()))
+    Ok(Packet::new(message_type, msg_bytes, client_id.to_string()))
 }
 
 fn get_connect_message(

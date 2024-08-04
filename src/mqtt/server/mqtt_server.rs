@@ -647,16 +647,16 @@ impl MQTTServer {
         false
     }
 
-    fn check_capacity(&self, topic: String) -> bool {
-        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
-                if topic_messages.len() > 10 {
-                    return true;
-                }
-            }
-        }
-        false
-    }
+    // fn check_capacity(&self, topic: String) -> bool {
+    //     if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
+    //         if let Some(topic_messages) = messages_by_topic_locked.get(&topic) {
+    //             if topic_messages.len() > 10 {
+    //                 return true;
+    //             }
+    //         }
+    //     }
+    //     false
+    // }
     
     /// .
     fn remove_old_messages(&self, topic: String) -> Result<(), Error> {

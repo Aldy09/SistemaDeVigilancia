@@ -48,6 +48,7 @@ impl AuthenticateClient {
 
                 // Si es reconexión, no quiero add_new_user xq eso me crearía un User nuevo y yo ya tengo uno.
                 if !is_reconnection {
+                    println!("DEBUG: Agregando nuevo usuario al servidor con username {:?}", username);
                     mqtt_server.add_new_user(&stream, username, &connect_msg)?;
                 }
 
