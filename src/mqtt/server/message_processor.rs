@@ -31,6 +31,7 @@ impl MessageProcessor {
         
         // Intenta crear un ThreadPool con 6 threads
         let mut pool = create_thread_pool(20);
+        
         pool = None; 
         for packet in rx_1 {
             let self_clone = self.clone_ref();
