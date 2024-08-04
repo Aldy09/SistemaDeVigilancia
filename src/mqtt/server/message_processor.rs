@@ -1,7 +1,6 @@
 use std::sync::mpsc::Receiver;
 
-use eframe::glow::NONE;
-use rayon::ThreadPool;
+//use rayon::ThreadPool;
 
 use crate::mqtt::{
     messages::{
@@ -17,9 +16,7 @@ use super::{mqtt_server_2::MQTTServer, packet::Packet};
 
 #[derive(Debug)]
 pub struct MessageProcessor {
-    //rx_1: Receiver<Packet>,
     mqtt_server: MQTTServer,
-    //tx_2: Sender<Vec<u8>>,
 }
 
 impl MessageProcessor {
@@ -29,26 +26,8 @@ impl MessageProcessor {
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
         
-        // Intenta crear un ThreadPool con 6 threads
-        let mut pool = create_thread_pool(20);
-        
-        pool = None; 
         for packet in rx_1 {
-            let self_clone = self.clone_ref();
-            // Decide si usar el pool o no basado en si pool es Some o None.
-            //Si es None continua el flujo del programa en el hilo actual
-            match &pool {
-                Some(pool) => {
-                    pool.spawn(move || {
-                        self_clone.process_packet(packet);
-                    });
-                }
-                None => {
-                    println!("DEBUG: No hay ThreadPool, procesando paquete en el hilo actual");
-                    // Ejecuta la lógica de procesamiento directamente si no hay ThreadPool
-                    self.process_packet(packet); // Ejecuta en el hilo actual
-                }
-            }
+            self.process_packet(packet); // Ejecuta en el hilo actual
         }
 
         Ok(())
@@ -121,11 +100,6 @@ impl MessageProcessor {
         }
     }
 
-    fn clone_ref(&self) -> Self {
-        MessageProcessor {
-            mqtt_server: self.mqtt_server.clone_ref(),
-        }
-    }
     
     pub fn send_puback_to(&self, publish_msg: &PublishMessage, client_id: &str) -> Result< (), Error> {
         if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
@@ -145,18 +119,23 @@ impl MessageProcessor {
         }
         Ok(())
     }
-
+    
+    // fn clone_ref(&self) -> Self {
+    //     MessageProcessor {
+    //         mqtt_server: self.mqtt_server.clone_ref(),
+    //     }
+    // }
 }
 
-fn create_thread_pool(num_threads: usize) -> Option<ThreadPool> {
-    match rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build()
-    {
-        Ok(pool) => Some(pool),
-        Err(e) => {
-            println!("No se pudo crear el threadpool: {:?}", e);
-            None
-        }
-    }
-}
+// fn create_thread_pool(num_threads: usize) -> Option<ThreadPool> {
+//     match rayon::ThreadPoolBuilder::new()
+//         .num_threads(num_threads)
+//         .build()
+//     {
+//         Ok(pool) => Some(pool),
+//         Err(e) => {
+//             println!("No se pudo crear el threadpool: {:?}", e);
+//             None
+//         }
+//     }
+// }

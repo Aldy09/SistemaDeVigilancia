@@ -1,9 +1,6 @@
-use rustx::mqtt::server::incoming_connections::ClientListener;
 use rustx::mqtt::server::mqtt_server_2::MQTTServer;
 use std::env::args;
 use std::io::{Error, ErrorKind};
-use std::net::TcpListener;
-use std::thread;
 
 //use rustx::mqtt_server::{create_server, handle_incoming_connections, load_port};
 
@@ -27,26 +24,11 @@ pub fn load_port() -> Result<(String, u16), Error> {
     Ok((localhost, port))
 }
 
-/// Crea un servidor en la dirección ip y puerto especificados.
-fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
-    let listener =
-        TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
-    Ok(listener)
-}
 
 fn main() -> Result<(), Error> {
     let (ip, port) = load_port()?;
-    let listener = create_server(ip, port)?;
 
-    let mqtt_server = MQTTServer::new()?;
-    let mut incoming_connections = ClientListener::new();
-
-    // Hilo para manejar las conexiones entrantes
-    let thread_incoming = thread::spawn(move || {
-        let _ = incoming_connections.handle_incoming_connections(listener, mqtt_server);
-    });
-
-    thread_incoming.join().unwrap();
+    let _mqtt_server = MQTTServer::new(ip, port)?;
 
     Ok(())
 }

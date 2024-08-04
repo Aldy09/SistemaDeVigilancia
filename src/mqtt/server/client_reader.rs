@@ -76,7 +76,6 @@ impl ClientReader {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
 
         let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref())?;
-        //let mut client_writer = ClientWriter::new(self.stream.try_clone()?, &client_id)?;
         let mut handlers = Vec::<JoinHandle<()>>::new();
         let mut self_clone = self.clone_ref();
         let client_id_clone = client_id.to_owned();
@@ -90,12 +89,6 @@ impl ClientReader {
         handlers.push(std::thread::spawn(move || {
             let _ = message_processor.handle_packets(rx_1);
         }));
-
-        // Espera por paquetes que se necesiten escribir en el stream del cliente.
-        // Por ejemplo, un mensaje de CONNACK, o un mensaje de un cierto topic al que se suscribió el cliente.
-        // handlers.push(std::thread::spawn(move || {
-        //     let _ = client_writer.send_packets_to_client(rx_2);
-        // }));
 
         for h in handlers {
             let _ = h.join();

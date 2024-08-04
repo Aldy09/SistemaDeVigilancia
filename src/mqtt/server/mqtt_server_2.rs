@@ -1,4 +1,3 @@
-
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::{
     disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
@@ -11,8 +10,8 @@ use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
 // use crate::mqtt::mqtt_utils::utils::
 //   write_message_to_stream;
 use crate::mqtt::server::user::User;
-use std::net::TcpStream;
-
+use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 use crate::mqtt::server::user_state::UserState;
 use std::collections::hash_map::ValuesMut;
@@ -21,6 +20,8 @@ use std::fs::File;
 
 use std::io::{Error, ErrorKind, Write};
 use std::sync::{Arc, Mutex};
+
+use super::incoming_connections::ClientListener;
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
@@ -35,13 +36,13 @@ fn clean_file(file_path: &str) -> Result<(), Error> {
 #[derive(Debug)]
 pub struct MQTTServer {
     connected_users: ShareableUsers,
-    available_packet_id: u16,                                      //
+    available_packet_id: u16, //
     messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
-    //tx_2: Option<Sender<Vec<u8>>>,
+                              //tx_2: Option<Sender<Vec<u8>>>,
 }
 
 impl MQTTServer {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
         let file_path = "log.txt";
         if let Err(e) = clean_file(file_path) {
             println!("Error al limpiar el archivo: {:?}", e);
@@ -53,6 +54,16 @@ impl MQTTServer {
             messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
             //tx_2: None,
         };
+
+        let listener = create_server(ip, port)?;
+        let mut incoming_connections = ClientListener::new();
+        let self_clone = mqtt_server.clone_ref();
+        // Hilo para manejar las conexiones entrantes
+        let thread_incoming = thread::spawn(move || {
+            let _ = incoming_connections.handle_incoming_connections(listener, self_clone);
+        });
+
+        thread_incoming.join().unwrap();
 
         Ok(mqtt_server)
     }
@@ -150,10 +161,18 @@ impl MQTTServer {
         println!("DEBUG: ADENTRO DE send_unreceived_messages");
         // Si user está suscripto al topic en cuestión
         let user_subscribed_topics = user.get_topics();
-        println!("LOS TOPICS DEL USER {:?} SON: {:?}", user.get_username(), user_subscribed_topics);
+        println!(
+            "LOS TOPICS DEL USER {:?} SON: {:?}",
+            user.get_username(),
+            user_subscribed_topics
+        );
         if user_subscribed_topics.contains(topic) {
             // Calculamos la cantidad de mensajes de topic que a user le falta recibir
-            println!("DEBUG: DESPUES DEL IF CONTAINS, del user {:?} y el topic {:?}", user.get_username(), topic);
+            println!(
+                "DEBUG: DESPUES DEL IF CONTAINS, del user {:?} y el topic {:?}",
+                user.get_username(),
+                topic
+            );
             let topic_server_last_id = topic_messages.len() as u32;
             let user_last_id = user.get_last_id_by_topic(topic);
             let diff = topic_server_last_id - user_last_id; // Debug: Panic! Xq overflow, da negativo. Hola lock envenenado.
@@ -169,7 +188,11 @@ impl MQTTServer {
                         println!("DEBUG: DENTRO DEL IF IS DISCONNECTED");
                         write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
                         //self.write_to_client(msg.to_bytes());
-                        println!("[DEBUG]:  el MENSAJE PUBLISH {:?} se envió AL CLIENTE {:?} ", msg, user.get_username());
+                        println!(
+                            "[DEBUG]:  el MENSAJE PUBLISH {:?} se envió AL CLIENTE {:?} ",
+                            msg,
+                            user.get_username()
+                        );
                         user.update_last_id_by_topic(topic, (next_message + 1) as u32);
                     } else {
                         // rama else solamente para debug
@@ -260,14 +283,26 @@ impl MQTTServer {
         msg: &SubscribeMessage,
     ) -> Result<Vec<SubscribeReturnCode>, Error> {
         let mut return_codes = vec![];
-        println!("DEBUG: entrando a add_topics_to_subscriber para el usuario {:?} ", username);
+        println!(
+            "DEBUG: entrando a add_topics_to_subscriber para el usuario {:?} ",
+            username
+        );
         // Agrega los topics a los que se suscribió el usuario
         if let Ok(mut connected_users) = self.connected_users.lock() {
-            println!("DEBUG: ANTES DEL IF GET MUT para el usuario {:?} ", username);
+            println!(
+                "DEBUG: ANTES DEL IF GET MUT para el usuario {:?} ",
+                username
+            );
             if let Some(user) = connected_users.get_mut(username) {
-                println!("DEBUG: DESPUES DEL IF GET MUT para el usuario {:?} ", username);
+                println!(
+                    "DEBUG: DESPUES DEL IF GET MUT para el usuario {:?} ",
+                    username
+                );
                 for (topic, _qos) in msg.get_topic_filters() {
-                    println!("DEBUG: Agregando el topic: {:?} al usuario {:?} ", topic, username);
+                    println!(
+                        "DEBUG: Agregando el topic: {:?} al usuario {:?} ",
+                        topic, username
+                    );
                     user.add_topic(topic.to_string());
                     return_codes.push(SubscribeReturnCode::QoS1);
                     println!(
@@ -281,7 +316,11 @@ impl MQTTServer {
     }
 
     /// Envía un mensaje de tipo SubAck al cliente.
-    pub fn send_suback(&self, return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>, stream: &mut TcpStream) -> Result<(), Error> {
+    pub fn send_suback(
+        &self,
+        return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>,
+        stream: &mut TcpStream,
+    ) -> Result<(), Error> {
         match return_codes_res {
             Ok(return_codes) => {
                 let ack = SubAckMessage::new(0, return_codes.clone());
@@ -529,7 +568,7 @@ impl MQTTServer {
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
-    pub fn send_puback(&self, msg: &PublishMessage, stream:&mut TcpStream) -> Result<(), Error> {
+    pub fn send_puback(&self, msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
         let option_packet_id = msg.get_packet_identifier();
         let packet_id = option_packet_id.unwrap_or(0);
 
@@ -547,11 +586,14 @@ impl MQTTServer {
     pub fn handle_subscribe_message(
         &self,
         msg: &SubscribeMessage,
-        username: &str
+        username: &str,
     ) -> Result<(), Error> {
         // Obtiene el topic al que se está suscribiendo el user
         println!("DEBUG: entrando a handle_subscribe_message");
-        println!("DEBUG: los topics del mensaje Subscribe son: {:?}", msg.get_topic_filters());
+        println!(
+            "DEBUG: los topics del mensaje Subscribe son: {:?}",
+            msg.get_topic_filters()
+        );
         for (topic, _) in msg.get_topic_filters() {
             if self.there_are_old_messages_to_send_for(topic) {
                 println!("DEBUG: DENTRO DEL THERE ARE OLD MESSAGES TO SEND");
@@ -573,11 +615,18 @@ impl MQTTServer {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     pub fn get_connected_users(&self) -> ShareableUsers {
         self.connected_users.clone()
     }
+}
+
+/// Crea un servidor en la dirección ip y puerto especificados.
+fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
+    let listener =
+        TcpListener::bind(format!("{}:{}", ip, port)).expect("Error al enlazar el puerto");
+    Ok(listener)
 }
