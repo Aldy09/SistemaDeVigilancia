@@ -120,12 +120,13 @@ impl MessageProcessor {
         Ok(())
     }
     
-    // fn clone_ref(&self) -> Self {
-    //     MessageProcessor {
-    //         mqtt_server: self.mqtt_server.clone_ref(),
-    //     }
-    // }
 }
+
+// fn clone_ref(&self) -> Self {
+//     MessageProcessor {
+//         mqtt_server: self.mqtt_server.clone_ref(),
+//     }
+// }
 
 // fn create_thread_pool(num_threads: usize) -> Option<ThreadPool> {
 //     match rayon::ThreadPoolBuilder::new()

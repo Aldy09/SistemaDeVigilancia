@@ -38,7 +38,6 @@ pub struct MQTTServer {
     connected_users: ShareableUsers,
     available_packet_id: u16, //
     messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
-                              //tx_2: Option<Sender<Vec<u8>>>,
 }
 
 impl MQTTServer {
@@ -52,7 +51,6 @@ impl MQTTServer {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
             available_packet_id: 0,
             messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
-            //tx_2: None,
         };
 
         let listener = create_server(ip, port)?;
@@ -79,9 +77,8 @@ impl MQTTServer {
         // Obtiene o crea (si no existía) el VeqDequeue<PublishMessage> correspondiente al topic del publish message
         let topic_messages = msgs_by_topic_l
             .entry(topic)
-            //.or_insert_with(VecDeque::new);
-            .or_default(); // clippy.
-                           // Inserta el PublishMessage en el HashMap interno
+            .or_default(); 
+        // Inserta el PublishMessage en la VecDeque interno
         topic_messages.push_back(publish_msg);
     }
 
@@ -127,10 +124,10 @@ impl MQTTServer {
     fn handle_reconnecting_user(
         &self,
         client: &mut User,
-        _new_stream_of_reconnected_user: &StreamType,
+        new_stream_of_reconnected_user: &StreamType,
     ) -> Result<(), Error> {
         client.set_state(UserState::Active);
-        //client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
+        client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
 
         // Envía los mensajes que no recibió de todos los topics a los que está suscripto
         let topics = client.get_topics().to_vec();
@@ -227,16 +224,11 @@ impl MQTTServer {
         Ok(())
     }
 
-    // pub fn send_connack(&self, connack: ConnackMessage) {
-    //     self.write_to_client(connack.to_bytes());
-    // }
-
     pub fn clone_ref(&self) -> Self {
         Self {
             connected_users: self.connected_users.clone(),
             available_packet_id: self.available_packet_id,
             messages_by_topic: self.messages_by_topic.clone(),
-            //tx_2: self.tx_2.clone(),
         }
     }
 
@@ -262,14 +254,12 @@ impl MQTTServer {
     /// Procesa el PublishMessage: lo agrega al hashmap de su topic, y luego lo envía a los suscriptores de ese topic
     /// que estén conectados.
     pub fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
-        //if self.check_capacity(msg.get_topic()) { // <--- aux: se mueve para adentro del remove_old_messages.
         println!("DEBUG: ADENTRO DE handle_publish_message");
         match self.remove_old_messages(msg.get_topic()) {
             // print para ver el error mientras debuggueamos
             Ok(_) => {}
             Err(e) => println!("DEBUG: Error al salir del remove_old_messages: {:?}", e),
         };
-        //}
 
         self.store_and_distribute_publish_msg(msg)?; //
 
@@ -385,7 +375,7 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// .
+    /// Remueve los mensajes antiguos de la estructura del server para el topic `topic`.
     fn remove_old_messages(&self, topic: String) -> Result<(), Error> {
         println!("DEBUG: entrando a remove_old_messages, por tomar lock");
         // Recorro los usuarios
@@ -397,15 +387,9 @@ impl MQTTServer {
                     if topic_messages.len() > 50 {
                         let min_last_id =
                             self.calculate_min_last_id_among_users_for(&topic, &mut users)?;
-                        //println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
-
                         self.remove_messages_until(min_last_id, topic_messages)?;
-                        //println!( "DEBUG: 2 _ min_last_id: {:?}", min_last_id);
-
                         let mut users = users_locked.values_mut(); // aux []
-
                         self.update_last_ids_for_users(&topic, min_last_id, &mut users)?;
-                        //println!( "DEBUG: 3 _ min_last_id: {:?}", min_last_id);
                     }
                 }
             } else {
@@ -420,17 +404,7 @@ impl MQTTServer {
             ));
         }
         println!("DEBUG: saliendo de remove_old_messages");
-        /*
-        // Aux: así estaba antes:
-        let min_last_id = self.calculate_min_last_id_among_users_for(&topic)?;
-        println!( "DEBUG: 1 _ min_last_id: {:?}", min_last_id);
 
-        self.remove_messages_until(min_last_id, &topic)?;
-        println!( "DEBUG: 2 _ min_last_id: {:?}", min_last_id);
-
-        // self.update_last_ids_for_users(&topic, min_last_id)?;
-        // println!( "DEBUG: 3 _ min_last_id: {:?}", min_last_id);
-        */
         Ok(())
     }
 
@@ -449,7 +423,6 @@ impl MQTTServer {
         );
         let mut i = 0;
         while i < min_last_id {
-            // [] sah, es un for
             topic_messages.pop_front();
             i += 1;
         }
@@ -551,20 +524,6 @@ impl MQTTServer {
         }
         Ok(())
     }
-
-    // pub fn set_tx(&mut self, tx: Sender<Vec<u8>>) {
-    //     self.tx_2 = Some(tx);
-    // }
-
-    // pub fn write_to_client(&self, msg: Vec<u8>) {
-    //     if let Some(tx) = &self.tx_2 {
-    //         let send_res = tx.send(msg);
-    //         match send_res {
-    //             Ok(_) => println!("Mensaje enviado exitosamente al cliente."),
-    //             Err(_) => println!("Error al enviar mensaje al cliente."),
-    //         }
-    //     }
-    // }
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.

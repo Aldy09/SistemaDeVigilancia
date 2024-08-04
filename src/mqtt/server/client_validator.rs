@@ -31,7 +31,6 @@ impl AuthenticateClient {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(&connect_msg)?;
 
-        //mqtt_server.send_connack(connack_response);
         write_message_to_stream(&connack_response.to_bytes(), stream)?;
 
         // Si el cliente se autenticó correctamente y se conecta por primera vez,
