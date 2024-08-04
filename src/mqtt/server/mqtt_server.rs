@@ -427,7 +427,7 @@ impl MQTTServer {
 
                 // Obtiene el topic al que se está suscribiendo el user
                 for (topic, _) in msg.get_topic_filters() {
-                    if self.there_are_old_messages_to_send_for(topic) {
+                    if self.there_are_old_messages_to_send_for(topic) { // <-- aux: poco probable en nuestro caso de uso pero cuidado.
                         // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
                         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
                             if let Some(user) = connected_users_locked.get_mut(username) {
@@ -559,6 +559,34 @@ impl MQTTServer {
     /// Almacena el `PublishMessage` en la estructura del server para su topic, y lo envía a sus suscriptores.
     fn store_and_distribute_publish_msg(&self, msg: &PublishMessage) -> Result<(), Error> {
         println!("DEBUG: entrando a store_and_distribute_publish_msg, por tomar lock");
+        // Recorremos todos los usuarios
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                
+                self.add_message_to_hashmap(msg.clone(), &mut messages_by_topic_locked); // workaround, la ubico acá por ahora xq adentro del if ya es otro tipo de dato y cambiaría implementación.
+                
+                if let Some(topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {                
+                    for user in connected_users.values_mut() {
+                        // Send msgs to subscribers
+                        self.send_unreceived_messages(user, &msg.get_topic(), topic_messages)?;
+                    }
+                }
+            } else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a messages_by_topic para almacenar y distribuir un Publish."));
+            }           
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a users para almacenar y distribuir un Publish."));
+        }
+
+
+
+
+        /* // Así estaba antes:
+        println!("DEBUG: entrando a store_and_distribute_publish_msg, por tomar lock");
         if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
             self.add_message_to_hashmap(msg.clone(), &mut messages_by_topic_locked); // workaround, la ubico acá por ahora xq adentro del if ya es otro tipo de dato y cambiaría implementación.
             
@@ -573,7 +601,7 @@ impl MQTTServer {
             return Err(Error::new(
                 ErrorKind::Other,
                 "Error: no se pudo tomar lock a messages_by_topic para almacenar y distribuir un Publish."));
-        }
+        }*/
         println!("DEBUG: saliendo de store_and_distribute_publish_msg");
         Ok(())
     }
