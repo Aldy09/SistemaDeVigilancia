@@ -3,15 +3,14 @@ use std::{
     fs,
     io::{self, Error, ErrorKind},
     sync::{Arc, Mutex},
-    thread::{self, sleep, JoinHandle},
-    time::Duration,
+    thread::{self, JoinHandle},
 };
 
 use std::sync::mpsc::Receiver as MpscReceiver;
 
-use crate::apps::{common_clients::there_are_no_more_publish_msgs, incident_data::{
-    incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState,
-}, sist_dron::calculations::{calculate_direction, calculate_distance}};
+use crate::apps::{common_clients::there_are_no_more_publish_msgs,
+    incident_data::incident_info::IncidentInfo,
+};
 use crate::apps::{
     apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads,
     sist_dron::dron_state::DronState,
@@ -147,7 +146,7 @@ impl Dron {
 
         let self_child = self.clone_ref();
         let self_child_aux = self.clone_ref();
-        let mut dron_logic = DronLogic::new(self_child.data,
+        let dron_logic = DronLogic::new(self_child.data,
             self_child.dron_properties, mqtt_client.clone(), self_child.logger,
              self_child_aux, self_child.drone_distances_by_incident.clone());
             // Aux: el mqtt_client y el dron se los paso solo por ahora, dsp los vamos a borrar de ahí.
