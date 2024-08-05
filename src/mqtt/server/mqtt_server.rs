@@ -411,47 +411,22 @@ impl MQTTServer {
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
             PacketType::Publish => {
-                // Publish
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
                 //println!("   Mensaje publish completo recibido: {:?}", msg);
                 display_debug_publish_msg(&msg);
                 self.send_puback(&msg, stream)?;
-                println!("DEBUG: justo antes del handle_publish_message, para user: {:?}", username);
                 self.handle_publish_message(&msg)?;
-                println!("DEBUG: justo dsp del handle_publish_message, para user: {:?}", username);
             }
             PacketType::Subscribe => {
-                // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
 
-                // Obtiene el topic al que se está suscribiendo el user
-                for (topic, _) in msg.get_topic_filters() {
-                    if self.there_are_old_messages_to_send_for(topic) { // <-- aux: poco probable en nuestro caso de uso pero cuidado.
-                        // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
-                        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-                            if let Some(user) = connected_users_locked.get_mut(username) {
-
-                                // Necesitamos también los mensajes
-                                if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-                                    if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
-                                        self.send_unreceived_messages(user, topic, topic_messages)?;
-                                    }
-                                } else {
-                                    return Err(Error::new(
-                                        ErrorKind::Other,
-                                        "Error: no se pudo tomar lock a messages_by_topic para enviar Publish durante un Subscribe."));
-                                }
-                            }
-                        }
-                    }
-                }
+                self.send_preexisting_msgs_to_new_subscriber(username, &msg)?;
 
                 self.send_suback(return_codes, stream)?;
                 println!("DEBUG: terminado el subscribe, para user: {:?}", username);
             }
             PacketType::Puback => {
-                // PubAck
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
                 display_debug_puback_msg(&msg);
             }
@@ -461,6 +436,37 @@ impl MQTTServer {
             ),
         };
 
+        Ok(())
+    }
+
+    /// Recorre la estructura de mensajes para el topic al que el suscriptor `username` se está suscribiendo con el `msg`,
+    /// y le envía todos los mensajes que se publicaron a dicho topic previo a la suscripción.
+    fn send_preexisting_msgs_to_new_subscriber(&self, username: &str, msg: &SubscribeMessage) -> Result<(), Error> {
+        // Obtiene el topic al que se está suscribiendo el user
+        for (topic, _) in msg.get_topic_filters() {
+            // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
+            if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+                if let Some(user) = connected_users_locked.get_mut(username) {
+
+                    // Necesitamos también los mensajes
+                    if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                        if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
+                            if self.there_are_old_messages_to_send_for(&topic_messages) {
+                                self.send_unreceived_messages(user, topic, topic_messages)?;
+                            }
+                        }
+                    } else {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Error: no se pudo tomar lock a messages_by_topic para enviar Publish durante un Subscribe."));
+                    }
+                }
+            }  else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a users para enviar Publish durante un Subscribe."));
+            }                    
+        }
         Ok(())
     }
 
@@ -558,7 +564,6 @@ impl MQTTServer {
 
     /// Almacena el `PublishMessage` en la estructura del server para su topic, y lo envía a sus suscriptores.
     fn store_and_distribute_publish_msg(&self, msg: &PublishMessage) -> Result<(), Error> {
-        println!("DEBUG: entrando a store_and_distribute_publish_msg, por tomar lock");
         // Recorremos todos los usuarios
         if let Ok(mut connected_users) = self.connected_users.lock() {
             if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
@@ -581,28 +586,6 @@ impl MQTTServer {
                 ErrorKind::Other,
                 "Error: no se pudo tomar lock a users para almacenar y distribuir un Publish."));
         }
-
-
-
-
-        /* // Así estaba antes:
-        println!("DEBUG: entrando a store_and_distribute_publish_msg, por tomar lock");
-        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-            self.add_message_to_hashmap(msg.clone(), &mut messages_by_topic_locked); // workaround, la ubico acá por ahora xq adentro del if ya es otro tipo de dato y cambiaría implementación.
-            
-            if let Some(topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {                
-                
-                // Sin soltar el lock, también necesitamos los users
-                self.send_msgs_to_subscribers(msg.get_topic(), topic_messages)?;
-
-            }
-
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Error: no se pudo tomar lock a messages_by_topic para almacenar y distribuir un Publish."));
-        }*/
-        println!("DEBUG: saliendo de store_and_distribute_publish_msg");
         Ok(())
     }
 
@@ -664,13 +647,9 @@ impl MQTTServer {
     }
 
     /// Devuelve si la estructura del topic contiene `PublishMessage`s.
-    fn there_are_old_messages_to_send_for(&self, topic: &String) -> bool {
-        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
-                if !topic_messages.is_empty() {
-                    return true;
-                }
-            }
+    fn there_are_old_messages_to_send_for(&self, topic_messages: &VecDeque<PublishMessage>) -> bool {        
+        if !topic_messages.is_empty() {
+            return true;
         }
         false
     }
