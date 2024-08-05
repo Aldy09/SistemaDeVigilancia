@@ -20,8 +20,7 @@ use crate::logging::string_logger::StringLogger;
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 use super::{
-    dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo,
-    sist_dron_properties::SistDronProperties,
+    data::Data, dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, sist_dron_properties::SistDronProperties
 };
 
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
@@ -31,6 +30,7 @@ type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>
 /// ya que lo demás son constantes para el funcionamiento del Dron.
 #[derive(Debug)]
 pub struct Dron {
+    data: Data,
     // El id y su posición y estado actuales se encuentran en el siguiente struct
     current_info: Arc<Mutex<DronCurrentInfo>>,
 
@@ -87,6 +87,7 @@ impl Dron {
 
     fn clone_ref(&self) -> Self {
         Self {
+            data: self.data.clone_ref(),
             current_info: Arc::clone(&self.current_info),
             dron_properties: self.dron_properties,
             logger: self.logger.clone_ref(),
@@ -807,7 +808,7 @@ impl Dron {
         // Posicion inicial del dron
         dron_properties.set_range_center_position(initial_lat, initial_lon);
 
-        let current_info = DronCurrentInfo::new(
+        let ci = DronCurrentInfo::new(
             id,
             initial_lat,
             initial_lon,
@@ -819,8 +820,10 @@ impl Dron {
             "Dron {} creado en posición (lat, lon): {}, {}.",
             id, initial_lat, initial_lon
         ));
+        let current_info = Arc::new(Mutex::new(ci));
         let dron = Dron {
-            current_info: Arc::new(Mutex::new(current_info)),
+            data: Data::new(current_info.clone(), dron_properties),
+            current_info,
             dron_properties,
             logger,
             drone_distances_by_incident,
