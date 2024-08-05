@@ -36,8 +36,6 @@ impl MessageProcessor {
     fn process_packet(&self, packet: Packet) {
         let msg_bytes = packet.get_msg_bytes();
         let client_id = packet.get_username();
-        let message_type = packet.get_message_type();
-        println!("DEBUG: RECIBIENDO PAQUETE DE TIPO {:?} PARA EL USUARIO: {:?}", message_type, client_id);
         match packet.get_message_type() {
             PacketType::Publish => self.handle_publish(msg_bytes, &client_id),
             PacketType::Subscribe => self.handle_subscribe(msg_bytes, &client_id),
@@ -56,17 +54,9 @@ impl MessageProcessor {
                     println!("   ERROR: {:?}", e);
                     return;
                 }
-                println!(
-                    "DEBUG: justo antes del handle_publish_message, para user: {:?}",
-                    client_id
-                );
                 self.mqtt_server
                     .handle_publish_message(&publish_msg)
                     .unwrap();
-                println!(
-                    "DEBUG: justo dsp del handle_publish_message, para user: {:?}",
-                    client_id
-                );
             }
             Err(e) => println!("   ERROR: {:?}", e),
         }
@@ -76,7 +66,6 @@ impl MessageProcessor {
         let subscribe_msg_res = SubscribeMessage::from_bytes(msg_bytes);
         match subscribe_msg_res {
             Ok(msg) => {
-                println!("DEBUG: justo antes del add_topics_to_subscriber, para user: {:?}", client_id);
                 let return_codes_res = self.mqtt_server.add_topics_to_subscriber(client_id, &msg);
                 let operation_result = self.mqtt_server.send_preexisting_msgs_to_new_subscriber(client_id,&msg );
                 if let Err(e) = operation_result {
@@ -86,7 +75,6 @@ impl MessageProcessor {
                 if let Err(e) = suback_res {
                     println!("   ERROR: {:?}", e);
                 }
-                println!("DEBUG: Terminado el suscribe para el usuario: {:?}", client_id);
             }
             Err(e) => println!("   ERROR: {:?}", e),
         }

@@ -71,8 +71,6 @@ impl ClientReader {
 
     // recibe paquetes del broker para enviarlos a su TcpStream y viceversa
     pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
-
-        println!("MANEJANDO PAQUETES EN CLIENT READER para el usuario {:?}", client_id);
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
 
         let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref())?;
@@ -99,39 +97,46 @@ impl ClientReader {
 
     // Espera por paquetes que llegan desde su TcpStream y los envía al Broker
     pub fn handle_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
-        let mut fixed_header_info: ([u8; 2], FixedHeader);
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
             match get_fixed_header_from_stream(&mut self.stream) {
                 Ok(Some((fixed_h_buf, fixed_h))) => {
-                    fixed_header_info = (fixed_h_buf, fixed_h);
-
-                    // Caso se recibe un disconnect
-                    if is_disconnect_msg(&fixed_header_info.1) {
-                        self.mqtt_server.publish_users_will_message(client_id)?;
-                        self.mqtt_server.remove_user(client_id);
-                        println!("Mqtt cliente leyendo: recibo disconnect");
-                        shutdown(&self.stream);
+                    if is_disconnect_msg(&fixed_h) {
+                        self.handle_disconnect(client_id)?;
                         break;
                     }
-
-                    let packet =
-                        create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, client_id)?;
-
-                    tx_1.send(packet).unwrap();
+                    self.handle_packet(fixed_h, fixed_h_buf, client_id, &tx_1)?;
                 }
                 Ok(None) => {
-                    println!("Se desconectó el cliente: {:?}.", client_id);
-                    self.mqtt_server
-                        .set_user_as_temporally_disconnected(client_id)?;
-                    self.mqtt_server.publish_users_will_message(client_id)?;
-                    // Acá se manejaría para recuperar la sesión cuando se reconecte.
+                    self.handle_client_disconnection(client_id)?;
                     break;
                 }
                 Err(_) => todo!(),
             }
         }
+        Ok(())
+    }
+
+    fn handle_disconnect(&mut self, client_id: &str) -> Result<(), Error> {
+        self.mqtt_server.publish_users_will_message(client_id)?;
+        self.mqtt_server.remove_user(client_id);
+        println!("Mqtt cliente leyendo: recibo disconnect");
+        shutdown(&self.stream);
+        Ok(())
+    }
+
+    fn handle_packet(&mut self, fixed_h: FixedHeader, fixed_h_buf: [u8; 2], client_id: &str, tx_1: &Sender<Packet>) -> Result<(), Error> {
+        let packet = create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, client_id)?;
+        tx_1.send(packet).unwrap();
+        Ok(())
+    }
+
+    fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
+        println!("Se desconectó el cliente: {:?}.", client_id);
+        self.mqtt_server.set_user_as_temporally_disconnected(client_id)?;
+        self.mqtt_server.publish_users_will_message(client_id)?;
+        // Acá se manejaría para recuperar la sesión cuando se reconecte.
         Ok(())
     }
 
