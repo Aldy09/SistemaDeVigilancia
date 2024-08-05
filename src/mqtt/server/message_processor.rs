@@ -78,7 +78,7 @@ impl MessageProcessor {
             Ok(msg) => {
                 println!("DEBUG: justo antes del add_topics_to_subscriber, para user: {:?}", client_id);
                 let return_codes_res = self.mqtt_server.add_topics_to_subscriber(client_id, &msg);
-                let operation_result = self.mqtt_server.handle_subscribe_message(&msg, client_id);
+                let operation_result = self.mqtt_server.send_preexisting_msgs_to_new_subscriber(client_id,&msg );
                 if let Err(e) = operation_result {
                     println!("   ERROR: {:?}", e);
                 }
