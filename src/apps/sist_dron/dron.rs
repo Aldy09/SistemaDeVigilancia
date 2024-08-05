@@ -11,7 +11,7 @@ use std::sync::mpsc::Receiver as MpscReceiver;
 
 use crate::apps::{common_clients::there_are_no_more_publish_msgs, incident_data::{
     incident::Incident, incident_info::IncidentInfo, incident_state::IncidentState,
-}};
+}, sist_dron::calculations::{calculate_direction, calculate_distance}};
 use crate::apps::{
     apps_mqtt_topics::AppsMqttTopics, common_clients::join_all_threads,
     sist_dron::dron_state::DronState,
@@ -55,9 +55,12 @@ impl Dron {
 
     fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()> {
         let mut self_child = self.clone_ref();
-        thread::spawn(move || loop {
+        thread::spawn(move ||
+            //let battery_manager = BatteryManager::new(self_child.data);
+            loop {
             sleep(Duration::from_secs(5));
             //Actualizar batería
+
             let _ = self_child.decrement_and_check_battery_lvl(&mqtt_client.clone());
         })
     }
@@ -433,31 +436,7 @@ impl Dron {
         self.data.set_state(DronState::ExpectingToRecvIncident, false)?;
 
         Ok(())
-    }
-
-    /// Calcula la dirección en la que debe volar desde una posición `origin` hasta `destination`.
-    // Aux: esto estaría mejor en un struct posicion quizás? [] ver.
-    fn calculate_direction(&self, origin: (f64, f64), destination: (f64, f64)) -> (f64, f64) {
-        // calcular la distancia ('en diagonal') entre los dos puntos
-        let (origin_lat, origin_lon) = (origin.0, origin.1);
-        let (dest_lat, dest_lon) = (destination.0, destination.1);
-
-        // Cálculo de distancia
-        let lat_dist = dest_lat - origin_lat;
-        let lon_dist = dest_lon - origin_lon;
-        let distance = f64::sqrt(lat_dist.powi(2) + lon_dist.powi(2));
-
-        // Vector unitario: (destino - origen) / || distancia ||, para cada coordenada.
-        let unit_lat = lat_dist / distance;
-        let unit_lon = lon_dist / distance;
-        let direction: (f64, f64) = (unit_lat, unit_lon);
-
-        direction
-    }
-
-    fn calculate_distance(&self, a: (f64, f64), b: (f64, f64)) -> f64 {
-        ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt()
-    }
+    }    
 
     fn fly_to_mantainance(
         &mut self,
@@ -466,7 +445,7 @@ impl Dron {
         flag_maintanance: bool,
     ) -> Result<(), Error> {
         let origin = self.data.get_current_position()?;
-        let dir = self.calculate_direction(origin, destination);
+        let dir = calculate_direction(origin, destination);
         println!("Fly_to: volando"); // se puede borrar
         self.logger.log(format!(
             "Fly_to: dir: {:?}, vel: {}",
@@ -479,7 +458,7 @@ impl Dron {
 
         let mut current_pos = origin;
         let threshold = 0.001; // Define un umbral adecuado para tu aplicación
-        while self.calculate_distance(current_pos, destination) > threshold {
+        while calculate_distance(current_pos, destination) > threshold {
             current_pos = self.data.increment_current_position_in(dir, flag_maintanance)?;
 
             // Simular el vuelo, el dron se desplaza
@@ -522,7 +501,7 @@ impl Dron {
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let origin = self.data.get_current_position()?;
-        let dir = self.calculate_direction(origin, destination);
+        let dir = calculate_direction(origin, destination);
         println!("Fly_to: volando"); // se puede borrar
         self.logger.log(format!(
             "Fly_to: dir: {:?}, vel: {}",
@@ -534,7 +513,7 @@ impl Dron {
         self.data.set_flying_info_values(dir, false)?;
         let mut current_pos = origin;
         let threshold = 0.001; //
-        while self.calculate_distance(current_pos, destination) > threshold {
+        while calculate_distance(current_pos, destination) > threshold {
             current_pos = self.data.increment_current_position_in(dir, false)?;
 
             // Simula el vuelo, el dron se desplaza
@@ -749,6 +728,7 @@ impl Dron {
 
 mod test {
     use super::Dron;
+    use crate::apps::sist_dron::calculations::calculate_direction;
     use crate::apps::sist_dron::dron_state::DronState;
     use crate::logging::string_logger::StringLogger;
     use std::sync::mpsc;
@@ -788,14 +768,13 @@ mod test {
 
     #[test]
     fn test_3a_calculate_direction_da_la_direccion_esperada() {
-        let dron = create_dron_4();
 
         // Dados destino y origen
         let origin = (0.0, 0.0); // desde el (0,0)
         let destination = (4.0, -3.0);
         let hip = 5.0; // hipotenusa da 5;
 
-        let dir = dron.calculate_direction(origin, destination);
+        let dir = calculate_direction(origin, destination);
 
         // La dirección calculada es la esperada
         let expected_dir = (4.0 / hip, -3.0 / hip);
@@ -814,7 +793,7 @@ mod test {
         let destination = (origin.0 + 4.0, origin.1 - 3.0);
         let hip = 5.0; // hipotenusa da 5;
 
-        let dir = dron.calculate_direction(origin, destination);
+        let dir = calculate_direction(origin, destination);
 
         // La dirección calculada es la esperada
         let expected_dir = (4.0 / hip, -3.0 / hip);
