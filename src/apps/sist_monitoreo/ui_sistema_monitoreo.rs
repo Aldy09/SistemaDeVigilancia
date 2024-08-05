@@ -170,6 +170,14 @@ impl UISistemaMonitoreo {
         }
     }
 
+    fn create_custom_style(&self) -> Style {
+        Style {
+            symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
+            ..Default::default()
+        }
+    }
+    
+
     fn initialize_places() -> Places {
         let mantainance_style = Self::create_maintenance_style();
         let mantainance_ui = Self::create_maintenance_place(mantainance_style);
@@ -283,13 +291,6 @@ impl UISistemaMonitoreo {
                 }
             }
 
-            //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
-
-            /*println!(
-                "EL vector de incidentes a resolver es: {:?}",
-                self.incidents_to_resolve
-            );*/
-
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_info = &incident.incident_info;
@@ -353,30 +354,30 @@ impl UISistemaMonitoreo {
     /// Crea el Place para el incidente recibido, lo agrega a la ui para que se muestre por pantalla,
     /// y lo agrega a un hashmap para continuar procesándolo (Aux: rever tema ids que quizás se pisen cuando camaras publiquen incs).
     fn add_incident(&mut self, incident: &Incident) {
-        let custom_style = Style {
-            symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
-            ..Default::default()
-        };
+        let custom_style = self.create_custom_style();
+        let new_place_incident = self.create_place_for_incident(incident, &custom_style);
+        self.places.add_place(new_place_incident);
+        self.store_incident_info(incident);
+    }
 
+    
+    fn create_place_for_incident(&self, incident: &Incident, custom_style: &Style) -> Place {
         let place_type = PlaceType::from_inc_source(incident.get_source());
-
         let (lat, lon) = incident.get_position();
-        let new_place_incident = Place {
-            position: Position::from_lon_lat(
-                lon, lat,
-            ),
+        Place {
+            position: Position::from_lon_lat(lon, lat),
             label: format!("Incident {}", incident.get_id()),
             symbol: '⚠',
-            style: custom_style,
+            style: custom_style.clone(),
             id: incident.get_id(),
             place_type,
-        };
-        self.places.add_place(new_place_incident);
-        
+        }
+    }
+    
+    fn store_incident_info(&mut self, incident: &Incident) {
         let inc_info = IncidentInfo::new(incident.get_id(), *incident.get_source());
         let inc_to_store = incident.clone();
-        self.hashmap_incidents
-            .insert(inc_info, inc_to_store); // Edit: viendo :). Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
+        self.hashmap_incidents.insert(inc_info, inc_to_store);
     }
 
     fn get_next_incident_id(&mut self) -> u8 {
