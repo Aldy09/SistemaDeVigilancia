@@ -410,6 +410,12 @@ impl MQTTServer {
         users: &mut ValuesMut<'_, String, User>,
     ) -> Result<u32, Error> {
         let mut min_last_id = u32::MAX;
+        if users.len() == 0 {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error grave: calculate_min_last_id_among_users_for, se está por calcular el mínimo con error, lista de users vacía."));
+        }
+
         // Recorro los usuarios
         for user in users {
             // Si el usuario está suscripto al topic
