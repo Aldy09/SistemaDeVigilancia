@@ -9,23 +9,23 @@ use crate::mqtt::messages::{
 // Add the missing import
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::mqtt_utils::utils::{
-    get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
-    get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream,
+    display_debug_puback_msg, display_debug_publish_msg, get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn, get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown, write_message_to_stream
 };
 use crate::mqtt::server::user_state::UserState;
 use crate::mqtt::server::{file_helper::read_lines, user::User};
 
-use std::collections::HashMap;
+use std::collections::hash_map::ValuesMut;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 
-use std::io::{Error, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
-type TopicMessages = HashMap<u32, PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
+type TopicMessages = VecDeque<PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
 
 fn clean_file(file_path: &str) -> Result<(), Error> {
     let mut file = File::create(file_path)?;
@@ -139,12 +139,16 @@ impl MQTTServer {
     /// si ya estaba como activo, es un usuario duplicado por lo que le envía disconnect al stream anterior;
     /// si estaba como desconectado temporalmente (ie ctrl+C), se está reconectando.
     /// Devuelve true si era reconexión, false si no era reconexión.
-    fn manage_possible_reconnecting_or_duplicate_user(&self, client_id: &str, new_stream_of_reconnected_user: &StreamType) -> Result<bool, Error> {
+    fn manage_possible_reconnecting_or_duplicate_user(
+        &self,
+        client_id: &str,
+        new_stream_of_reconnected_user: &StreamType,
+    ) -> Result<bool, Error> {
         if let Ok(mut connected_users_locked) = self.connected_users.lock() {
             if let Some(client) = connected_users_locked.get_mut(client_id) {
                 match client.get_state() {
-                    UserState::Active => {   
-                        // El cliente ya se encontraba activo ==> Es duplicado.                     
+                    UserState::Active => {
+                        // El cliente ya se encontraba activo ==> Es duplicado.
                         self.handle_duplicate_user(client)?;
                     }
                     UserState::TemporallyDisconnected => {
@@ -167,21 +171,31 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Actualiza el stream al nuevo stream que ahora tiene user luego de aberse reconectado; y 
+    /// Actualiza el stream al nuevo stream que ahora tiene user luego de aberse reconectado; y
     /// le envía por ese nuevo stream a user los mensajes que no recibió por estar desconectado.
     fn handle_reconnecting_user(
         &self,
         client: &mut User,
-        new_stream_of_reconnected_user: &StreamType
+        new_stream_of_reconnected_user: &StreamType,
     ) -> Result<(), Error> {
         client.set_state(UserState::Active);
         client.update_stream_with(new_stream_of_reconnected_user.try_clone()?);
-        
-        // envía los mensajes que no recibió de todos los topics a los que está suscripto
+
+        // Envía los mensajes que no recibió de todos los topics a los que está suscripto
         let topics = client.get_topics().to_vec();
         for topic in topics {
-            self.send_unreceived_messages(client, &topic)?;
+            // Necesitamos los mensajes
+            if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                if let Some(topic_messages) = messages_by_topic_locked.get_mut(&topic) {
+                        self.send_unreceived_messages(client, &topic, topic_messages)?;        
+                }
+            } else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a messages_by_topic para enviar Publish durante reconexión."));
+            }
         }
+
         Ok(())
     }
 
@@ -214,16 +228,21 @@ impl MQTTServer {
                 // lo desconecta si es duplicado, le envía lo que no tiene si se reconecta.
                 let mut is_reconnection = false;
                 if let Some(client_id) = connect_msg.get_client_id() {
-                    is_reconnection = self.manage_possible_reconnecting_or_duplicate_user(client_id, &stream)?;
+                    is_reconnection =
+                        self.manage_possible_reconnecting_or_duplicate_user(client_id, &stream)?;
                 }
 
                 // Si es reconexión, no quiero add_new_user xq eso me crearía un User nuevo y yo ya tengo uno.
                 if !is_reconnection {
                     self.add_new_user(&stream, username, &connect_msg)?;
                 }
-                
+
                 // Continuar la conexión, ya puede empezar a recibir otros tipos de mensaje (publish msg / subscribe msg / etc).
                 self.handle_connection(username, &mut stream)?;
+                println!(
+                    "   se ha salido de la función, se deja de leer para el cliente: {}.",
+                    username
+                ); // debug
             }
         } else {
             println!("   ERROR: No se pudo autenticar al cliente."); //(ya se le envió el ack informando).
@@ -329,7 +348,7 @@ impl MQTTServer {
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
         write_message_to_stream(&ack_msg_bytes, stream)?;
-        println!("   tipo publish: Enviado el ack: {:?}", ack);
+        println!("   tipo publish: Enviado el ack para packet_id: {:?}", ack.get_packet_id());
         Ok(())
     }
 
@@ -391,38 +410,24 @@ impl MQTTServer {
         // Ahora sí ya puede haber diferentes tipos de mensaje.
         match fixed_header.get_message_type() {
             PacketType::Publish => {
-                // Publish
                 let msg = PublishMessage::from_bytes(msg_bytes)?;
-                println!("   Mensaje publish completo recibido: {:?}", msg);
+                //println!("   Mensaje publish completo recibido: {:?}", msg);
+                display_debug_publish_msg(&msg);
                 self.send_puback(&msg, stream)?;
                 self.handle_publish_message(&msg)?;
             }
             PacketType::Subscribe => {
-                // Subscribe
                 let msg = SubscribeMessage::from_bytes(msg_bytes)?;
                 let return_codes = self.add_topics_to_subscriber(username, &msg)?;
 
-                // Obtiene el topic al que se está suscribiendo el user
-                for (topic, _) in msg.get_topic_filters() {
-                    if self.there_are_old_messages_to_send(topic) {
-                        // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
-                        if let Ok(mut connected_users_locked) = self.connected_users.lock() {
-                            if let Some(user) = connected_users_locked.get_mut(username) {
-                                self.send_unreceived_messages(user, topic)?;
-                            }
-                        }
-                    }
+                self.send_preexisting_msgs_to_new_subscriber(username, &msg)?;
 
-                }
-                
                 self.send_suback(return_codes, stream)?;
+                println!("DEBUG: terminado el subscribe, para user: {:?}", username);
             }
             PacketType::Puback => {
-                // PubAck
-                println!("Recibo mensaje tipo PubAck");
-                // Entonces tengo el mensaje completo
                 let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
-                println!("   Mensaje pub ack completo recibido: {:?}", msg);
+                display_debug_puback_msg(&msg);
             }
             _ => println!(
                 "   ERROR: tipo desconocido: recibido: \n   {:?}",
@@ -430,6 +435,37 @@ impl MQTTServer {
             ),
         };
 
+        Ok(())
+    }
+
+    /// Recorre la estructura de mensajes para el topic al que el suscriptor `username` se está suscribiendo con el `msg`,
+    /// y le envía todos los mensajes que se publicaron a dicho topic previo a la suscripción.
+    fn send_preexisting_msgs_to_new_subscriber(&self, username: &str, msg: &SubscribeMessage) -> Result<(), Error> {
+        // Obtiene el topic al que se está suscribiendo el user
+        for (topic, _) in msg.get_topic_filters() {
+            // Al user que se conecta, se le envía lo que no tenía del topic en cuestión
+            if let Ok(mut connected_users_locked) = self.connected_users.lock() {
+                if let Some(user) = connected_users_locked.get_mut(username) {
+
+                    // Necesitamos también los mensajes
+                    if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                        if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
+                            if self.there_are_old_messages_to_send_for(topic_messages) {
+                                self.send_unreceived_messages(user, topic, topic_messages)?;
+                            }
+                        }
+                    } else {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Error: no se pudo tomar lock a messages_by_topic para enviar Publish durante un Subscribe."));
+                    }
+                }
+            }  else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a users para enviar Publish durante un Subscribe."));
+            }                    
+        }
         Ok(())
     }
 
@@ -496,38 +532,60 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Agrega un PublishMessage al Hashmap de su topic
-    fn add_message_to_hashmap(&self, publish_msg: PublishMessage) {
+    /// Agrega un PublishMessage a la estructura de mensajes de su topic.
+    fn add_message_to_topic_messages(&self, publish_msg: PublishMessage, msgs_by_topic_l: &mut std::sync::MutexGuard<'_, HashMap<String, TopicMessages>>) {
         let topic = publish_msg.get_topic();
-        if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
-            // Obtiene o crea (si no existía) el HashMap<u8, PublishMessage> correspondiente al topic del publish message
-            let topic_messages = messages_by_topic_locked
-                .entry(topic)
-                .or_insert_with(HashMap::new);
-            let id = topic_messages.len() as u32;
-            // Inserta el PublishMessage en el HashMap interno
-            topic_messages.insert(id, publish_msg);
-        }
+    
+        // Obtiene o crea (si no existía) el VeqDequeue<PublishMessage> correspondiente al topic del publish message
+        let topic_messages = msgs_by_topic_l
+            .entry(topic)
+            //.or_insert_with(VecDeque::new);
+            .or_default(); // clippy.
+        // Inserta el PublishMessage en el HashMap interno
+        topic_messages.push_back(publish_msg);        
     }
 
     /// Procesa el PublishMessage: lo agrega al hashmap de su topic, y luego lo envía a los suscriptores de ese topic
     /// que estén conectados.
     fn handle_publish_message(&self, msg: &PublishMessage) -> Result<(), Error> {
-        self.add_message_to_hashmap(msg.clone());
-        self.send_msgs_to_subscribers(msg.get_topic())?;
+        self.store_and_distribute_publish_msg(msg)?;
+        self.remove_old_messages_from_server(msg.get_topic())?;
+        Ok(())
+    }
 
+    /// Almacena el `PublishMessage` en la estructura del server para su topic, y lo envía a sus suscriptores.
+    fn store_and_distribute_publish_msg(&self, msg: &PublishMessage) -> Result<(), Error> {
+        // Vamos a recorrer todos los usuarios
+        if let Ok(mut connected_users) = self.connected_users.lock() {
+            // Necesitamos también los mensajes
+            if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                
+                // Procesamos el mensaje
+                self.add_message_to_topic_messages(msg.clone(), &mut messages_by_topic_locked);
+                if let Some(topic_messages) = messages_by_topic_locked.get_mut(&msg.get_topic()) {                
+                    self.send_msgs_to_subscribers(msg.get_topic(), topic_messages, &mut connected_users.values_mut())?;
+                }
+
+            // Se devuelve error en los demás casos.
+            } else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a messages_by_topic para almacenar y distribuir un Publish."));
+            }           
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a users para almacenar y distribuir un Publish."));
+        }
         Ok(())
     }
 
     /// Envía a todos los suscriptores del topic `topic`, los mensajes que todavía no hayan recibido.
-    fn send_msgs_to_subscribers(&self, topic: String) -> Result<(), Error> {
-        // Recorremos todos los usuarios
-        if let Ok(mut connected_users) = self.connected_users.lock() {
-            for user in connected_users.values_mut() {
-                self.send_unreceived_messages(user, &topic)?;
-            }
+    fn send_msgs_to_subscribers(&self, topic: String, topic_messages: &VecDeque<PublishMessage>, users: &mut ValuesMut<'_, String, User>) -> Result<(), Error> {
+        // Recorremos todos los usuarios        
+        for user in users {
+            self.send_unreceived_messages(user, &topic, topic_messages)?;
         }
-
         Ok(())
     }
 
@@ -537,52 +595,162 @@ impl MQTTServer {
 
     /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
     /// recibido. Si sí los contiene, entonces se los envía, actualizando el last_id del 'user' para ese 'topic'.
-    fn send_unreceived_messages(&self, user: &mut User, topic: &String) -> Result<(), Error> {
-        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            // Obtenemos el hashmap que tiene todos los PublishMessage del topic en cuestión
-            if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
-                // Si user está suscripto al topic en cuestión
-                let user_subscribed_topics = user.get_topics();
-                if user_subscribed_topics.contains(topic) {
-                    // Calculamos la cantidad de mensajes de topic que a user le falta recibir
-                    let last_id_topic_server = topic_messages.len() as u32;
-                    let last_id_user = user.get_last_id_by_topic(topic);
-                    let diff = last_id_topic_server - last_id_user;
-                    println!("DEBUG: last server: {}, last_user: {}, diff: {}", last_id_topic_server, last_id_user, diff);
-                    for _ in 0..diff {
-                        // de 0 a diff, sin incluir el diff, "[0, diff)";
-                        let mut user_stream = user.get_stream()?;
-                        let next_message = user.get_last_id_by_topic(topic);
-                        let msg = topic_messages.get(&next_message).unwrap();
-                        if user.is_not_disconnected() {
-                            write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
-                            println!("[DEBUG]:   el msg se envió.");
-                            user.update_last_id_by_topic(topic, next_message + 1);
-                        } else {
-                            // rama else solamente para debug
-                            println!("[DEBUG]:   el msg NO se envía xq entra al if.");
-                        }
+    fn send_unreceived_messages(&self, user: &mut User, topic: &String, topic_messages: &VecDeque<PublishMessage>) -> Result<(), Error> {
+        // Si user está suscripto al topic en cuestión
+        let user_subscribed_topics = user.get_topics();
+        if user_subscribed_topics.contains(topic) {
+            // Calculamos la cantidad de mensajes de topic que a user le falta recibir
+            let topic_server_last_id = topic_messages.len() as u32;
+            let user_last_id = user.get_last_id_by_topic(topic);
+            
+            if user_last_id > topic_server_last_id {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error grave: send_unreceived_messages, la resta estaba por dar negativa."));
+            }
+
+            let diff = topic_server_last_id - user_last_id; // Debug: Panic! Xq overflow, da negativo. Hola lock envenenado.
+            println!(
+                "DEBUG: last server: {}, last user: {}, diff: {}, user: {:?}",
+                topic_server_last_id, user_last_id, diff, user.get_username()
+            );
+            for _ in 0..diff {
+                // de 0 a diff, sin incluir el diff, "[0, diff)";
+                let next_message = user.get_last_id_by_topic(topic) as usize;                        
+                if let Some(msg) = topic_messages.get(next_message){
+                    
+                    let mut user_stream = user.get_stream()?;
+                    if user.is_not_disconnected() {
+                        write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
+                        println!("[DEBUG]:   el msg se envió.");
+                        user.update_last_id_by_topic(topic, (next_message + 1) as u32);
+                    } else {
+                        // rama else solamente para debug
+                        println!("[DEBUG]:   el msg No se envía xq entra al if.");
                     }
+                } else {
+                    println!("ERROR NO SE ENCUENTRA EL TOPIC_MSGS.GET(TOPIC) A ENVIAR!!!");
                 }
-            } else {
-                // rama else solo para debug
-                println!("[DEBUG]:   NO se encuentra el hashmap en server para el topic: {:?}, user last: {}.", topic, user.get_last_id_by_topic(topic));
+                
             }
         }
-
         Ok(())
     }
 
-    fn there_are_old_messages_to_send(&self, topic: &String) -> bool {
-        if let Ok(messages_by_topic_locked) = self.messages_by_topic.lock() {
-            if let Some(topic_messages) = messages_by_topic_locked.get(topic) {
-                if !topic_messages.is_empty() {
-                    return true;
-                }
-            }
+    /// Devuelve si la estructura del topic contiene `PublishMessage`s.
+    fn there_are_old_messages_to_send_for(&self, topic_messages: &VecDeque<PublishMessage>) -> bool {        
+        if !topic_messages.is_empty() {
+            return true;
         }
         false
     }
+
+    /// Devuelve si corresponde ejecutar la eliminación de mensajes anteriores de la estructura `topic_messages`.
+    fn check_capacity(&self, topic_messages: &VecDeque<PublishMessage>) -> bool {        
+        if topic_messages.len() > 100 { // cte
+            return true;
+        }
+        false
+    }
+    
+    /// Remueve los mensajes antiguos de la estructuras de mensajes del topic `topic`, si la misma se encuentra cercana a una cierta capacidad fija.
+    /// Para ello analiza primero el mínimo mensaje hasta el cual todos los usuarios conectados ya recibieron (el user `last_id``),
+    /// borra hasta dicho mínimo, y luego actualiza la información de cada user (el user `last_id`) para que los índices sigan siendo consistentes.
+    fn remove_old_messages_from_server(&self, topic: String) -> Result<(), Error> {
+        // Vamos a recorrer los usuarios
+        if let Ok(mut users_locked) = self.connected_users.lock() {
+            let mut users = users_locked.values_mut();
+            // Necesitamos también los mensajes
+            if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
+                if let Some(topic_messages) = messages_by_topic_locked.get_mut(&topic) {
+                    if self.check_capacity(topic_messages) {
+                
+                        let min_last_id = self.calculate_min_last_id_among_users_for(&topic, &mut users)?;
+
+                        self.remove_messages_until(min_last_id, topic_messages)?;
+
+                        let mut users = users_locked.values_mut(); // aux []
+
+                        self.update_last_ids_for_users(&topic, min_last_id, &mut users)?;
+                    }
+                }
+            } else {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Error: no se pudo tomar lock a messages_by_topic para remover elementos de la estructura para un topic."));
+                }               
+            
+            
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error: no se pudo tomar lock a users para recortar estructura de mensajes."))
+        }
+        Ok(())
+    }
+    
+    /// Recorre los users para devolver, para el topic `topic`, el mínimo last_id de entre los users suscriptos a él.
+    /// Devuelve el mínimo, o un error si no se pudo.
+    fn calculate_min_last_id_among_users_for(&self, topic: &String, users: &mut ValuesMut<'_, String, User>) -> Result<u32, Error> {
+        let mut min_last_id = u32::MAX;
+        if users.len() == 0 {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error grave: calculate_min_last_id_among_users_for, se está por calcular el mínimo con error, lista de users vacía."));
+        }
+
+        // Recorro los usuarios
+        for user in users {
+            // Si el usuario está suscripto al topic
+            if user.get_topics().contains(topic) {
+                let user_last_id = user.get_last_id_by_topic(topic);
+                // Tomamos el mínimo de los last_id de los usuarios suscriptos al topic
+                if user_last_id < min_last_id {
+                    min_last_id = user_last_id;
+                }
+                println!( "DEBUG: last_id: {:?} de user: {:?} ", user_last_id, user.get_username());
+                
+            }
+        }
+        // Aux: entre todos ellos, algún mínimo sí o sí hay. Si todos tienen 0, el mínimo será 0.
+        Ok(min_last_id)
+        
+    }
+    
+    /// Actualiza, ajusta el last_id para el topic `topic`, de todos sus User's suscriptores, para mantenerlos consistentes luego de
+    /// que se eliminen mensajes de la queue del topic `topic`.
+    fn update_last_ids_for_users(&self, topic: &String, min_last_id: u32, users: &mut ValuesMut<'_, String, User>) -> Result<(), Error> {
+        println!("DEBUG: Entrando a update_last_ids_for_users, min_last_id calculado fue: {}", min_last_id);
+        // Para cada user
+        for user in users {               
+            println!("DEBUG:   user: {:?} tiene get_topics: {:?}", user.get_username(), user.get_topics());
+            // Si está suscripto al topic en cuestión
+            if user.get_topics().contains(topic) {
+                let last_id = user.get_last_id_by_topic(topic);
+                let diff = last_id - min_last_id; // [] debug: esta resta también da panic.
+                user.update_last_id_by_topic(topic, diff);
+                println!("DEBUG: last_id anterior: {}, queda: {}, para user: {:?}.", last_id, diff, user.get_username());
+            }
+        }
+        println!("DEBUG: Saliendo de update_last_ids_for_users."); // debug
+        
+        Ok(())
+    }
+
+    /// Elimina todos los mensajes de la queue `topic_messages` que contiene los `PublishMessage`s deñ topic en cuestión,
+    /// desde el principio hasta el `min_last_id` sin incluirlo.
+    fn remove_messages_until(&self, min_last_id: u32, topic_messages: &mut VecDeque<PublishMessage>) -> Result<(), Error> {
+        println!("DEBUG: remove_messages_until, cola de mensajes antes del remove: {:?}", topic_messages);
+        let mut i = 0;
+        while i < min_last_id { // [] sah, es un for
+            topic_messages.pop_front();
+            i += 1;
+        }
+        println!("DEBUG: remove_messages_until, cola de mensajes después del remove: {:?}", topic_messages);
+    
+        Ok(())
+    }    
+
 }
 
 /// Crea un servidor en la dirección ip y puerto especificados.

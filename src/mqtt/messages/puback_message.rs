@@ -95,6 +95,10 @@ impl PubAckMessage {
     pub fn get_reason_code(&self) -> u8 {
         self.puback_reason_code
     }
+
+    pub fn get_packet_id(&self) -> u16 {
+        self.packet_id
+    }
 }
 
 #[cfg(test)]

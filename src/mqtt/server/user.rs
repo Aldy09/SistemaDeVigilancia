@@ -80,10 +80,11 @@ impl User {
         if let Some(last_id) = self.last_id_by_topic.get(topic) {
             return *last_id;
         }
+        println!("PRINT DEBUG PROBANDO"); // []
         0 // <---. // Aux. Por qué podría no encontrarse el topic? xq no se insertó todavía.., pero si se está reconectando debería existir de la conexión anterior;
     }
 
-    /// Actualiza el `last_id` del topic `topic`, con el recibido por parámetro.
+    /// Actualiza (sobreescribe) el `last_id` del topic `topic`, con el recibido por parámetro.
     pub fn update_last_id_by_topic(&mut self, topic: &String, last_id: u32) {
         self.last_id_by_topic.insert(topic.to_owned(), last_id);
     }
@@ -106,6 +107,7 @@ impl User {
     /// Agrega el topic a los topics a los que user está suscripto.
     pub fn add_topic(&mut self, topic: String) {
         self.topics.push(topic.clone());
+        // Inicializa su last_id para ese topic en 0 si el mismo no existía.
         self.last_id_by_topic.entry(topic).or_insert(0);
     }
     

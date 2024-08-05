@@ -1,5 +1,6 @@
 use std::io::{Error, ErrorKind};
 
+use crate::mqtt::mqtt_utils::utils::display_debug_publish_msg;
 use crate::mqtt::stream_type::StreamType;
 use crate::mqtt::{
     messages::{
@@ -37,7 +38,8 @@ impl MQTTClientWriter {
         let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
         let publish_message = match result {
             Ok(msg) => {
-                println!("Mqtt publish: envío publish: \n   {:?}", msg);
+                //println!("Mqtt publish: envío publish: \n   {:?}", msg);
+                display_debug_publish_msg(&msg);
                 msg
             }
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
