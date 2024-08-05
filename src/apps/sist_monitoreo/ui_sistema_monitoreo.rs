@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str::{from_utf8, Utf8Error};
+use std::time::{Duration, Instant};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident_data::incident_state::IncidentState;
@@ -22,6 +23,7 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use egui::Color32;
 use egui::Context;
+use futures::channel::mpsc::channel;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,7 +132,10 @@ pub struct UISistemaMonitoreo {
     exit_tx: Sender<bool>,
     incidents_to_resolve: Vec<IncidentWithDrones>, // posicion 0  --> (inc_id_to_resolve, drones(dron1, dron2)) // posicion 1 --> (inc_id_to_resolve 2, drones(dron1, dron2))
     hashmap_incidents: HashMap<IncidentInfo, Incident>, //
-    error_tx: Option<CrossbeamSender<String>>,
+    error_tx: CrossbeamSender<String>,
+    error_rx: CrossbeamReceiver<String>,
+    error_message: Option<String>,
+    error_display_start: Option<Instant>,
 }
 
 impl UISistemaMonitoreo {
@@ -144,6 +149,7 @@ impl UISistemaMonitoreo {
 
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
         let places = Self::initialize_places();
+        let (error_tx, error_rx) = unbounded();
 
         Self {
             providers: providers(egui_ctx.to_owned()),
@@ -161,7 +167,10 @@ impl UISistemaMonitoreo {
             exit_tx,
             incidents_to_resolve: Vec::new(),
             hashmap_incidents: HashMap::new(),
-            error_tx: None,
+            error_tx,
+            error_rx,
+            error_message: None,
+            error_display_start: None,
         }
     }
 
@@ -535,28 +544,27 @@ impl UISistemaMonitoreo {
                 self.incident_dialog_open = false;
             }
             (Err(_), _) => {
-                if let Some(tx) = &self.error_tx {
-                    let _ = tx.send(
-                        "Latitud ingresada incorrectamente. Por favor, intente de nuevo."
-                            .to_string(),
-                    );
+                println!("Latitud ingresada incorrectamente. Por favor, intente de nuevo.");
+
+                let res_send = self.error_tx.send(
+                    "Latitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
+                );
+                match res_send {
+                    Ok(_) => println!("Mensaje de error enviado correctamente."),
+                    Err(_) => println!("Error al enviar mensaje de error."),
                 }
             }
             (_, Err(_)) => {
-                if let Some(tx) = &self.error_tx {
-                    let _ = tx.send(
-                        "Latitud ingresada incorrectamente. Por favor, intente de nuevo."
-                            .to_string(),
-                    );
+                println!("Longitud ingresada incorrectamente. Por favor, intente de nuevo.");
+
+                let res_send = self.error_tx.send(
+                    "Longitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
+                );
+                match res_send {
+                    Ok(_) => println!("Mensaje de error enviado correctamente."),
+                    Err(_) => println!("Error al enviar mensaje de error."),
                 }
             }
-        }
-    }
-
-    // En tu método de dibujo, muestra el mensaje de error si existe
-    fn draw_ui(&mut self, ui: &mut egui::Ui, rx: CrossbeamReceiver<String>) {
-        for error in rx {
-            //ui.label(error);
         }
     }
 
@@ -575,12 +583,64 @@ impl UISistemaMonitoreo {
         });
     }
 
-    fn draw_ui_with_error_handling(&mut self, ctx: &egui::Context) {
-        let (error_tx, error_rx) = unbounded::<String>();
-        self.error_tx = Some(error_tx);
+    // fn draw_ui(&mut self, ui: &mut egui::Ui) {
+    //     if let Ok(error) = self.error_rx.try_recv() {
+    //         // Crea una ventana emergente para mostrar el error
+    //         egui::Window::new("Error")
+    //             .collapsible(false) // Hace que la ventana no se pueda colapsar
+    //             .title_bar(true) // Muestra la barra de título
+    //             .show(ui.ctx(), |ui| {
+    //                 // Muestra el mensaje de error dentro de la ventana
+    //                 ui.label(error);
+    //             });
+    //     }
+    // }
 
+    fn draw_ui(&mut self, ui: &mut egui::Ui) {
+        self.check_for_errors();
+        let error_msg = &self.error_message.clone();
+        if let Some(error) = error_msg {
+            self.display_error_window(ui, error);
+        }
+    }
+    
+    fn check_for_errors(&mut self) {
+        if let Ok(error) = self.error_rx.try_recv() {
+            self.error_message = Some(error);
+            self.error_display_start = Some(Instant::now());
+        }
+    }
+
+    fn display_error_window(&mut self, ui: &mut egui::Ui, error: &String) {
+        if self.error_display_start.unwrap().elapsed() < Duration::from_secs(5) {
+            let screen_size = ui.ctx().screen_rect().size();
+            let window_size = egui::vec2(200.0, 200.0);
+            let pos = self.calculate_center_position(screen_size, window_size);
+
+            egui::Window::new("Error")
+                .collapsible(false)
+                .title_bar(true)
+                .fixed_pos(pos)
+                .min_size(window_size)
+                .show(ui.ctx(), |ui| {
+                    ui.heading(error);
+                });
+        } else {
+            self.error_message = None;
+            self.error_display_start = None;
+        }
+    }
+
+    fn calculate_center_position(&mut self, screen_size: egui::Vec2, window_size: egui::Vec2) -> egui::Pos2 {
+        egui::pos2(
+            (screen_size.x - window_size.x) / 2.0,
+            (screen_size.y - window_size.y) / 2.0,
+        )
+    }
+
+    fn draw_ui_with_error_handling(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.draw_ui(ui, error_rx);
+            self.draw_ui(ui);
         });
     }
 }
@@ -588,7 +648,7 @@ impl UISistemaMonitoreo {
 impl eframe::App for UISistemaMonitoreo {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.request_repaint_after(150, ctx);
-        //self.draw_ui_with_error_handling(ctx);
+        self.draw_ui_with_error_handling(ctx);
         self.handle_mqtt_messages(ctx);
         self.setup_map(ctx);
         self.setup_top_menu(ctx);
