@@ -187,7 +187,6 @@ impl MQTTServer {
             // Necesitamos los mensajes
             if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
                 if let Some(topic_messages) = messages_by_topic_locked.get_mut(&topic) {
-                    
                         self.send_unreceived_messages(client, &topic, topic_messages)?;        
                 }
             } else {
@@ -648,7 +647,7 @@ impl MQTTServer {
 
     /// Devuelve si corresponde ejecutar la eliminación de mensajes anteriores de la estructura `topic_messages`.
     fn check_capacity(&self, topic_messages: &VecDeque<PublishMessage>) -> bool {        
-        if topic_messages.len() > 10 {
+        if topic_messages.len() > 100 { // cte
             return true;
         }
         false
