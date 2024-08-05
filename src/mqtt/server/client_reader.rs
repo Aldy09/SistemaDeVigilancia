@@ -15,9 +15,9 @@ use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 
-use super::client_validator::AuthenticateClient;
+use super::client_authenticator::AuthenticateClient;
 use super::message_processor::MessageProcessor;
-use super::mqtt_server_2::MQTTServer;
+use super::mqtt_server::MQTTServer;
 
 #[derive(Debug)]
 pub struct ClientReader {
@@ -78,7 +78,7 @@ impl ClientReader {
         println!("Cerrando la conexión.");
         shutdown(&self.stream);
     }
-    
+
     // recibe paquetes del broker para enviarlos a su TcpStream y viceversa
     pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();

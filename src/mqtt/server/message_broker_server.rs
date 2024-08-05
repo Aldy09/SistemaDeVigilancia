@@ -1,4 +1,4 @@
-use rustx::mqtt::server::mqtt_server_2::MQTTServer;
+use rustx::mqtt::server::mqtt_server::MQTTServer;
 use std::env::args;
 use std::io::{Error, ErrorKind};
 

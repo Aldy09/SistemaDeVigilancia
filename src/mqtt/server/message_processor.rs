@@ -12,7 +12,7 @@ use crate::mqtt::{
 
 use std::io::Error;
 
-use super::{mqtt_server_2::MQTTServer, packet::Packet};
+use super::{mqtt_server::MQTTServer, packet::Packet};
 
 #[derive(Debug)]
 pub struct MessageProcessor {
@@ -49,7 +49,7 @@ impl MessageProcessor {
         match publish_msg_res {
             Ok(publish_msg) => {
                 display_debug_publish_msg(&publish_msg);
-                let puback_res = self.send_puback_to(&publish_msg, client_id);
+                let puback_res = self.send_puback_to(client_id, &publish_msg);
                 if let Err(e) = puback_res {
                     println!("   ERROR: {:?}", e);
                     return;
@@ -71,7 +71,7 @@ impl MessageProcessor {
                 if let Err(e) = operation_result {
                     println!("   ERROR: {:?}", e);
                 }
-                let suback_res = self.send_suback_to(return_codes_res, client_id);
+                let suback_res = self.send_suback_to(client_id, return_codes_res);
                 if let Err(e) = suback_res {
                     println!("   ERROR: {:?}", e);
                 }
@@ -89,7 +89,7 @@ impl MessageProcessor {
     }
 
     
-    pub fn send_puback_to(&self, publish_msg: &PublishMessage, client_id: &str) -> Result< (), Error> {
+    pub fn send_puback_to(&self, client_id: &str, publish_msg: &PublishMessage) -> Result< (), Error> {
         if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
             if let Some(user) = connected_users_locked.get_mut(client_id) {
                 self.mqtt_server.send_puback(publish_msg, &mut user.get_stream()?)?;
@@ -98,7 +98,7 @@ impl MessageProcessor {
         Ok(())
     }
     
-    fn send_suback_to(&self, return_codes_res: Result<Vec<SubscribeReturnCode>, Error>, client_id: &str,) -> Result< (), Error > {
+    fn send_suback_to(&self, client_id: &str, return_codes_res: Result<Vec<SubscribeReturnCode>, Error>) -> Result< (), Error > {
 
         if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
             if let Some(user) = connected_users_locked.get_mut(client_id) {
