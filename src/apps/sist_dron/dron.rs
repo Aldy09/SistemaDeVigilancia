@@ -148,7 +148,8 @@ impl Dron {
         let self_child = self.clone_ref();
         let self_child_aux = self.clone_ref();
         let mut dron_logic = DronLogic::new(self_child.data,
-            self_child.dron_properties, mqtt_client.clone(), self_child.logger, self_child_aux);
+            self_child.dron_properties, mqtt_client.clone(), self_child.logger,
+             self_child_aux, self_child.drone_distances_by_incident.clone());
             // Aux: el mqtt_client y el dron se los paso solo por ahora, dsp los vamos a borrar de ahí.
 
         for publish_msg in mqtt_rx {
@@ -177,7 +178,6 @@ impl Dron {
         })
     }
 
-
     /// Hace publish de su current info.
     /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
     pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
@@ -193,7 +193,8 @@ impl Dron {
         Ok(())
     }    
 
-    fn get_distance_to(&self, destination: (f64, f64)) -> Result<f64, Error> {
+    // Aux: esta función no va a estar más acá dsp de un refactor. [].
+    pub fn get_distance_to(&self, destination: (f64, f64)) -> Result<f64, Error> {
         if let Ok(ci) = self.current_info.lock() {
             return Ok(ci.get_distance_to(destination));
         }
@@ -249,8 +250,9 @@ impl Dron {
             id, initial_lat, initial_lon
         ));
         let current_info = Arc::new(Mutex::new(ci));
+        let data = Data::new(current_info.clone());
         let dron = Dron {
-            data: Data::new(current_info.clone()),
+            data,
             current_info,
             dron_properties,
             logger,
@@ -259,28 +261,6 @@ impl Dron {
         };
 
         Ok(dron)
-    }
-
-    fn add_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
-        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.insert(inc.get_info(), (inc.get_position(), Vec::new()));
-            return Ok(());
-        }
-        Err(Error::new(
-            ErrorKind::Other,
-            "Error al tomar lock de drone_distances_by_incident.",
-        ))
-    }
-
-    fn remove_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
-        if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
-            distances.remove(&inc.get_info());
-            return Ok(());
-        }
-        Err(Error::new(
-            ErrorKind::Other,
-            "Error al tomar lock de drone_distances_by_incident.",
-        ))
     }
 }
 
