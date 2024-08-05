@@ -49,8 +49,6 @@ impl Data {
         ))
     }
 
-    //// Funciones que toman lock ////
-
     /// Toma lock y devuelve su nivel de batería.
     pub fn get_battery_lvl(&self) -> Result<u8, Error> {
         if let Ok(ci) = self.current_info.lock() {
