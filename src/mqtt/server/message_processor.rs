@@ -20,8 +20,8 @@ pub struct MessageProcessor {
 }
 
 impl MessageProcessor {
-    pub fn new(mqtt_server: MQTTServer) -> Result<MessageProcessor, Error> {
-        Ok(MessageProcessor { mqtt_server })
+    pub fn new(mqtt_server: MQTTServer) -> Self {
+        MessageProcessor { mqtt_server }
     }
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {

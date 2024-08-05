@@ -12,7 +12,7 @@ use crate::mqtt::server::packet::Packet;
 
 use std::io::Error;
 use std::net::TcpStream;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 
 use super::client_authenticator::AuthenticateClient;
@@ -79,24 +79,19 @@ impl ClientReader {
         shutdown(&self.stream);
     }
 
-    // recibe paquetes del broker para enviarlos a su TcpStream y viceversa
+    // Función modificada para usar las nuevas funciones modulares
     pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
 
-        let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref())?;
         let mut handlers = Vec::<JoinHandle<()>>::new();
-        let mut self_clone = self.clone_ref();
+
         let client_id_clone = client_id.to_owned();
 
-        // Envia al hilo de abajo los mensajes (en bytes) que llegan al servidor
-        handlers.push(std::thread::spawn(move || {
-            let _ = self_clone.handle_stream(client_id_clone.as_str(), tx_1);
-        }));
+        // Hilo para obtener los bytes que llegan al servidor en el TCPStream
+        handlers.push(self.spawn_stream_handler(client_id_clone, tx_1));
 
-        // Recibe los mensajes en bytes para posteriormente procesarlos
-        handlers.push(std::thread::spawn(move || {
-            let _ = message_processor.handle_packets(rx_1);
-        }));
+        // Hilo para manejar la recepción y procesamiento de mensajes
+        handlers.push(self.spawn_message_processor(rx_1));
 
         for h in handlers {
             let _ = h.join();
@@ -105,7 +100,26 @@ impl ClientReader {
         Ok(())
     }
 
-    // Espera por paquetes que llegan desde su TcpStream y los envía al Broker
+    // Hilo para obtener los bytes que llegan al servidor en el TCPStream
+    fn spawn_stream_handler(
+        &self,
+        client_id_clone: String,
+        tx_1: Sender<Packet>,
+    ) -> JoinHandle<()> {
+        let mut self_clone = self.clone_ref();
+        std::thread::spawn(move || {
+            let _ = self_clone.handle_stream(client_id_clone.as_str(), tx_1);
+        })
+    }
+
+    // Hilo para manejar la recepción y procesamiento de mensajes
+    fn spawn_message_processor(&self, rx_1: Receiver<Packet>) -> JoinHandle<()> {
+        let mut message_processor = MessageProcessor::new(self.mqtt_server.clone_ref());
+        std::thread::spawn(move || {
+            let _ = message_processor.handle_packets(rx_1);
+        })
+    }
+    // Espera por paquetes que llegan desde su TcpStream y los envia al hilo de arriba
     pub fn handle_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
@@ -136,7 +150,13 @@ impl ClientReader {
         Ok(())
     }
 
-    fn handle_packet(&mut self, fixed_h: FixedHeader, fixed_h_buf: [u8; 2], client_id: &str, tx_1: &Sender<Packet>) -> Result<(), Error> {
+    fn handle_packet(
+        &mut self,
+        fixed_h: FixedHeader,
+        fixed_h_buf: [u8; 2],
+        client_id: &str,
+        tx_1: &Sender<Packet>,
+    ) -> Result<(), Error> {
         let packet = create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, client_id)?;
         tx_1.send(packet).unwrap();
         Ok(())
@@ -144,7 +164,8 @@ impl ClientReader {
 
     fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
         println!("Se desconectó el cliente: {:?}.", client_id);
-        self.mqtt_server.set_user_as_temporally_disconnected(client_id)?;
+        self.mqtt_server
+            .set_user_as_temporally_disconnected(client_id)?;
         self.mqtt_server.publish_users_will_message(client_id)?;
         // Acá se manejaría para recuperar la sesión cuando se reconecte.
         Ok(())
