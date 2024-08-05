@@ -2,31 +2,29 @@ use std::{io::{Error, ErrorKind}, sync::{Arc, Mutex}};
 
 use crate::apps::incident_data::incident_info::IncidentInfo;
 
-use super::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, dron_state::DronState, sist_dron_properties::SistDronProperties};
+use super::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo, dron_state::DronState};
 
 #[derive(Debug)]
 pub struct Data {
-    current_info: Arc<Mutex<DronCurrentInfo>>,
-    dron_properties: SistDronProperties
-
+    pub current_info: Arc<Mutex<DronCurrentInfo>>, // Aux: lo hago pub solo por un momento, lo usa solamente el battery en una línea, dsp lo ponemos privado otra vez. [].
 }
 
 impl Data {
-    pub fn new(current_info: Arc<Mutex<DronCurrentInfo>>, dron_properties: SistDronProperties) -> Self {
-        Self { current_info, dron_properties }
+    pub fn new(current_info: Arc<Mutex<DronCurrentInfo>>) -> Self {
+        Self { current_info }
     }
 
     /// Establece como `flying_info` a la dirección recibida, y a la velocidad leída del archivo de configuración.
     pub fn set_flying_info_values(
         &mut self,
         dir: (f64, f64),
+        speed: f64,
         flag_maintanance: bool,
     ) -> Result<(), Error> {
         let is_mantainance_set = flag_maintanance;
         let is_not_maintainance_set =
             self.get_state()? != DronState::Mantainance && !flag_maintanance;
         if is_mantainance_set || is_not_maintainance_set {
-            let speed = self.dron_properties.get_speed();
             let info = DronFlyingInfo::new(dir, speed);
             self.set_flying_info(info)?;
             Ok(())
@@ -194,11 +192,22 @@ impl Data {
             "Error al tomar lock de current info.",
         ))
     }
+
+    pub fn set_battery_lvl(&mut self, new_battery_level: u8) -> Result<(), Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            ci.set_battery_lvl(new_battery_level);
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de current info.",
+            ))
+        }
+    }
     
     pub fn clone_ref(&self) -> Data {
         Self {
             current_info: self.current_info.clone(),
-            dron_properties: self.dron_properties
         }
     }
 

@@ -1,3 +1,4 @@
+pub mod battery_manager;
 pub mod calculations;
 pub mod data;
 pub mod dron;
