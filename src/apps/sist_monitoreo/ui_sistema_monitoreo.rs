@@ -131,6 +131,8 @@ pub struct UISistemaMonitoreo {
 }
 
 impl UISistemaMonitoreo {
+
+
     pub fn new(
         egui_ctx: Context,
         tx: Sender<Incident>,
@@ -139,25 +141,8 @@ impl UISistemaMonitoreo {
     ) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
-        // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
-
-        let mantainance_style = Style {
-            symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
-            ..Default::default()
-        };
-
-        let mantainance_ui = Place {
-            position: places::mantenimiento(),
-            label: "Mantenimiento".to_string(),
-            symbol: '🔋',
-            style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
-            id: 0,
-            place_type: PlaceType::Mantainance,
-        };
-
-        let mut places = Places::new();
-        places.add_place(mantainance_ui);
+        let places = Self::initialize_places();
 
         Self {
             providers: providers(egui_ctx.to_owned()),
@@ -177,12 +162,77 @@ impl UISistemaMonitoreo {
             hashmap_incidents: HashMap::new(),
         }
     }
+
+    fn create_maintenance_style() -> Style {
+        Style {
+            symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
+            ..Default::default()
+        }
+    }
+
+    fn initialize_places() -> Places {
+        let mantainance_style = Self::create_maintenance_style();
+        let mantainance_ui = Self::create_maintenance_place(mantainance_style);
+        let mut places = Places::new();
+        places.add_place(mantainance_ui);
+        places
+    }
+
+    fn create_maintenance_place(style: Style) -> Place {
+        Place {
+            position: places::mantenimiento(),
+            label: "Mantenimiento".to_string(),
+            symbol: '🔋',
+            style,
+            id: 0,
+            place_type: PlaceType::Mantainance,
+        }
+    }
     
     /// Envía internamente a otro hilo el `incident` recibido, para publicarlo por mqtt.
     fn send_incident_for_publish(&self, incident: Incident) {
         println!("Enviando incidente: {:?}", incident);
         let _ = self.publish_incident_tx.send(incident);
     }
+
+    fn create_camera_style(camera_state: CameraState) -> Style {
+        match camera_state {
+            CameraState::Active => Style {
+                symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
+                ..Default::default()
+            },
+            CameraState::SavingMode => Style::default(),
+        }
+    }
+
+    fn create_camera_place(camera: &Camera, style: Style) -> Place {
+        let camera_id = camera.get_id();
+        let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+
+        Place {
+            position: Position::from_lon_lat(longitude, latitude),
+            label: format!("Camera {}", camera_id),
+            symbol: '📷',
+            style,
+            id: camera_id,
+            place_type: PlaceType::Camera,
+        }
+    }
+    
+    fn update_camera_on_map(&mut self, camera: Camera) {
+        let camera_id = camera.get_id();
+
+        if camera.is_not_deleted() {
+            self.places.remove_place(camera_id, PlaceType::Camera);
+
+            let style = Self::create_camera_style(camera.get_state());
+            let camera_ui = Self::create_camera_place(&camera, style);
+            self.places.add_place(camera_ui);
+        } else {
+            self.places.remove_place(camera_id, PlaceType::Camera);
+        }
+    }
+
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
@@ -192,34 +242,7 @@ impl UISistemaMonitoreo {
             camera.get_state()
         );
 
-        if camera.is_not_deleted() {
-            let camera_id = camera.get_id();
-            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-            // Si existía, la elimino del mapa, para volver a dibujarla (xq puede tener cambiado el estado)
-            self.places.remove_place(camera_id, PlaceType::Camera);
-
-            // Se le pone un color dependiendo de su estado
-            let style = match camera.get_state() {
-                CameraState::Active => Style {
-                    symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
-                    ..Default::default()
-                },
-                CameraState::SavingMode => Style::default(),
-            };
-
-            let camera_ui = Place {
-                position: Position::from_lon_lat(longitude, latitude),
-                label: format!("Camera {}", camera_id),
-                symbol: '📷',
-                style, //ESTE ES DEL LABEL, NO DEL ICONO
-                id: camera_id,
-                place_type: PlaceType::Camera,
-            };
-            self.places.add_place(camera_ui);
-        } else {
-            self.places
-                .remove_place(camera.get_id(), PlaceType::Camera);
-        }
+        self.update_camera_on_map(camera);
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
