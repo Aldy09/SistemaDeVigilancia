@@ -1,3 +1,4 @@
+
 use std::io::Error;
 use std::net::{TcpListener, TcpStream};
 
@@ -46,5 +47,12 @@ impl ClientListener {
         Ok(std::thread::spawn(move || {
             let _ = client_reader.handle_client();
         }))
+    }
+}
+
+
+impl Default for ClientListener {
+    fn default() -> Self {
+        Self::new()
     }
 }

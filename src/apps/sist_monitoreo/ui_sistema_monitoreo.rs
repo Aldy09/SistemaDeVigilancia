@@ -23,7 +23,6 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use egui::Color32;
 use egui::Context;
-use futures::channel::mpsc::channel;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

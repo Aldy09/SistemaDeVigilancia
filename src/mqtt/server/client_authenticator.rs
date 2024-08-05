@@ -113,7 +113,7 @@ impl AuthenticateClient {
         let mut credentials = Vec::new();
 
         if let Ok(lines) = read_lines(path) {
-            for line in lines.filter_map(Result::ok) {
+            for line in lines.map_while(Result::ok) {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() == 2 {
                     credentials.push((parts[0].to_string(), parts[1].to_string()));
@@ -138,5 +138,12 @@ impl AuthenticateClient {
         } else {
             false
         }
+    }
+}
+
+
+impl Default for AuthenticateClient {
+    fn default() -> Self {
+        AuthenticateClient::new()
     }
 }

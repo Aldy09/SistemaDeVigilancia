@@ -487,7 +487,7 @@ impl MQTTServer {
                     // Necesitamos también los mensajes
                     if let Ok(mut messages_by_topic_locked) = self.messages_by_topic.lock() {
                         if let Some(topic_messages) = messages_by_topic_locked.get_mut(topic) {
-                            if self.there_are_old_messages_to_send_for(&topic_messages) {
+                            if self.there_are_old_messages_to_send_for(topic_messages) {
                                 self.send_unreceived_messages(user, topic, topic_messages)?;
                             }
                         }

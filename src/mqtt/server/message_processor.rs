@@ -37,8 +37,8 @@ impl MessageProcessor {
         let msg_bytes = packet.get_msg_bytes();
         let client_id = packet.get_username();
         match packet.get_message_type() {
-            PacketType::Publish => self.handle_publish(msg_bytes, &client_id),
-            PacketType::Subscribe => self.handle_subscribe(msg_bytes, &client_id),
+            PacketType::Publish => self.handle_publish(msg_bytes, client_id),
+            PacketType::Subscribe => self.handle_subscribe(msg_bytes, client_id),
             PacketType::Puback => self.handle_puback(msg_bytes),
             _ => println!("   ERROR: Tipo de mensaje desconocido\n "),
         };
