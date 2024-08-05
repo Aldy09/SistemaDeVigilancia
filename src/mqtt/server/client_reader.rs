@@ -35,16 +35,24 @@ impl ClientReader {
 
     /// Procesa los mensajes entrantes de un dado cliente.
     pub fn handle_client(&mut self) -> Result<(), Error> {
-        // Leo un fixed header, deberá ser de un connect
-        let (fixed_header_buf, fixed_header) =
-            get_fixed_header_from_stream_for_conn(&mut self.stream)?;
-
-        let fixed_header_info = (fixed_header_buf, fixed_header);
-        let (fixed_header_buf, fixed_header) = (&fixed_header_info.0, &fixed_header_info.1);
+        let (fixed_header_buf, fixed_header) = self.read_and_validate_header()?;
 
         let authenticator = AuthenticateClient::new();
+        self.authenticate_and_handle_connection(&fixed_header, &fixed_header_buf, &authenticator)
+    }
 
-        // El único tipo válido es el de connect, xq siempre se debe iniciar la comunicación con un connect.
+    fn read_and_validate_header(&mut self) -> Result<([u8; 2], FixedHeader), Error> {
+        let (fixed_header_buf, fixed_header) =
+            get_fixed_header_from_stream_for_conn(&mut self.stream)?;
+        Ok((fixed_header_buf, fixed_header))
+    }
+
+    fn authenticate_and_handle_connection(
+        &mut self,
+        fixed_header: &FixedHeader,
+        fixed_header_buf: &[u8; 2],
+        authenticator: &AuthenticateClient,
+    ) -> Result<(), Error> {
         match fixed_header.get_message_type() {
             PacketType::Connect => {
                 let connect_msg =
@@ -59,16 +67,18 @@ impl ClientReader {
                     }
                 }
             }
-            _ => {
-                println!("Error, el primer mensaje recibido DEBE ser un connect.");
-                println!("   recibido: {:?}", fixed_header);
-                println!("Cerrando la conexión.");
-                shutdown(&self.stream);
-            }
-        };
+            _ => self.handle_invalid_message(fixed_header),
+        }
         Ok(())
     }
 
+    fn handle_invalid_message(&self, fixed_header: &FixedHeader) {
+        println!("Error, el primer mensaje recibido DEBE ser un connect.");
+        println!("   recibido: {:?}", fixed_header);
+        println!("Cerrando la conexión.");
+        shutdown(&self.stream);
+    }
+    
     // recibe paquetes del broker para enviarlos a su TcpStream y viceversa
     pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
