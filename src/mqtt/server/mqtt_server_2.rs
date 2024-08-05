@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use super::incoming_connections::ClientListener;
 
+const TOPIC_MESSAGES_LEN: usize = 50;
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
 type StreamType = TcpStream;
 type TopicMessages = VecDeque<PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
@@ -326,7 +327,7 @@ impl MQTTServer {
 
     /// Devuelve si corresponde ejecutar la eliminación de mensajes anteriores de la estructura `topic_messages`.
     fn check_capacity(&self, topic_messages: &VecDeque<PublishMessage>) -> bool {        
-        if topic_messages.len() > 50 {
+        if topic_messages.len() > TOPIC_MESSAGES_LEN {
             return true;
         }
         false
