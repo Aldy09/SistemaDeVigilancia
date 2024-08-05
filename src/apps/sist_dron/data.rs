@@ -198,7 +198,7 @@ impl Data {
     pub fn clone_ref(&self) -> Data {
         Self {
             current_info: self.current_info.clone(),
-            dron_properties: self.dron_properties.clone()
+            dron_properties: self.dron_properties
         }
     }
 
