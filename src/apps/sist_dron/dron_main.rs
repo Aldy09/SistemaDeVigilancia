@@ -1,5 +1,10 @@
 use std::io::Error;
 
+use rustx::apps::{
+    apps_mqtt_topics::AppsMqttTopics,
+    common_clients::{get_app_will_topic, join_all_threads},
+    sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
+};
 use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::client::mqtt_client::MQTTClient;
 use rustx::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
@@ -19,7 +24,7 @@ fn get_app_will_msg_content(id: u8) -> WillContent {
 
 fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr) = get_id_lat_long_and_broker_address()?;
-    
+
     // Se crean y configuran ambos extremos del string logger
     let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
