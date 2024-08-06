@@ -4,8 +4,8 @@ use crate::apps::{
     incident_data::incident::{self, Incident},
     sist_camaras::{
         ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
-        logic::CamerasLogic,
-        sist_camaras_abm::ABMCameras,
+        sistema_camaras_logic::CamerasLogic,
+        sistema_camaras_abm::ABMCameras,
         types::shareable_cameras_type::ShCamerasType
     },
 };
