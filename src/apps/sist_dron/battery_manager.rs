@@ -1,4 +1,4 @@
-use std::{io::{Error, ErrorKind}, sync::mpsc::Sender, thread::sleep, time::Duration};
+use std::{io::Error, sync::mpsc::Sender, thread::sleep, time::Duration};
 
 use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger};
 
@@ -23,27 +23,18 @@ impl BatteryManager {
             sleep(Duration::from_secs(5));
             
             //Actualizar batería
-            let _ = self.decrement_and_check_battery_lvl();
+            if let Err(e) = self.decrement_and_check_battery_lvl(){
+                self.logger.log(format!("Error en BatteryManager: {:?}.", e));
+            }
         }
     }
 
     fn decrement_and_check_battery_lvl(&mut self) -> Result<(), Error> {
-        let maintanence_position;
-        let should_go_to_maintanence: bool;
+                
+        let min_battery = self.dron_properties.get_min_operational_battery_lvl(); //20
 
-        if let Ok(mut ci) = self.current_data.current_info.lock() {
-            //decrementa la bateria
-            let min_battery = self.dron_properties.get_min_operational_battery_lvl(); //20
-            should_go_to_maintanence = ci.decrement_and_check_battery_lvl(min_battery); //inc=None
-            maintanence_position = self.dron_properties.get_mantainance_position();
-        //obelisco
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Error al tomar lock de current info.",
-            ));
-        }
-
+        let should_go_to_maintanence = self.current_data.decrement_and_check_battery_lvl(min_battery)?;
+        
         if should_go_to_maintanence {
             self.logger
                 .log("Batería baja, debo ir a mantenimiento.".to_string());
@@ -59,12 +50,12 @@ impl BatteryManager {
             };
             // Vuela a mantenimiento
             self.current_data.set_state(DronState::Mantainance, true)?;
-
+            let maintanence_position = self.dron_properties.get_mantainance_position();
             self.fly_to_mantainance(maintanence_position, true)?;
-            sleep(Duration::from_secs(3));
 
+            sleep(Duration::from_secs(3));
+            self.recharge_battery()?;
             self.logger.log("Recargando batería al 100%.".to_string());
-            self.recharge_battery()?; // podría llamarse recharge battery.
 
             // Vuelve a la posición correspondiente
             self.fly_to_mantainance(position_to_go, true)?;

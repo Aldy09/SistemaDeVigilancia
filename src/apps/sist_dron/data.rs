@@ -6,11 +6,12 @@ use super::{dron_current_info::DronCurrentInfo, dron_flying_info::DronFlyingInfo
 
 #[derive(Debug)]
 pub struct Data {
-    pub current_info: Arc<Mutex<DronCurrentInfo>>, // Aux: lo hago pub solo por un momento, lo usa solamente el battery en una línea, dsp lo ponemos privado otra vez. [].
+    current_info: Arc<Mutex<DronCurrentInfo>>, // Aux: lo hago pub solo por un momento, lo usa solamente el battery en una línea, dsp lo ponemos privado otra vez. [].
 }
 
 impl Data {
-    pub fn new(current_info: Arc<Mutex<DronCurrentInfo>>) -> Self {
+    pub fn new(ci: DronCurrentInfo) -> Self {
+        let current_info = Arc::new(Mutex::new(ci));
         Self { current_info }
     }
 
@@ -117,6 +118,18 @@ impl Data {
             "Error al tomar lock de current info.",
         ))
     }
+    /// Decrementa la batería, establece el inc_id_to_resolve en None si la misma se encuentra por debajo del mínimo,
+    /// y devuelve si la misma se encuentra por debajo de `min_battery`.
+    pub fn decrement_and_check_battery_lvl(&mut self, min_battery: u8) -> Result<bool, Error> {
+        if let Ok(mut ci) = self.current_info.lock() {
+            Ok(ci.decrement_and_check_battery_lvl(min_battery))
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de current info.",
+            ))
+        }
+    }
 
     /// Toma lock y establece su nivel de batería al recibido por parámetro.
     pub fn set_battery_lvl(&mut self, new_battery_level: u8) -> Result<(), Error> {
@@ -130,6 +143,7 @@ impl Data {
             ))
         }
     }
+
 
     /// Toma lock y establece el inc id a resolver.
     pub fn set_inc_id_to_resolve(&self, inc_info: IncidentInfo) -> Result<(), Error> {

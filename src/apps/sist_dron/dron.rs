@@ -39,7 +39,7 @@ pub struct Dron {
 
     logger: StringLogger,
 
-    drone_distances_by_incident: DistancesType,
+    drone_distances_by_inc: DistancesType,
     qos: u8,
 }
 
@@ -97,7 +97,7 @@ impl Dron {
             data: self.data.clone_ref(),
             dron_properties: self.dron_properties,
             logger: self.logger.clone_ref(),
-            drone_distances_by_incident: Arc::clone(&self.drone_distances_by_incident),
+            drone_distances_by_inc: Arc::clone(&self.drone_distances_by_inc),
             qos: self.qos,
         }
     }
@@ -174,7 +174,7 @@ impl Dron {
             s.data,
             s.dron_properties,
             s.logger,
-            s.drone_distances_by_incident.clone(),
+            s.drone_distances_by_inc.clone(),
             ci_tx,
         );
         
@@ -239,31 +239,29 @@ impl Dron {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let mut dron_properties = SistDronProperties::new(properties_file)?;
+        
         let drone_distances_by_incident = Arc::new(Mutex::new(HashMap::new()));
-
         // Inicia desde el range_center, por lo cual tiene estado activo; y con batería al 100%.
-        // Posicion inicial del dron
         dron_properties.set_range_center_position(initial_lat, initial_lon);
 
-        let ci = DronCurrentInfo::new(
+        let current_info = DronCurrentInfo::new(
             id,
             initial_lat,
             initial_lon,
             100,
             DronState::ExpectingToRecvIncident,
         );
+        let data = Data::new(current_info);
 
         logger.log(format!(
             "Dron {} creado en posición (lat, lon): {}, {}.",
             id, initial_lat, initial_lon
         ));
-        let current_info = Arc::new(Mutex::new(ci));
-        let data = Data::new(current_info.clone());
         let dron = Dron {
             data,
             dron_properties,
             logger,
-            drone_distances_by_incident,
+            drone_distances_by_inc: drone_distances_by_incident,
             qos,
         };
 
