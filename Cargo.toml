@@ -58,4 +58,4 @@ path = "src/apps/sist_dron/dron_main.rs"
 
 [[bin]]
 name = "parse_json"
-path = "src/apps/sist_camaras/parse_json.rs"
+path = "src/apps/sist_camaras/ai_detection/parse_json.rs"

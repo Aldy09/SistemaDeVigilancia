@@ -5,7 +5,7 @@ use rustx::{
         incident_data::incident::Incident,
         sist_camaras::{
             ai_detection::ai_detector_manager::AIDetectorManager,
-            manage_stored_cameras::create_cameras, shareable_cameras_type::ShCamerasType,
+            manage_stored_cameras::create_cameras, types::shareable_cameras_type::ShCamerasType,
         },
     },
     logging::string_logger::StringLogger,

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::mpsc;
 
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
-use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
+use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 use crate::logging::string_logger::StringLogger;
 
