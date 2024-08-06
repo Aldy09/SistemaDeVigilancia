@@ -12,11 +12,11 @@ use crate::{
         }, sist_dron::calculations::{calculate_direction, calculate_distance},
     },
     logging::string_logger::StringLogger,
-    mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
+    mqtt::messages::publish_message::PublishMessage,
 };
 
 use super::{
-    data::Data, dron::Dron, dron_current_info::DronCurrentInfo, dron_state::DronState,
+    data::Data, dron_current_info::DronCurrentInfo, dron_state::DronState,
     sist_dron_properties::SistDronProperties,
 };
 
@@ -24,10 +24,7 @@ use super::{
 pub struct DronLogic {
     current_data: Data,
     dron_properties: SistDronProperties,
-    mqtt_client: Arc<Mutex<MQTTClient>>,
     logger: StringLogger,
-    dron: Dron, // Aux: el dron y el mqtt_client solo se guardan acá mientras dura el refactor, dsp veremos.
-    // aux: ahora se está usando solamente para llamar a publish_current_info.
     drone_distances_by_incident: DistancesType, // ya es arc mutex.
     ci_tx: Sender<DronCurrentInfo>,
 }
@@ -38,18 +35,14 @@ impl DronLogic {
     pub fn new(
         current_data: Data,
         dron_properties: SistDronProperties,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
         logger: StringLogger,
-        dron: Dron,
         distances: DistancesType,
         ci_tx: Sender<DronCurrentInfo>,
     ) -> Self {
         Self {
             current_data,
             dron_properties,
-            mqtt_client,
             logger,
-            dron,
             drone_distances_by_incident: distances,
             ci_tx,
         }
@@ -59,9 +52,7 @@ impl DronLogic {
         Self {
             current_data: self.current_data.clone_ref(),
             dron_properties: self.dron_properties,
-            mqtt_client: self.mqtt_client.clone(),
             logger: self.logger.clone_ref(),
-            dron: self.dron.clone_ref(),
             drone_distances_by_incident: self.drone_distances_by_incident.clone(),
             ci_tx: self.ci_tx.clone(),
         }
@@ -145,7 +136,7 @@ impl DronLogic {
                 if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info) {
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
-                    let self_distance = self.dron.get_distance_to(*incident_position)?;
+                    let self_distance = self.current_data.get_distance_to(*incident_position)?;
 
                     // Agrego al vector la menor distancia entre los dos drones al incidente
                     if self_distance <= received_dron_distance {
@@ -251,7 +242,7 @@ impl DronLogic {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
                     self.fly_to(destination)?;
-                    self.remove_incident_to_hashmap(&inc_id)?;
+                    self.remove_incident_from_hashmap(&inc_id)?;
                 }
             } else {
                 println!("   el inc No está en mi rango."); // se puede borrar
@@ -399,7 +390,7 @@ impl DronLogic {
         ))
     }
 
-    fn remove_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
+    fn remove_incident_from_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             distances.remove(&inc.get_info());
             return Ok(());
