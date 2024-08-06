@@ -1,10 +1,12 @@
 use std::sync::mpsc::Receiver;
 
 use crate::apps::{
-    apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs, sist_camaras::{
+    apps_mqtt_topics::AppsMqttTopics,
+    common_clients::there_are_no_more_publish_msgs,
+    sist_camaras::{
         ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
         shareable_cameras_type::ShCamerasType, sist_camaras_abm::ABMCameras,
-    }
+    },
 };
 use crate::apps::{
     common_clients::exit_when_asked,
@@ -30,7 +32,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-type HashmapIncsType = HashMap<IncidentInfo, Vec<u8>>;
+use super::{hashmap_incs_type::HashmapIncsType, logic::CamerasLogic};
 
 #[derive(Debug)]
 pub struct SistemaCamaras {
@@ -81,12 +83,12 @@ impl SistemaCamaras {
         &mut self,
         cameras_rx: Receiver<Vec<u8>>,
         exit_rx: Receiver<bool>,
-        publish_message_rx: Receiver<PublishMessage>,
+        publish_msg_rx: Receiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
-        let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
+        let mqtt_sh = Arc::new(Mutex::new(mqtt_client));
 
         // ABM
         children.push(self.spawn_abm_cameras_thread(
@@ -96,29 +98,23 @@ impl SistemaCamaras {
         ));
 
         // Recibe las cámaras que envía el abm y las publica por MQTT
-        children.push(self.spawn_publish_to_topic_thread(mqtt_client_sh.clone(), cameras_rx));
+        children.push(self.spawn_publish_to_topic_thread(mqtt_sh.clone(), cameras_rx));
         // Exit
-        children.push(spawn_exit_when_asked_thread(
-            mqtt_client_sh.clone(),
-            exit_rx,
-        ));
+        children.push(spawn_exit_when_asked_thread(mqtt_sh.clone(), exit_rx));
 
         // Incident detector (ai)
         let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
-        children.push(self.spawn_ai_incident_analyzer_thread(incident_tx)); // conexión con proveedor intelig artificial
-        children
-            .push(self.spawn_receive_incident_detected_thread(incident_rx, mqtt_client_sh.clone())); // recibe inc y publica
+        children.push(self.spawn_ai_detector_thread(incident_tx)); // conexión con proveedor intelig artificial
+        children.push(self.spawn_recv_and_publish_inc_thread(incident_rx, mqtt_sh.clone())); // recibe inc y publica
 
         // Suscribe y recibe mensajes por MQTT
-        children.push(
-            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
-        );
+        children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx));
 
         children
     }
 
     /// Recibe los incidentes que envía el detector, y los publica por MQTT al topic de incidentes.
-    fn spawn_receive_incident_detected_thread(
+    fn spawn_recv_and_publish_inc_thread(
         &self,
         rx: Receiver<Incident>,
         mqtt_client: Arc<Mutex<MQTTClient>>,
@@ -201,12 +197,11 @@ impl SistemaCamaras {
         // Publica cámaras al inicio
         self.send_cameras_from_file_to_publish();
         // Lanza el hilo para el abm
-        let cameras_cloned = cameras.clone();
-        let logger_for_child = self.logger.clone_ref();
+        let cameras_c = cameras.clone();
+        let logger_c = self.logger.clone_ref();
         thread::spawn(move || {
             // Ejecuta el menú del abm
-            let mut abm_cameras =
-                ABMCameras::new(cameras_cloned, cameras_tx, exit_tx, logger_for_child);
+            let mut abm_cameras = ABMCameras::new(cameras_c, cameras_tx, exit_tx, logger_c);
             abm_cameras.run();
         })
     }
@@ -281,7 +276,7 @@ impl SistemaCamaras {
     }
 
     /// Pone en ejecución el módulo de detección automática de incidentes.
-    fn spawn_ai_incident_analyzer_thread(&self, tx: mpsc::Sender<Incident>) -> JoinHandle<()> {
+    fn spawn_ai_detector_thread(&self, tx: mpsc::Sender<Incident>) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
         let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
@@ -298,6 +293,7 @@ impl SistemaCamaras {
         msg: PublishMessage,
         cameras: &mut ShCamerasType,
         incs_being_managed: &mut HashmapIncsType,
+        logic: CamerasLogic,
     ) {
         if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
             self.logger.log(format!(
@@ -390,7 +386,10 @@ impl SistemaCamaras {
         match cameras.lock() {
             Ok(mut cams) => {
                 println!("Proceso el incidente {:?} por primera vez", inc.get_info());
-                self.logger.log(format!("Proceso el incidente {:?} por primera vez", inc.get_info()));
+                self.logger.log(format!(
+                    "Proceso el incidente {:?} por primera vez",
+                    inc.get_info()
+                ));
                 let cameras_that_follow_inc =
                     self.get_id_of_cameras_that_will_change_state_to_active(&mut cams, &inc);
 
@@ -401,7 +400,10 @@ impl SistemaCamaras {
                         let state_has_changed =
                             bordering_cam.append_to_incs_being_managed(inc.get_info());
                         if state_has_changed {
-                            self.logger.log(format!("Cambiando a SavingMode, enviando cámara: {:?}", bordering_cam));
+                            self.logger.log(format!(
+                                "Cambiando a SavingMode, enviando cámara: {:?}",
+                                bordering_cam
+                            ));
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
                         }
                     };
@@ -450,10 +452,16 @@ impl SistemaCamaras {
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
     ) {
-        let mut incs_being_managed: HashmapIncsType = HashMap::new();
+        let mut incs_being_managed: HashmapIncsType = HashMap::new(); // se borrará []
+        let logic = CamerasLogic::new(cameras.clone());
 
         for msg in rx {
-            self.handle_received_message(msg, cameras, &mut incs_being_managed)
+            //self.handle_received_message(msg, cameras, &mut incs_being_managed.clone());
+            if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
+                self.logger
+                    .log(format!("Sistema-Camaras: recibió inc: {:?}", incident));
+                self.manage_incidents(incident, cameras, &mut incs_being_managed);
+            }
         }
 
         there_are_no_more_publish_msgs(&self.logger);

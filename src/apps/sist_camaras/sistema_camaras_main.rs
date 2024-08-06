@@ -48,14 +48,14 @@ fn main() -> Result<(), Error> {
     let will_msg_data =
         WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
     match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data)) {
-        Ok((mqtt_client, publish_message_rx, handle)) => {
+        Ok((mqtt_client, publish_msg_rx, handle)) => {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
             let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
 
             let mut handles =
-                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_message_rx, mqtt_client);
+                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_msg_rx, mqtt_client);
 
             handles.push(handle);
             join_all_threads(handles);
