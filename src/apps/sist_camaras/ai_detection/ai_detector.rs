@@ -5,7 +5,7 @@ use std::error::Error;
 use std::io::ErrorKind;
 use std::sync::{mpsc, Arc, Mutex};
 
-use crate::apps::sist_camaras::shareable_cameras_type::ShCamerasType;
+use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;
 use crate::apps::incident_data::incident_source::IncidentSource;
 use crate::logging::string_logger::StringLogger;

@@ -5,8 +5,9 @@ use std::{
 
 use crate::{apps::incident_data::incident::Incident, logging::string_logger::StringLogger};
 
-use super::{
-    camera::Camera, hashmap_incs_type::HashmapIncsType, shareable_cameras_type::ShCamerasType,
+use crate::apps::sist_camaras::{
+    camera::Camera,
+    types::{hashmap_incs_type::HashmapIncsType, shareable_cameras_type::ShCamerasType},
 };
 
 #[derive(Debug)]

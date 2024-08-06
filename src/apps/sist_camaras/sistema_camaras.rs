@@ -3,8 +3,10 @@ use crate::apps::{
     common_clients::{exit_when_asked, there_are_no_more_publish_msgs},
     incident_data::incident::{self, Incident},
     sist_camaras::{
-        ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera, logic::CamerasLogic,
-        shareable_cameras_type::ShCamerasType, sist_camaras_abm::ABMCameras,
+        ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
+        logic::CamerasLogic,
+        sist_camaras_abm::ABMCameras,
+        types::shareable_cameras_type::ShCamerasType
     },
 };
 use crate::logging::string_logger::StringLogger;
@@ -13,7 +15,7 @@ use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::Pu
 use std::collections::HashMap;
 use std::{
     fs,
-    io::{self, Error, ErrorKind},
+    io::{self, ErrorKind},
     sync::{
         mpsc::{self, Receiver, Sender},
         Arc, Mutex,
