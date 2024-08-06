@@ -391,55 +391,65 @@ impl UISistemaMonitoreo {
         &mut self,
         publish_message: PublishMessage,
     ) -> Result<(), Utf8Error> {
-        // Obtengo el contenido del publish message
-        let will_content_res =
-            WillContent::will_content_from_string(from_utf8(&publish_message.get_payload())?);
+        let will_content_res = WillContent::will_content_from_string(from_utf8(&publish_message.get_payload())?);
+        
         if let Ok(will_content) = will_content_res {
-            let app_type = will_content.get_app_type_identifier();
-            // Obtengo los campos necesarios para remover del vector places
-            let id_option = will_content.get_id(); // es un option xq solo dron tiene id en este contexto.
-            let place_type = PlaceType::from_app_type_will_content(&app_type);
-
-            match app_type {
-                AppType::Cameras => {
-                    // Se eliminan Todas las cámaras
-                    self.places.remove_places(place_type)
-                }
-                AppType::Dron => {
-                    if let Some(id) = id_option {
-                        // Se elimina el dron de id indicado, porque el mismo se desconectó.
-                        self.places.remove_place(id, place_type)
-                    }
-                }
-                AppType::Monitoreo => {
-                    // este caso nunca va a darse, no recibirá su propio mensaje, y tampoco interesa.
-                }
-            }
+            self.process_will_content(will_content)?;
         }
 
         Ok(())
     }
 
+    fn process_will_content(&mut self, will_content: WillContent) -> Result<(), Utf8Error> {
+        let app_type = will_content.get_app_type_identifier();
+        let id_option = will_content.get_id(); // es un option porque solo dron tiene id en este contexto.
+        let place_type = PlaceType::from_app_type_will_content(&app_type);
+
+        match app_type {
+            AppType::Cameras => self.handle_camera_disconnection(place_type),
+            AppType::Dron => self.handle_drone_disconnection(id_option, place_type),
+            AppType::Monitoreo => {},
+        }
+        Ok(())
+    }
+
+    fn handle_camera_disconnection(&mut self, place_type: PlaceType) {
+        // Se eliminan Todas las cámaras
+        self.places.remove_places(place_type)
+    }
+
+    fn handle_drone_disconnection(&mut self, id_option: Option<u8>, place_type: PlaceType) {
+        if let Some(id) = id_option {
+            // Se elimina el dron de id indicado, porque el mismo se desconectó.
+            self.places.remove_place(id, place_type)
+        }
+    }
+
     fn handle_mqtt_messages(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |_ui| {
             if let Ok(publish_message) = self.publish_message_rx.try_recv() {
-                match publish_message.get_topic_name() {
-                    topic if topic == AppsMqttTopics::CameraTopic.to_str() => {
-                        self.handle_camera_message(publish_message)
-                    }
-                    topic if topic == AppsMqttTopics::DronTopic.to_str() => {
-                        self.handle_drone_message(publish_message)
-                    }
-                    topic if topic == AppsMqttTopics::IncidentTopic.to_str() => {
-                        self.handle_incident_message(publish_message)
-                    }
-                    topic if topic == AppsMqttTopics::DescTopic.to_str() => {
-                        let _ = self.handle_disconnection_message(publish_message);
-                    }
-                    _ => (),
-                }
+                self.route_message(publish_message);
             }
         });
+    }
+
+    fn route_message(&mut self, publish_message: PublishMessage) {
+        match publish_message.get_topic_name() {
+            topic if topic == AppsMqttTopics::CameraTopic.to_str() => {
+                self.handle_camera_message(publish_message)
+            },
+            topic if topic == AppsMqttTopics::DronTopic.to_str() => {
+                self.handle_drone_message(publish_message)
+            },
+            topic if topic == AppsMqttTopics::IncidentTopic.to_str() => {
+                self.handle_incident_message(publish_message)
+            },
+            topic if topic == AppsMqttTopics::DescTopic.to_str() => {
+                println!("Recibido mensaje de desconexión.");
+                let _ = self.handle_disconnection_message(publish_message);
+            },
+            _ => (),
+        }
     }
 
     fn setup_map(&mut self, ctx: &egui::Context) {
@@ -525,45 +535,38 @@ impl UISistemaMonitoreo {
     }
 
     fn process_incident(&mut self) {
-        let latitude_text = self.latitude.to_string();
-        let longitude_text = self.longitude.to_string();
-        println!("Latitud: {}", latitude_text);
-        println!("Longitud: {}", longitude_text);
+        match self.parse_location() {
+            Ok(location) => self.handle_successful_parse(location),
+            Err(err) => self.send_error_message(err),
+        }
+    }
 
-        match (latitude_text.parse::<f64>(), longitude_text.parse::<f64>()) {
-            (Ok(latitude), Ok(longitude)) => {
-                let location: (f64, f64) = (latitude, longitude);
-                let incident = Incident::new(
-                    self.get_next_incident_id(),
-                    location,
-                    IncidentSource::Manual,
-                );
-                self.add_incident(&incident);
-                self.send_incident_for_publish(incident);
-                self.incident_dialog_open = false;
-            }
-            (Err(_), _) => {
-                println!("Latitud ingresada incorrectamente. Por favor, intente de nuevo.");
+    fn parse_location(&self) -> Result<(f64, f64), &'static str> {
+        let latitude_result = self.latitude.to_string().parse::<f64>();
+        let longitude_result = self.longitude.to_string().parse::<f64>();
 
-                let res_send = self.error_tx.send(
-                    "Latitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
-                );
-                match res_send {
-                    Ok(_) => println!("Mensaje de error enviado correctamente."),
-                    Err(_) => println!("Error al enviar mensaje de error."),
-                }
-            }
-            (_, Err(_)) => {
-                println!("Longitud ingresada incorrectamente. Por favor, intente de nuevo.");
+        match (latitude_result, longitude_result) {
+            (Ok(latitude), Ok(longitude)) => Ok((latitude, longitude)),
+            (Err(_), _) => Err("Latitud ingresada incorrectamente. Por favor, intente de nuevo."),
+            (_, Err(_)) => Err("Longitud ingresada incorrectamente. Por favor, intente de nuevo."),
+        }
+    }
 
-                let res_send = self.error_tx.send(
-                    "Longitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
-                );
-                match res_send {
-                    Ok(_) => println!("Mensaje de error enviado correctamente."),
-                    Err(_) => println!("Error al enviar mensaje de error."),
-                }
-            }
+    fn handle_successful_parse(&mut self, location: (f64, f64)) {
+        let incident = Incident::new(
+            self.get_next_incident_id(),
+            location,
+            IncidentSource::Manual,
+        );
+        self.add_incident(&incident);
+        self.send_incident_for_publish(incident);
+        self.incident_dialog_open = false;
+    }
+
+    fn send_error_message(&self, error_message: &'static str) {
+        match self.error_tx.send(error_message.to_string()) {
+            Ok(_) => println!("Mensaje de error enviado correctamente."),
+            Err(_) => println!("Error al enviar mensaje de error."),
         }
     }
 
@@ -581,20 +584,7 @@ impl UISistemaMonitoreo {
             ctx.request_repaint_after(std::time::Duration::from_millis(milliseconds));
         });
     }
-
-    // fn draw_ui(&mut self, ui: &mut egui::Ui) {
-    //     if let Ok(error) = self.error_rx.try_recv() {
-    //         // Crea una ventana emergente para mostrar el error
-    //         egui::Window::new("Error")
-    //             .collapsible(false) // Hace que la ventana no se pueda colapsar
-    //             .title_bar(true) // Muestra la barra de título
-    //             .show(ui.ctx(), |ui| {
-    //                 // Muestra el mensaje de error dentro de la ventana
-    //                 ui.label(error);
-    //             });
-    //     }
-    // }
-
+    
     fn draw_ui(&mut self, ui: &mut egui::Ui) {
         self.check_for_errors();
         let error_msg = &self.error_message.clone();
