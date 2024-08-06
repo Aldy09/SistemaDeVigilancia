@@ -80,10 +80,9 @@ impl Dron {
     
     fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>, ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
         let self_child = self.clone_ref();
-        let self_child_aux = self.clone_ref(); // Aux: solamente por ahora, mientras dura el refactor.
         thread::spawn(move || {
             let mut battery_manager = BatteryManager::new(self_child.data,
-                self_child.dron_properties, mqtt_client.clone(), self_child.logger, self_child_aux);
+                self_child.dron_properties, self_child.logger);
                 // Aux: el mqtt_client y el dron se los paso solo por ahora, dsp los vamos a borrar de ahí.
             battery_manager.run();
         })
@@ -105,14 +104,14 @@ impl Dron {
         let self_c = self.clone_ref();
         thread::spawn(move || {
             for ci in ci_rx {
-                self_c.publish_current_info(&mqtt_client);
+                self_c.publish_current_info(ci, &mqtt_client);
             }            
         })
     }
 
     /// Hace publish de su current info.
     /// Le servirá a otros drones para ver la condición de los dos drones más cercanos y a monitoreo para mostrarlo en mapa.
-    pub fn publish_current_info(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    pub fn publish_current_info(&self, _ci: DronCurrentInfo, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
             if let Ok(ci) = &self.current_info.lock() {
                 mqtt_client_l.mqtt_publish(
@@ -178,7 +177,7 @@ impl Dron {
         let self_child_aux = self.clone_ref();
         let dron_logic = DronLogic::new(self_child.data,
             self_child.dron_properties, mqtt_client.clone(), self_child.logger,
-             self_child_aux, self_child.drone_distances_by_incident.clone());
+             self_child_aux, self_child.drone_distances_by_incident.clone(), ci_tx);
             // Aux: el mqtt_client y el dron se los paso solo por ahora, dsp los vamos a borrar de ahí.
 
         for publish_msg in mqtt_rx {

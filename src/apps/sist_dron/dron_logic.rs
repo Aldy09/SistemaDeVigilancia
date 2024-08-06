@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
-    sync::{Arc, Mutex}, thread::{self, sleep}, time::Duration,
+    sync::{mpsc::Sender, Arc, Mutex}, thread::{self, sleep}, time::Duration,
 };
 
 use crate::{
@@ -29,6 +29,7 @@ pub struct DronLogic {
     dron: Dron, // Aux: el dron y el mqtt_client solo se guardan acá mientras dura el refactor, dsp veremos.
     // aux: ahora se está usando solamente para llamar a publish_current_info.
     drone_distances_by_incident: DistancesType, // ya es arc mutex.
+    ci_tx: Sender<DronCurrentInfo>,
 }
 
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
@@ -41,6 +42,7 @@ impl DronLogic {
         logger: StringLogger,
         dron: Dron,
         distances: DistancesType,
+        ci_tx: Sender<DronCurrentInfo>,
     ) -> Self {
         Self {
             current_data,
@@ -49,6 +51,7 @@ impl DronLogic {
             logger,
             dron,
             drone_distances_by_incident: distances,
+            ci_tx,
         }
     }
 
@@ -60,6 +63,7 @@ impl DronLogic {
             logger: self.logger.clone_ref(),
             dron: self.dron.clone_ref(),
             drone_distances_by_incident: self.drone_distances_by_incident.clone(),
+            ci_tx: self.ci_tx.clone(),
         }
     }
 
@@ -238,7 +242,7 @@ impl DronLogic {
                     .set_state(DronState::RespondingToIncident, false)?;
 
                 // Publica su estado (su current info) para que otros drones vean la condición b, y monitoreo lo muestre en mapa
-                self.dron.publish_current_info(mqtt_client)?;
+                self.publish_current_info()?;
 
                 let should_move =
                     self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
@@ -250,7 +254,7 @@ impl DronLogic {
                 if should_move {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
-                    self.fly_to(destination, mqtt_client)?;
+                    self.fly_to(destination)?;
                     self.remove_incident_to_hashmap(&inc_id)?;
                 }
             } else {
@@ -264,7 +268,7 @@ impl DronLogic {
 
             // Volar a la posición de Mantenimiento
             let destination = self.dron_properties.get_range_center_position();
-            self.fly_to(destination, mqtt_client)?;
+            self.fly_to(destination)?;
         }
 
         Ok(())
@@ -323,7 +327,7 @@ impl DronLogic {
     ) -> Result<(), Error> {
         // Volver, volar al range center
         let destination = self.dron_properties.get_range_center_position();
-        self.fly_to(destination, mqtt_client)?;
+        self.fly_to(destination)?;
 
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
         self.current_data
@@ -335,7 +339,6 @@ impl DronLogic {
     fn fly_to(
         &mut self,
         destination: (f64, f64),
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let origin = self.current_data.get_current_position()?;
         let dir = calculate_direction(origin, destination);
@@ -365,7 +368,7 @@ impl DronLogic {
             ));
 
             // Publica
-            self.dron.publish_current_info(mqtt_client)?;
+            self.publish_current_info()?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -383,7 +386,7 @@ impl DronLogic {
             .set_state(DronState::ManagingIncident, false)?;
 
         // Publica
-        self.dron.publish_current_info(mqtt_client)?;
+        self.publish_current_info()?;
 
         println!("Fin vuelo."); // se podría borrar
         self.logger.log("Fin vuelo.".to_string());
@@ -411,5 +414,14 @@ impl DronLogic {
             ErrorKind::Other,
             "Error al tomar lock de drone_distances_by_incident.",
         ))
+    }
+    
+    fn publish_current_info(&self) -> Result<(), Error> {
+        let ci = self.current_data.get_current_info()?;
+        if self.ci_tx.send(ci).is_err() {
+            println!("Error al enviar current_info para ser publicada.");
+            self.logger.log("Error al enviar current_info para ser publicada.".to_string());
+        }
+        Ok(())
     }
 }

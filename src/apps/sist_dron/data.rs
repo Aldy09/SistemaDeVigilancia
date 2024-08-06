@@ -208,5 +208,18 @@ impl Data {
             current_info: self.current_info.clone(),
         }
     }
+    
+    pub fn get_current_info(&self) -> Result<DronCurrentInfo, Error> {
+
+        if let Ok(ci) = self.current_info.lock() {
+            return Ok(ci.clone());
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de current info.",
+        ))
+    }
+
+    
 
 }
