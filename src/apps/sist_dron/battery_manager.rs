@@ -1,23 +1,21 @@
-use std::{io::{Error, ErrorKind}, sync::{Arc, Mutex}, thread::sleep, time::Duration};
+use std::{io::Error, sync::mpsc::Sender, thread::sleep, time::Duration};
 
-use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger, mqtt::client::mqtt_client::MQTTClient};
+use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger};
 
-use super::{data::Data, dron::Dron, dron_state::DronState, sist_dron_properties::SistDronProperties};
+use super::{data::Data, dron_current_info::DronCurrentInfo, dron_state::DronState, sist_dron_properties::SistDronProperties};
 
 #[derive(Debug)]
 pub struct BatteryManager {
     current_data: Data,
     dron_properties: SistDronProperties,
-    mqtt_client: Arc<Mutex<MQTTClient>>,
     logger: StringLogger,
-    dron: Dron, // Aux: el dron y el mqtt_client solo se guardan acá mientras dura el refactor, dsp veremos.
-                // aux: ahora se está usando solamente para llamar a publish_current_info.
+    ci_tx: Sender<DronCurrentInfo>,
 }
 
 impl BatteryManager {
 
-    pub fn new(current_data: Data, dron_properties: SistDronProperties, mqtt_client: Arc<Mutex<MQTTClient>>, logger: StringLogger, dron: Dron) -> Self {
-        Self { current_data, dron_properties, mqtt_client, logger, dron }
+    pub fn new(current_data: Data, dron_properties: SistDronProperties, logger: StringLogger, ci_tx: Sender<DronCurrentInfo>) -> Self {
+        Self { current_data, dron_properties, logger, ci_tx }
     }
 
     pub fn run(&mut self) {
@@ -25,27 +23,18 @@ impl BatteryManager {
             sleep(Duration::from_secs(5));
             
             //Actualizar batería
-            let _ = self.decrement_and_check_battery_lvl();
+            if let Err(e) = self.decrement_and_check_battery_lvl(){
+                self.logger.log(format!("Error en BatteryManager: {:?}.", e));
+            }
         }
     }
 
     fn decrement_and_check_battery_lvl(&mut self) -> Result<(), Error> {
-        let maintanence_position;
-        let should_go_to_maintanence: bool;
+                
+        let min_battery = self.dron_properties.get_min_operational_battery_lvl(); //20
 
-        if let Ok(mut ci) = self.current_data.current_info.lock() {
-            //decrementa la bateria
-            let min_battery = self.dron_properties.get_min_operational_battery_lvl(); //20
-            should_go_to_maintanence = ci.decrement_and_check_battery_lvl(min_battery); //inc=None
-            maintanence_position = self.dron_properties.get_mantainance_position();
-        //obelisco
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Error al tomar lock de current info.",
-            ));
-        }
-
+        let should_go_to_maintanence = self.current_data.decrement_and_check_battery_lvl(min_battery)?;
+        
         if should_go_to_maintanence {
             self.logger
                 .log("Batería baja, debo ir a mantenimiento.".to_string());
@@ -61,12 +50,12 @@ impl BatteryManager {
             };
             // Vuela a mantenimiento
             self.current_data.set_state(DronState::Mantainance, true)?;
-
+            let maintanence_position = self.dron_properties.get_mantainance_position();
             self.fly_to_mantainance(maintanence_position, true)?;
-            sleep(Duration::from_secs(3));
 
+            sleep(Duration::from_secs(3));
+            self.recharge_battery()?;
             self.logger.log("Recargando batería al 100%.".to_string());
-            self.recharge_battery()?; // podría llamarse recharge battery.
 
             // Vuelve a la posición correspondiente
             self.fly_to_mantainance(position_to_go, true)?;
@@ -106,7 +95,7 @@ impl BatteryManager {
             ));
 
             // Publica
-            self.dron.publish_current_info(&self.mqtt_client)?;
+            self.publish_current_info()?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -123,7 +112,7 @@ impl BatteryManager {
         self.current_data.set_state(DronState::ManagingIncident, true)?;
 
         // Publica
-        self.dron.publish_current_info(&self.mqtt_client)?;
+        self.publish_current_info()?;
 
         println!("Fin vuelo."); // se podría borrar
         self.logger.log("Fin vuelo.".to_string());
@@ -133,6 +122,16 @@ impl BatteryManager {
 
     fn recharge_battery(&mut self) -> Result<(), Error> {
         self.current_data.set_battery_lvl(self.dron_properties.get_max_battery_lvl())?;
+        Ok(())
+    }
+
+    /// Envía la current_info por un channel para que la parte receptora le haga publish.
+    fn publish_current_info(&self) -> Result<(), Error> {
+        let ci = self.current_data.get_current_info()?;
+        if let Err(e) = self.ci_tx.send(ci) {
+            println!("Error al enviar current_info para ser publicada: {:?}", e);
+            self.logger.log(format!("Error al enviar current_info para ser publicada: {:?}.", e));
+        }
         Ok(())
     }
 

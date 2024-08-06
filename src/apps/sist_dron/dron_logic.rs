@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
-    sync::{Arc, Mutex}, thread::{self, sleep}, time::Duration,
+    sync::{mpsc::Sender, Arc, Mutex}, thread::{self, sleep}, time::Duration,
 };
 
 use crate::{
@@ -12,11 +12,11 @@ use crate::{
         }, sist_dron::calculations::{calculate_direction, calculate_distance},
     },
     logging::string_logger::StringLogger,
-    mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage},
+    mqtt::messages::publish_message::PublishMessage,
 };
 
 use super::{
-    data::Data, dron::Dron, dron_current_info::DronCurrentInfo, dron_state::DronState,
+    data::Data, dron_current_info::DronCurrentInfo, dron_state::DronState,
     sist_dron_properties::SistDronProperties,
 };
 
@@ -24,11 +24,9 @@ use super::{
 pub struct DronLogic {
     current_data: Data,
     dron_properties: SistDronProperties,
-    mqtt_client: Arc<Mutex<MQTTClient>>,
     logger: StringLogger,
-    dron: Dron, // Aux: el dron y el mqtt_client solo se guardan acá mientras dura el refactor, dsp veremos.
-    // aux: ahora se está usando solamente para llamar a publish_current_info.
     drone_distances_by_incident: DistancesType, // ya es arc mutex.
+    ci_tx: Sender<DronCurrentInfo>,
 }
 
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
@@ -37,18 +35,16 @@ impl DronLogic {
     pub fn new(
         current_data: Data,
         dron_properties: SistDronProperties,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
         logger: StringLogger,
-        dron: Dron,
         distances: DistancesType,
+        ci_tx: Sender<DronCurrentInfo>,
     ) -> Self {
         Self {
             current_data,
             dron_properties,
-            mqtt_client,
             logger,
-            dron,
             drone_distances_by_incident: distances,
+            ci_tx,
         }
     }
 
@@ -56,10 +52,9 @@ impl DronLogic {
         Self {
             current_data: self.current_data.clone_ref(),
             dron_properties: self.dron_properties,
-            mqtt_client: self.mqtt_client.clone(),
             logger: self.logger.clone_ref(),
-            dron: self.dron.clone_ref(),
             drone_distances_by_incident: self.drone_distances_by_incident.clone(),
+            ci_tx: self.ci_tx.clone(),
         }
     }
 
@@ -67,12 +62,11 @@ impl DronLogic {
     pub fn process_recvd_msg(
         &mut self,
         msg: PublishMessage,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let topic = msg.get_topic();
         let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
         match enum_topic {
-            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), mqtt_client),
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload()),
             AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.current_data.get_id()? != received_ci.get_id();
@@ -99,14 +93,13 @@ impl DronLogic {
     fn process_valid_inc(
         &mut self,
         payload: Vec<u8>,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let inc = Incident::from_bytes(payload)?;
         let inc_id = inc.get_id();
 
         match *inc.get_state() {
             IncidentState::ActiveIncident => {
-                match self.manage_incident(inc, mqtt_client) {
+                match self.manage_incident(inc) {
                     // Si la función termina con éxito, se devuelve ok.
                     Ok(_) => Ok(()),
                     // Si la función termina de procesar el incidente con error, hay que ver de qué tipo es el eroor
@@ -128,7 +121,7 @@ impl DronLogic {
                 }
             }
             IncidentState::ResolvedIncident => {
-                self.go_back_if_my_inc_was_resolved(inc, mqtt_client)?;
+                self.go_back_if_my_inc_was_resolved(inc)?;
                 Ok(())
             }
         }
@@ -143,7 +136,7 @@ impl DronLogic {
                 if let Some((incident_position, candidate_drones)) = distances.get_mut(&inc_info) {
                     let received_dron_distance = received_dron.get_distance_to(*incident_position);
 
-                    let self_distance = self.dron.get_distance_to(*incident_position)?;
+                    let self_distance = self.current_data.get_distance_to(*incident_position)?;
 
                     // Agrego al vector la menor distancia entre los dos drones al incidente
                     if self_distance <= received_dron_distance {
@@ -161,7 +154,6 @@ impl DronLogic {
     fn decide_if_should_move_to_incident(
         &self,
         incident: &Incident,
-        _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
         let mut should_move = false;
 
@@ -205,7 +197,6 @@ impl DronLogic {
     fn manage_incident(
         &mut self,
         inc_id: Incident,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let event = format!("Recibido inc activo de id: {}", inc_id.get_id()); // se puede borrar
         println!("{:?}", event); // se puede borrar
@@ -238,10 +229,10 @@ impl DronLogic {
                     .set_state(DronState::RespondingToIncident, false)?;
 
                 // Publica su estado (su current info) para que otros drones vean la condición b, y monitoreo lo muestre en mapa
-                self.dron.publish_current_info(mqtt_client)?;
+                self.publish_current_info()?;
 
                 let should_move =
-                    self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
+                    self.decide_if_should_move_to_incident(&inc_id)?;
                 println!("   debería ir al incidente según cercanía: {}", should_move); // se puede borrar
                 self.logger.log(format!(
                     "   debería ir al incidente según cercanía: {}",
@@ -250,8 +241,8 @@ impl DronLogic {
                 if should_move {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
-                    self.fly_to(destination, mqtt_client)?;
-                    self.remove_incident_to_hashmap(&inc_id)?;
+                    self.fly_to(destination)?;
+                    self.remove_incident_from_hashmap(&inc_id)?;
                 }
             } else {
                 println!("   el inc No está en mi rango."); // se puede borrar
@@ -264,7 +255,7 @@ impl DronLogic {
 
             // Volar a la posición de Mantenimiento
             let destination = self.dron_properties.get_range_center_position();
-            self.fly_to(destination, mqtt_client)?;
+            self.fly_to(destination)?;
         }
 
         Ok(())
@@ -290,7 +281,6 @@ impl DronLogic {
     fn go_back_if_my_inc_was_resolved(
         &mut self,
         inc: Incident,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         self.logger
             .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
@@ -307,7 +297,7 @@ impl DronLogic {
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial",
                     inc.get_id()
                 ));
-                self.go_back_to_range_center_position(mqtt_client)?;
+                self.go_back_to_range_center_position()?;
                 self.current_data.unset_inc_id_to_resolve()?;
             }
         }
@@ -319,11 +309,10 @@ impl DronLogic {
     /// para continuar escuchando incidentes.
     fn go_back_to_range_center_position(
         &mut self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         // Volver, volar al range center
         let destination = self.dron_properties.get_range_center_position();
-        self.fly_to(destination, mqtt_client)?;
+        self.fly_to(destination)?;
 
         // Una vez que llegué: Setear estado a nuevamente recibir incidentes
         self.current_data
@@ -335,7 +324,6 @@ impl DronLogic {
     fn fly_to(
         &mut self,
         destination: (f64, f64),
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let origin = self.current_data.get_current_position()?;
         let dir = calculate_direction(origin, destination);
@@ -365,7 +353,7 @@ impl DronLogic {
             ));
 
             // Publica
-            self.dron.publish_current_info(mqtt_client)?;
+            self.publish_current_info()?;
         }
 
         // Salió del while porque está a muy poca distancia del destino. Hace ahora el paso final.
@@ -383,7 +371,7 @@ impl DronLogic {
             .set_state(DronState::ManagingIncident, false)?;
 
         // Publica
-        self.dron.publish_current_info(mqtt_client)?;
+        self.publish_current_info()?;
 
         println!("Fin vuelo."); // se podría borrar
         self.logger.log("Fin vuelo.".to_string());
@@ -402,7 +390,7 @@ impl DronLogic {
         ))
     }
 
-    fn remove_incident_to_hashmap(&self, inc: &Incident) -> Result<(), Error> {
+    fn remove_incident_from_hashmap(&self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             distances.remove(&inc.get_info());
             return Ok(());
@@ -411,5 +399,15 @@ impl DronLogic {
             ErrorKind::Other,
             "Error al tomar lock de drone_distances_by_incident.",
         ))
+    }
+    
+    /// Envía la current_info por un channel para que la parte receptora le haga publish.
+    fn publish_current_info(&self) -> Result<(), Error> {
+        let ci = self.current_data.get_current_info()?;
+        if let Err(e) = self.ci_tx.send(ci) {
+            println!("Error al enviar current_info para ser publicada: {:?}", e);
+            self.logger.log(format!("Error al enviar current_info para ser publicada: {:?}.", e));
+        }
+        Ok(())
     }
 }
