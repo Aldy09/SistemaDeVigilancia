@@ -1,7 +1,6 @@
 use std::io::Error;
 
 use rustx::apps::{
-    apps_mqtt_topics::AppsMqttTopics,
     common_clients::{get_app_will_topic, join_all_threads},
     sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},
 };
@@ -9,10 +8,6 @@ use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::client::mqtt_client::MQTTClient;
 use rustx::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use rustx::mqtt::mqtt_utils::will_message_utils::{app_type::AppType, will_content::WillContent};
-use rustx::apps::{
-        common_clients::{get_app_will_topic, join_all_threads},
-        sist_dron::{dron::Dron, utils::get_id_lat_long_and_broker_address},    
-};
 
 fn get_formatted_app_id(id: u8) -> String {
     format!("dron-{}", id)
