@@ -30,10 +30,7 @@ impl CamerasLogic {
     }
 
     /// Procesa un Incidente recibido.
-    pub fn manage_incident(
-        &mut self,
-        incident: Incident,
-    ) {
+    pub fn manage_incident(&mut self, incident: Incident) {
         // Proceso los incidentes
         if !self.incs_being_managed.contains_key(&incident.get_info()) {
             self.process_first_time_incident(incident);
@@ -45,10 +42,7 @@ impl CamerasLogic {
     // Aux: (condición "hasta que" del enunciado).
     /// Procesa un incidente cuando un incidente con ese mismo id ya fue recibido anteriormente.
     /// Si su estado es resuelto, vuelve el estado de la/s cámara/s que lo atendían, a ahorro de energía.
-    fn process_known_incident(
-        &mut self,
-        inc: Incident,
-    ) {
+    fn process_known_incident(&mut self, inc: Incident) {
         if inc.is_resolved() {
             self.logger.log(format!(
                 "Recibo el inc {} de nuevo, ahora con estado resuelto.",
@@ -63,21 +57,8 @@ impl CamerasLogic {
                 for camera_id in cams_managing_inc {
                     match self.cameras.lock() {
                         Ok(mut cams) => {
-                            // Actualizo las cámaras en cuestión
                             if let Some(cam_to_update) = cams.get_mut(camera_id) {
-                                let state_has_changed =
-                                    cam_to_update.remove_from_incs_being_managed(inc.get_info());
-                                self.logger.log(format!(
-                                    "  la cámara queda: cam id y lista de incs: {:?}",
-                                    cam_to_update.get_id_and_incs_for_debug_display()
-                                ));
-                                if state_has_changed {
-                                    self.logger.log(format!(
-                                        "Cambiado estado a Active, enviando cám: {:?}",
-                                        cam_to_update
-                                    ));
-                                    self.send_camera_bytes(cam_to_update, &self.cameras_tx);
-                                }
+                                self.stop_paying_attention_to(&inc, cam_to_update);
                             }
                         }
                         Err(_) => println!(
@@ -91,13 +72,29 @@ impl CamerasLogic {
         }
     }
 
+    /// Elimina el incidente `inc` de la lista de incs a los que la cámara `cam_to_update` estaba prestando atención.
+    /// Si eso trajo como consecuencia que la misma volviera a estado `SavingMode` (ie el removido era su último incidente),
+    /// entonces envío la cámara para ser publicada por MQTT ya que la misma ha cambiado.
+    fn stop_paying_attention_to(&self, inc: &Incident, cam_to_update: &mut Camera) {
+        // Actualizo la cámara en cuestión
+        let state_has_changed = cam_to_update.remove_from_incs_being_managed(inc.get_info());
+
+        let info = cam_to_update.get_id_and_incs_for_debug_display();
+        self.logger
+            .log(format!(" la cám queda: cam id y lista de incs: {:?}", info));
+
+        // La envío si cambió de estado
+        if state_has_changed {
+            self.logger
+                .log(format!("Cambiado a SavingMode: {:?}", cam_to_update));
+            self.send_camera_bytes(cam_to_update, &self.cameras_tx);
+        }
+    }
+
     /// Procesa un incidente cuando el mismo fue recibido por primera vez.
     /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
     /// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
-    fn process_first_time_incident(
-        &mut self,
-        inc: Incident,
-    ) {
+    fn process_first_time_incident(&mut self, inc: Incident) {
         match self.cameras.lock() {
             Ok(mut cams) => {
                 println!("Proceso el incidente {:?} por primera vez", inc.get_info());
@@ -111,20 +108,12 @@ impl CamerasLogic {
                 // El vector tiene los ids de todas las cámaras que deben cambiar a activo
                 for cam_id in &cameras_that_follow_inc {
                     if let Some(bordering_cam) = cams.get_mut(cam_id) {
-                        // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
-                        let state_has_changed =
-                            bordering_cam.append_to_incs_being_managed(inc.get_info());
-                        if state_has_changed {
-                            self.logger.log(format!(
-                                "Cambiando a estado Saving, enviando cám: {:?}",
-                                bordering_cam
-                            ));
-                            self.send_camera_bytes(bordering_cam, &self.cameras_tx);
-                        }
+                        self.start_paying_attention_to(&inc, bordering_cam);
                     };
                 }
                 // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                self.incs_being_managed.insert(inc.get_info(), cameras_that_follow_inc);
+                self.incs_being_managed
+                    .insert(inc.get_info(), cameras_that_follow_inc);
             }
             Err(_) => todo!(),
         }
@@ -141,24 +130,37 @@ impl CamerasLogic {
         // Recorremos cada una de las cámaras, para ver si el inc está en su rango
         for (cam_id, camera) in cams.iter_mut() {
             if camera.will_register(inc.get_position()) {
-                self.logger.log(format!(
-                    "Está en rango de cam: {}, cambiando su estado a activo.",
-                    cam_id
-                ));
+                self.logger
+                    .log(format!("En rango de cam: {}, cambiando a Activo.", cam_id));
 
+                // Si sí, se agrega ella
                 cameras_that_follow_inc.push(*cam_id);
-
+                // y sus lindantes
                 for bordering_cam_id in camera.get_bordering_cams() {
                     cameras_that_follow_inc.push(*bordering_cam_id);
                 }
-                self.logger.log(format!(
-                    "  la cámara queda: cam id y lista de incs: {:?}",
-                    camera.get_id_and_incs_for_debug_display()
-                ));
+
+                let info = camera.get_id_and_incs_for_debug_display();
+                self.logger
+                    .log(format!(" la cám queda: cam id y lista de incs: {:?}", info));
             }
         }
-
         cameras_that_follow_inc
+    }
+
+    /// Agrega el incidente `inc` a la lista de incs a los que la cámara `cam_to_update` presta atención.
+    /// Si eso trae como consecuencia que la misma cambiara a estado `Active` (ie el agregado era su primer incidente),
+    /// entonces envío la cámara para ser publicada por MQTT ya que la misma ha cambiado.
+    fn start_paying_attention_to(&self, inc: &Incident, cam_to_update: &mut Camera) {
+        // Agrega el inc a la lista de incs de la cámara, y de sus lindantes, para facilitar que luego puedan volver a su anterior estado
+        let state_has_changed = cam_to_update.append_to_incs_being_managed(inc.get_info());
+
+        // La envío si cambió de estado
+        if state_has_changed {
+            self.logger
+                .log(format!("Cambiando a estado Active: {:?}", cam_to_update));
+            self.send_camera_bytes(cam_to_update, &self.cameras_tx);
+        }
     }
 
     /// Envía la cámara recibida, por el channel, para que quien la reciba por rx haga el publish.
