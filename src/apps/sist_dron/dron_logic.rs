@@ -71,12 +71,11 @@ impl DronLogic {
     pub fn process_recvd_msg(
         &mut self,
         msg: PublishMessage,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let topic = msg.get_topic();
         let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
         match enum_topic {
-            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), mqtt_client),
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload()),
             AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.current_data.get_id()? != received_ci.get_id();
@@ -103,14 +102,13 @@ impl DronLogic {
     fn process_valid_inc(
         &mut self,
         payload: Vec<u8>,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let inc = Incident::from_bytes(payload)?;
         let inc_id = inc.get_id();
 
         match *inc.get_state() {
             IncidentState::ActiveIncident => {
-                match self.manage_incident(inc, mqtt_client) {
+                match self.manage_incident(inc) {
                     // Si la función termina con éxito, se devuelve ok.
                     Ok(_) => Ok(()),
                     // Si la función termina de procesar el incidente con error, hay que ver de qué tipo es el eroor
@@ -132,7 +130,7 @@ impl DronLogic {
                 }
             }
             IncidentState::ResolvedIncident => {
-                self.go_back_if_my_inc_was_resolved(inc, mqtt_client)?;
+                self.go_back_if_my_inc_was_resolved(inc)?;
                 Ok(())
             }
         }
@@ -165,7 +163,6 @@ impl DronLogic {
     fn decide_if_should_move_to_incident(
         &self,
         incident: &Incident,
-        _mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> Result<bool, Error> {
         let mut should_move = false;
 
@@ -209,7 +206,6 @@ impl DronLogic {
     fn manage_incident(
         &mut self,
         inc_id: Incident,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         let event = format!("Recibido inc activo de id: {}", inc_id.get_id()); // se puede borrar
         println!("{:?}", event); // se puede borrar
@@ -245,7 +241,7 @@ impl DronLogic {
                 self.publish_current_info()?;
 
                 let should_move =
-                    self.decide_if_should_move_to_incident(&inc_id, mqtt_client.clone())?;
+                    self.decide_if_should_move_to_incident(&inc_id)?;
                 println!("   debería ir al incidente según cercanía: {}", should_move); // se puede borrar
                 self.logger.log(format!(
                     "   debería ir al incidente según cercanía: {}",
@@ -294,7 +290,6 @@ impl DronLogic {
     fn go_back_if_my_inc_was_resolved(
         &mut self,
         inc: Incident,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         self.logger
             .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
@@ -311,7 +306,7 @@ impl DronLogic {
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial",
                     inc.get_id()
                 ));
-                self.go_back_to_range_center_position(mqtt_client)?;
+                self.go_back_to_range_center_position()?;
                 self.current_data.unset_inc_id_to_resolve()?;
             }
         }
@@ -323,7 +318,6 @@ impl DronLogic {
     /// para continuar escuchando incidentes.
     fn go_back_to_range_center_position(
         &mut self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
         // Volver, volar al range center
         let destination = self.dron_properties.get_range_center_position();
@@ -416,11 +410,12 @@ impl DronLogic {
         ))
     }
     
+    /// Envía la current_info por un channel para que la parte receptora le haga publish.
     fn publish_current_info(&self) -> Result<(), Error> {
         let ci = self.current_data.get_current_info()?;
-        if self.ci_tx.send(ci).is_err() {
-            println!("Error al enviar current_info para ser publicada.");
-            self.logger.log("Error al enviar current_info para ser publicada.".to_string());
+        if let Err(e) = self.ci_tx.send(ci) {
+            println!("Error al enviar current_info para ser publicada: {:?}", e);
+            self.logger.log(format!("Error al enviar current_info para ser publicada: {:?}.", e));
         }
         Ok(())
     }

@@ -1,20 +1,21 @@
-use std::{io::{Error, ErrorKind}, thread::sleep, time::Duration};
+use std::{io::{Error, ErrorKind}, sync::mpsc::Sender, thread::sleep, time::Duration};
 
-use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger, mqtt::client::mqtt_client::MQTTClient};
+use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger};
 
-use super::{data::Data, dron_state::DronState, sist_dron_properties::SistDronProperties};
+use super::{data::Data, dron_current_info::DronCurrentInfo, dron_state::DronState, sist_dron_properties::SistDronProperties};
 
 #[derive(Debug)]
 pub struct BatteryManager {
     current_data: Data,
     dron_properties: SistDronProperties,
     logger: StringLogger,
+    ci_tx: Sender<DronCurrentInfo>,
 }
 
 impl BatteryManager {
 
-    pub fn new(current_data: Data, dron_properties: SistDronProperties, logger: StringLogger) -> Self {
-        Self { current_data, dron_properties, logger }
+    pub fn new(current_data: Data, dron_properties: SistDronProperties, logger: StringLogger, ci_tx: Sender<DronCurrentInfo>) -> Self {
+        Self { current_data, dron_properties, logger, ci_tx }
     }
 
     pub fn run(&mut self) {
@@ -133,12 +134,13 @@ impl BatteryManager {
         Ok(())
     }
 
+    /// Envía la current_info por un channel para que la parte receptora le haga publish.
     fn publish_current_info(&self) -> Result<(), Error> {
         let ci = self.current_data.get_current_info()?;
-        /*if self.ci_tx.send(ci).is_err() {
-            println!("Error al enviar current_info para ser publicada.");
-            self.logger.log("Error al enviar current_info para ser publicada.".to_string());
-        }*/ // Aux [].
+        if let Err(e) = self.ci_tx.send(ci) {
+            println!("Error al enviar current_info para ser publicada: {:?}", e);
+            self.logger.log(format!("Error al enviar current_info para ser publicada: {:?}.", e));
+        }
         Ok(())
     }
 

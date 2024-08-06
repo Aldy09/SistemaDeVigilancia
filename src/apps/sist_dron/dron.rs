@@ -70,7 +70,7 @@ impl Dron {
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
         
         let (ci_tx, ci_rx) = mpsc::channel::<DronCurrentInfo>();
-        children.push(self.spawn_for_update_battery(mqtt_client_sh.clone(), ci_tx.clone()));
+        children.push(self.spawn_for_update_battery(ci_tx.clone()));
         
         children.push(self.spawn_recv_ci_and_publish(ci_rx, mqtt_client_sh.clone()));
         self.subscribe_to_topics(mqtt_client_sh.clone(), mqtt_rx, ci_tx)?;
@@ -78,12 +78,11 @@ impl Dron {
         Ok(children)
     }
     
-    fn spawn_for_update_battery(&self, mqtt_client: Arc<Mutex<MQTTClient>>, ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
-        let self_child = self.clone_ref();
+    fn spawn_for_update_battery(&self,ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
+        let s = self.clone_ref();
         thread::spawn(move || {
-            let mut battery_manager = BatteryManager::new(self_child.data,
-                self_child.dron_properties, self_child.logger);
-                // Aux: el mqtt_client y el dron se los paso solo por ahora, dsp los vamos a borrar de ahí.
+            let mut battery_manager = BatteryManager::new(s.data,
+                s.dron_properties, s.logger, ci_tx);
             battery_manager.run();
         })
     }
@@ -99,13 +98,15 @@ impl Dron {
         }
     }
 
-    /// Recibe por rx la indicación de que sea desea publicar la current_info, y la publica por MQTT.
+    /// Recibe por rx la current_info que se desea publicar, y la publica por MQTT.
     pub fn spawn_recv_ci_and_publish(&self, ci_rx: mpsc::Receiver<DronCurrentInfo>, mqtt_client: Arc<Mutex<MQTTClient>>) -> JoinHandle<()>  {
         let self_c = self.clone_ref();
         thread::spawn(move || {
             for ci in ci_rx {
-                self_c.publish_current_info(ci, &mqtt_client);
-            }            
+                if let Err(e) = self_c.publish_current_info(ci, &mqtt_client) {
+                        self_c.logger.log(format!("Error al publicar la current_info: {:?}.", e));
+                }
+            }                        
         })
     }
 
@@ -185,7 +186,7 @@ impl Dron {
                 .log(format!("Dron: Recibo mensaje Publish: {:?}", publish_msg));
 
             // Lanza un hilo para procesar el mensaje, y luego lo espera correctamente
-            let handle_thread = self.spawn_process_recvd_msg_thread(publish_msg, mqtt_client, dron_logic.clone_ref());
+            let handle_thread = self.spawn_process_recvd_msg_thread(publish_msg, dron_logic.clone_ref());
             children.push(handle_thread);
         }
         there_are_no_more_publish_msgs(&self.logger);
@@ -196,13 +197,14 @@ impl Dron {
     fn spawn_process_recvd_msg_thread(
         &self,
         msg: PublishMessage,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
         dron_logic: DronLogic,
     ) -> JoinHandle<()> {
         let mut logic_clone = dron_logic.clone_ref();
-        let mqtt_client_clone = Arc::clone(mqtt_client);
+        let logger_c = self.logger.clone_ref();
         thread::spawn(move || {
-            let _ = logic_clone.process_recvd_msg(msg, &mqtt_client_clone);
+            if let Err(e) = logic_clone.process_recvd_msg(msg) {
+                logger_c.log(format!("Error al procesar mensage recibido, process_rcvd_msg: {:?}.", e));
+            }
         })
     }
 
