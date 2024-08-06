@@ -3,8 +3,7 @@ use crate::apps::{
     common_clients::{exit_when_asked, there_are_no_more_publish_msgs},
     incident_data::incident::{self, Incident},
     sist_camaras::{
-        hashmap_incs_type::HashmapIncsType, logic::CamerasLogic,
-        ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
+        ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera, logic::CamerasLogic,
         shareable_cameras_type::ShCamerasType, sist_camaras_abm::ABMCameras,
     },
 };
@@ -14,10 +13,12 @@ use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::Pu
 use std::collections::HashMap;
 use std::{
     fs,
-    io::{self, Error, ErrorKind}, sync::{
+    io::{self, Error, ErrorKind},
+    sync::{
         mpsc::{self, Receiver, Sender},
         Arc, Mutex,
-    }, thread::{self, JoinHandle},
+    },
+    thread::{self, JoinHandle},
 };
 
 #[derive(Debug)]
@@ -94,7 +95,7 @@ impl SistemaCamaras {
         children.push(self.spawn_recv_and_publish_inc_thread(incident_rx, mqtt_sh.clone())); // recibe inc y publica
 
         // Suscribe y recibe mensajes por MQTT
-        children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx, ));
+        children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx));
 
         children
     }
@@ -274,37 +275,22 @@ impl SistemaCamaras {
         })
     }
 
-    /*fn handle_received_message(
-        &mut self,
-        msg: PublishMessage,
-        cameras: &mut ShCamerasType,
-        incs_being_managed: &mut HashmapIncsType,
-        logic: CamerasLogic,
-    ) {
-        if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
-            self.logger.log(format!(
-                "Sistema-Camaras: recibió incidente: {:?}",
-                incident
-            ));
-            self.manage_incidents(incident, cameras, incs_being_managed);
-        }
-    }*/
-
     /// Recibe mensajes de los topics a los que se ha suscrito.
     fn receive_messages_from_subscribed_topics(
         &mut self,
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
     ) {
-        let mut incs_being_managed: HashmapIncsType = HashMap::new(); // se borrará []
-        let mut logic = CamerasLogic::new(cameras.clone(), self.cameras_tx.clone(), self.logger.clone_ref());
+        let mut logic = CamerasLogic::new(
+            cameras.clone(),
+            self.cameras_tx.clone(),
+            self.logger.clone_ref(),
+        );
 
         for msg in rx {
-            //self.handle_received_message(msg, cameras, &mut incs_being_managed.clone());
             if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
-                self.logger
-                    .log(format!("Sistema-Camaras: recibió inc: {:?}", incident));
-                logic.manage_incidents(incident, cameras, &mut incs_being_managed);
+                self.logger.log(format!("Inc recibido: {:?}", incident));
+                logic.manage_incident(incident);
             }
         }
 
@@ -325,7 +311,7 @@ impl SistemaCamaras {
             match res {
                 Ok(_) => {
                     println!("Sistema-Camara: Subscripción a exitosa");
-                    self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned,);
+                    self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned);
                 }
                 Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
             };

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::{mpsc::Sender, MutexGuard}};
+use std::{
+    collections::HashMap,
+    sync::{mpsc::Sender, MutexGuard},
+};
 
 use crate::{apps::incident_data::incident::Incident, logging::string_logger::StringLogger};
 
@@ -26,17 +29,15 @@ impl CamerasLogic {
     }
 
     /// Procesa un Incidente recibido.
-    pub fn manage_incidents(
+    pub fn manage_incident(
         &mut self,
         incident: Incident,
-        cameras: &mut ShCamerasType,
-        incs_being_managed: &mut HashmapIncsType,
     ) {
         // Proceso los incidentes
-        if !incs_being_managed.contains_key(&incident.get_info()) {
-            self.process_first_time_incident(cameras, incident, incs_being_managed);
+        if !self.incs_being_managed.contains_key(&incident.get_info()) {
+            self.process_first_time_incident(incident);
         } else {
-            self.process_known_incident(cameras, incident, incs_being_managed);
+            self.process_known_incident(incident);
         }
     }
 
@@ -44,43 +45,37 @@ impl CamerasLogic {
     /// Procesa un incidente cuando un incidente con ese mismo id ya fue recibido anteriormente.
     /// Si su estado es resuelto, vuelve el estado de la/s cámara/s que lo atendían, a ahorro de energía.
     fn process_known_incident(
-        &self,
-        cameras: &mut ShCamerasType,
+        &mut self,
         inc: Incident,
-        incs_being_managed: &mut HashmapIncsType,
     ) {
         if inc.is_resolved() {
-            println!(
-                "Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.",
-                inc.get_id()
-            );
             self.logger.log(format!(
-                "Recibo el incidente {} de nuevo, y ahora viene con estado resuelto.",
+                "Recibo el inc {} de nuevo, ahora con estado resuelto.",
                 inc.get_id()
             ));
             // Busco la/s cámara/s que atendían este incidente
-            if let Some(cams_managing_inc) = incs_being_managed.get(&inc.get_info()) {
+            if let Some(cams_managing_inc) = self.incs_being_managed.get(&inc.get_info()) {
                 // sé que existe, por el if de más arriba
 
                 // Cambio el estado de las cámaras que lo manejaban, otra vez a ahorro de energía
                 // solamente si el incidente en cuestión era el único que manejaban (si tenía más incidentes en rango, sigue estando activa)
                 for camera_id in cams_managing_inc {
-                    match cameras.lock() {
+                    match self.cameras.lock() {
                         Ok(mut cams) => {
                             // Actualizo las cámaras en cuestión
-                            if let Some(camera_to_update) = cams.get_mut(camera_id) {
+                            if let Some(cam_to_update) = cams.get_mut(camera_id) {
                                 let state_has_changed =
-                                    camera_to_update.remove_from_incs_being_managed(inc.get_info());
+                                    cam_to_update.remove_from_incs_being_managed(inc.get_info());
                                 self.logger.log(format!(
                                     "  la cámara queda: cam id y lista de incs: {:?}",
-                                    camera_to_update.get_id_and_incs_for_debug_display()
+                                    cam_to_update.get_id_and_incs_for_debug_display()
                                 ));
                                 if state_has_changed {
                                     self.logger.log(format!(
-                                        "Cambiado estado a ActiveMode, enviando cámara: {:?}",
-                                        camera_to_update
+                                        "Cambiado estado a Active, enviando cám: {:?}",
+                                        cam_to_update
                                     ));
-                                    self.send_camera_bytes(camera_to_update, &self.cameras_tx);
+                                    self.send_camera_bytes(cam_to_update, &self.cameras_tx);
                                 }
                             }
                         }
@@ -91,7 +86,7 @@ impl CamerasLogic {
                 }
             }
             // También elimino la entrada del hashmap que busca por incidente, ya no le doy seguimiento
-            incs_being_managed.remove(&inc.get_info());
+            self.incs_being_managed.remove(&inc.get_info());
         }
     }
 
@@ -99,12 +94,10 @@ impl CamerasLogic {
     /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
     /// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
     fn process_first_time_incident(
-        &self,
-        cameras: &mut ShCamerasType,
+        &mut self,
         inc: Incident,
-        incs_being_managed: &mut HashmapIncsType,
     ) {
-        match cameras.lock() {
+        match self.cameras.lock() {
             Ok(mut cams) => {
                 println!("Proceso el incidente {:?} por primera vez", inc.get_info());
                 self.logger.log(format!(
@@ -122,7 +115,7 @@ impl CamerasLogic {
                             bordering_cam.append_to_incs_being_managed(inc.get_info());
                         if state_has_changed {
                             self.logger.log(format!(
-                                "Cambiando a SavingMode, enviando cámara: {:?}",
+                                "Cambiando a estado Saving, enviando cám: {:?}",
                                 bordering_cam
                             ));
                             self.send_camera_bytes(bordering_cam, &self.cameras_tx);
@@ -130,7 +123,7 @@ impl CamerasLogic {
                     };
                 }
                 // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                incs_being_managed.insert(inc.get_info(), cameras_that_follow_inc);
+                self.incs_being_managed.insert(inc.get_info(), cameras_that_follow_inc);
             }
             Err(_) => todo!(),
         }
