@@ -4,7 +4,7 @@ use crate::mqtt::messages::packet_type::PacketType;
 /// El byte 1 contiene el tipo de mensaje en sus 4 bits más significativos,
 /// y ceros o posiblemente flags (dependiendo del tipo de mensaje) en sus 4 bits menos significativos.
 /// El byte 2 contiene la `remaining_length` que es la longitud de la porción restante del mensaje.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub struct FixedHeader {
     message_type_byte: u8, // byte 1, el tipo está en los 4 MSBits.
     remaining_length: u8,  // byte 2

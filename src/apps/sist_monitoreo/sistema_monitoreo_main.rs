@@ -1,12 +1,12 @@
 use std::io::Error;
 
 use crossbeam_channel::unbounded;
+use rustx::apps::{
+    common_clients::{get_broker_address, join_all_threads},
+    sist_monitoreo::sistema_monitoreo::SistemaMonitoreo,
+};
 use rustx::logging::string_logger::StringLogger;
 use rustx::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
-use rustx::apps::{
-        common_clients::{get_broker_address, join_all_threads},
-        sist_monitoreo::sistema_monitoreo::SistemaMonitoreo,
-    };
 
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Monitoreo")

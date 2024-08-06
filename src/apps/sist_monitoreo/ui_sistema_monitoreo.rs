@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::str::{from_utf8, Utf8Error};
+use std::time::{Duration, Instant};
 
 use crate::apps::apps_mqtt_topics::AppsMqttTopics;
 use crate::apps::incident_data::incident_state::IncidentState;
-use crate::apps::incident_data::{incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource};
+use crate::apps::incident_data::{
+    incident::Incident, incident_info::IncidentInfo, incident_source::IncidentSource,
+};
 use crate::apps::place_type::PlaceType;
 use crate::apps::sist_camaras::camera_state::CameraState;
 use crate::apps::sist_dron::dron_current_info::DronCurrentInfo;
@@ -17,9 +20,9 @@ use crate::apps::vendor::{
 use crate::apps::{places, plugins::ImagesPluginData};
 use crate::mqtt::mqtt_utils::will_message_utils::app_type::AppType;
 use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
-use crossbeam::channel::Receiver;
+use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use egui::Color32;
 use egui::Context;
-use egui::{menu, Color32};
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -122,42 +125,30 @@ pub struct UISistemaMonitoreo {
     latitude: String,
     longitude: String,
     publish_incident_tx: Sender<Incident>,
-    publish_message_rx: Receiver<PublishMessage>,
+    publish_message_rx: CrossbeamReceiver<PublishMessage>,
     places: Places,
     last_incident_id: u8,
     exit_tx: Sender<bool>,
     incidents_to_resolve: Vec<IncidentWithDrones>, // posicion 0  --> (inc_id_to_resolve, drones(dron1, dron2)) // posicion 1 --> (inc_id_to_resolve 2, drones(dron1, dron2))
-    hashmap_incidents: HashMap<IncidentInfo, Incident>, // 
+    hashmap_incidents: HashMap<IncidentInfo, Incident>, //
+    error_tx: CrossbeamSender<String>,
+    error_rx: CrossbeamReceiver<String>,
+    error_message: Option<String>,
+    error_display_start: Option<Instant>,
 }
 
 impl UISistemaMonitoreo {
     pub fn new(
         egui_ctx: Context,
         tx: Sender<Incident>,
-        publish_message_rx: Receiver<PublishMessage>,
+        publish_message_rx: CrossbeamReceiver<PublishMessage>,
         exit_tx: Sender<bool>,
     ) -> Self {
         egui_extras::install_image_loaders(&egui_ctx);
 
-        // Data for the `images` plugin showcase.
         let images_plugin_data = ImagesPluginData::new(egui_ctx.to_owned());
-
-        let mantainance_style = Style {
-            symbol_color: Color32::from_rgb(255, 165, 0), // Color naranja
-            ..Default::default()
-        };
-
-        let mantainance_ui = Place {
-            position: places::mantenimiento(),
-            label: "Mantenimiento".to_string(),
-            symbol: '🔋',
-            style: mantainance_style, //ESTE ES DEL LABEL, NO DEL ICONO
-            id: 0,
-            place_type: PlaceType::Mantainance,
-        };
-
-        let mut places = Places::new();
-        places.add_place(mantainance_ui);
+        let places = Self::initialize_places();
+        let (error_tx, error_rx) = unbounded();
 
         Self {
             providers: providers(egui_ctx.to_owned()),
@@ -175,14 +166,83 @@ impl UISistemaMonitoreo {
             exit_tx,
             incidents_to_resolve: Vec::new(),
             hashmap_incidents: HashMap::new(),
+            error_tx,
+            error_rx,
+            error_message: None,
+            error_display_start: None,
         }
     }
-    
+
+    fn create_style_with_color(r: u8, g: u8, b: u8) -> Style {
+        Style {
+            symbol_color: Color32::from_rgb(r, g, b),
+            ..Default::default()
+        }
+    }
+
+    fn initialize_places() -> Places {
+        let mantainance_style = Self::create_style_with_color(255, 165, 0); // Color naranja
+        let mantainance_ui = Self::create_maintenance_place(mantainance_style);
+        let mut places = Places::new();
+        places.add_place(mantainance_ui);
+        places
+    }
+
+    fn create_maintenance_place(style: Style) -> Place {
+        Place {
+            position: places::mantenimiento(),
+            label: "Mantenimiento".to_string(),
+            symbol: '🔋',
+            style,
+            id: 0,
+            place_type: PlaceType::Mantainance,
+        }
+    }
+
     /// Envía internamente a otro hilo el `incident` recibido, para publicarlo por mqtt.
     fn send_incident_for_publish(&self, incident: Incident) {
         println!("Enviando incidente: {:?}", incident);
         let _ = self.publish_incident_tx.send(incident);
     }
+
+    fn create_camera_style(camera_state: CameraState) -> Style {
+        match camera_state {
+            CameraState::Active => Style {
+                symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
+                ..Default::default()
+            },
+            CameraState::SavingMode => Style::default(),
+        }
+    }
+
+    fn create_camera_place(camera: &Camera, style: Style) -> Place {
+        let camera_id = camera.get_id();
+        let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
+
+        Place {
+            position: Position::from_lon_lat(longitude, latitude),
+            label: format!("Camera {}", camera_id),
+            symbol: '📷',
+            style,
+            id: camera_id,
+            place_type: PlaceType::Camera,
+        }
+    }
+
+    fn update_camera_on_map(&mut self, camera: Camera) {
+        let camera_id = camera.get_id();
+
+        if camera.is_not_deleted() {
+            self.places.remove_place(camera_id, PlaceType::Camera);
+
+            let style = Self::create_camera_style(camera.get_state());
+            let camera_ui = Self::create_camera_place(&camera, style);
+            self.places.add_place(camera_ui);
+        } else {
+            self.places.remove_place(camera_id, PlaceType::Camera);
+        }
+    }
+
     /// Se encarga de procesar y agregar o eliminar una cámara recibida al mapa.
     fn handle_camera_message(&mut self, publish_message: PublishMessage) {
         let camera = Camera::from_bytes(&publish_message.get_payload());
@@ -192,34 +252,7 @@ impl UISistemaMonitoreo {
             camera.get_state()
         );
 
-        if camera.is_not_deleted() {
-            let camera_id = camera.get_id();
-            let (latitude, longitude) = (camera.get_latitude(), camera.get_longitude());
-            // Si existía, la elimino del mapa, para volver a dibujarla (xq puede tener cambiado el estado)
-            self.places.remove_place(camera_id, PlaceType::Camera);
-
-            // Se le pone un color dependiendo de su estado
-            let style = match camera.get_state() {
-                CameraState::Active => Style {
-                    symbol_color: Color32::from_rgb(0, 255, 0), // Color verde
-                    ..Default::default()
-                },
-                CameraState::SavingMode => Style::default(),
-            };
-
-            let camera_ui = Place {
-                position: Position::from_lon_lat(longitude, latitude),
-                label: format!("Camera {}", camera_id),
-                symbol: '📷',
-                style, //ESTE ES DEL LABEL, NO DEL ICONO
-                id: camera_id,
-                place_type: PlaceType::Camera,
-            };
-            self.places.add_place(camera_ui);
-        } else {
-            self.places
-                .remove_place(camera.get_id(), PlaceType::Camera);
-        }
+        self.update_camera_on_map(camera);
     }
 
     /// Se encarga de procesar y agregar un dron recibido al mapa.
@@ -242,7 +275,7 @@ impl UISistemaMonitoreo {
                         .incidents_to_resolve
                         .iter()
                         .position(|incident| incident.incident_info == inc_info);
-                        //.position(|incident| incident.incident_info.get_inc_id() == inc_id); // <--pre refactor decía esto
+                    //.position(|incident| incident.incident_info.get_inc_id() == inc_id); // <--pre refactor decía esto
 
                     match incident_index {
                         Some(index) => {
@@ -260,13 +293,6 @@ impl UISistemaMonitoreo {
                 }
             }
 
-            //posicion 0  --> (inc_id_to_resolve = 1, drones(dron1, dron2))
-
-            /*println!(
-                "EL vector de incidentes a resolver es: {:?}",
-                self.incidents_to_resolve
-            );*/
-
             for incident in self.incidents_to_resolve.iter() {
                 if incident.drones.len() == 2 {
                     let inc_info = &incident.incident_info;
@@ -274,9 +300,9 @@ impl UISistemaMonitoreo {
                         incident.set_resolved();
                         // Obtengo el source del incidente, para pasarle un place_type acorde al remove_place
                         // y lo remuevo de la lista de places a mostrar en el mapa.
-                        let place_type = PlaceType::from_inc_source(incident.get_source());                        
+                        let place_type = PlaceType::from_inc_source(incident.get_source());
                         self.places.remove_place(inc_info.get_inc_id(), place_type);
-                        
+
                         self.send_incident_for_publish(incident);
                     }
                 }
@@ -318,42 +344,42 @@ impl UISistemaMonitoreo {
     /// Recibe un PublishMessage de topic Inc, y procesa el incidente recibido
     /// (se lo guarda para continuar procesándolo, y lo muestra en la ui).
     fn handle_incident_message(&mut self, msg: PublishMessage) {
-        if let Ok(inc) = Incident::from_bytes(msg.get_payload()){
+        if let Ok(inc) = Incident::from_bytes(msg.get_payload()) {
             // Agregamos el incidente (add_incident) solamente si él no fue creado por sist monitoreo.
-            if *inc.get_source() == IncidentSource::Automated && *inc.get_state() == IncidentState::ActiveIncident {
+            if *inc.get_source() == IncidentSource::Automated
+                && *inc.get_state() == IncidentState::ActiveIncident
+            {
                 self.add_incident(&inc);
             }
         }
-
     }
 
     /// Crea el Place para el incidente recibido, lo agrega a la ui para que se muestre por pantalla,
     /// y lo agrega a un hashmap para continuar procesándolo (Aux: rever tema ids que quizás se pisen cuando camaras publiquen incs).
     fn add_incident(&mut self, incident: &Incident) {
-        let custom_style = Style {
-            symbol_color: Color32::from_rgb(255, 0, 0), // Color rojo
-            ..Default::default()
-        };
+        let custom_style = Self::create_style_with_color(255, 0, 0); // Color rojo
+        let new_place_incident = self.create_place_for_incident(incident, &custom_style);
+        self.places.add_place(new_place_incident);
+        self.store_incident_info(incident);
+    }
 
+    fn create_place_for_incident(&self, incident: &Incident, custom_style: &Style) -> Place {
         let place_type = PlaceType::from_inc_source(incident.get_source());
-
         let (lat, lon) = incident.get_position();
-        let new_place_incident = Place {
-            position: Position::from_lon_lat(
-                lon, lat,
-            ),
+        Place {
+            position: Position::from_lon_lat(lon, lat),
             label: format!("Incident {}", incident.get_id()),
             symbol: '⚠',
-            style: custom_style,
+            style: custom_style.clone(),
             id: incident.get_id(),
             place_type,
-        };
-        self.places.add_place(new_place_incident);
-        
+        }
+    }
+
+    fn store_incident_info(&mut self, incident: &Incident) {
         let inc_info = IncidentInfo::new(incident.get_id(), *incident.get_source());
         let inc_to_store = incident.clone();
-        self.hashmap_incidents
-            .insert(inc_info, inc_to_store); // Edit: viendo :). Aux: cuando cámaras generen incidentes, rever esto xq pueden pisarse los ids.
+        self.hashmap_incidents.insert(inc_info, inc_to_store);
     }
 
     fn get_next_incident_id(&mut self) -> u8 {
@@ -361,10 +387,13 @@ impl UISistemaMonitoreo {
         self.last_incident_id
     }
 
-    fn handle_disconnection_message(&mut self, publish_message: PublishMessage) -> Result<(), Utf8Error> {
+    fn handle_disconnection_message(
+        &mut self,
+        publish_message: PublishMessage,
+    ) -> Result<(), Utf8Error> {
         // Obtengo el contenido del publish message
-        let will_content_res =  WillContent::will_content_from_string(
-            from_utf8(&publish_message.get_payload())?);
+        let will_content_res =
+            WillContent::will_content_from_string(from_utf8(&publish_message.get_payload())?);
         if let Ok(will_content) = will_content_res {
             let app_type = will_content.get_app_type_identifier();
             // Obtengo los campos necesarios para remover del vector places
@@ -373,65 +402,61 @@ impl UISistemaMonitoreo {
 
             match app_type {
                 AppType::Cameras => {
-                    // Se eliminan Todas las cámaras.
-                    println!("Desc, recibido will_message: Se desconectó Sistema Cámaras.");
+                    // Se eliminan Todas las cámaras
                     self.places.remove_places(place_type)
-                },
+                }
                 AppType::Dron => {
                     if let Some(id) = id_option {
-                        println!("Desc, recibido will_message: Se desconectó Dron {}.", id);
                         // Se elimina el dron de id indicado, porque el mismo se desconectó.
-                        self.places.remove_place(id, place_type)                        
+                        self.places.remove_place(id, place_type)
                     }
-                },
+                }
                 AppType::Monitoreo => {
                     // este caso nunca va a darse, no recibirá su propio mensaje, y tampoco interesa.
-                },
+                }
             }
-
         }
-        
+
         Ok(())
     }
-}
 
-impl eframe::App for UISistemaMonitoreo {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn handle_mqtt_messages(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |_ui| {
+            if let Ok(publish_message) = self.publish_message_rx.try_recv() {
+                match publish_message.get_topic_name() {
+                    topic if topic == AppsMqttTopics::CameraTopic.to_str() => {
+                        self.handle_camera_message(publish_message)
+                    }
+                    topic if topic == AppsMqttTopics::DronTopic.to_str() => {
+                        self.handle_drone_message(publish_message)
+                    }
+                    topic if topic == AppsMqttTopics::IncidentTopic.to_str() => {
+                        self.handle_incident_message(publish_message)
+                    }
+                    topic if topic == AppsMqttTopics::DescTopic.to_str() => {
+                        let _ = self.handle_disconnection_message(publish_message);
+                    }
+                    _ => (),
+                }
+            }
+        });
+    }
+
+    fn setup_map(&mut self, ctx: &egui::Context) {
         let rimless = egui::Frame {
             fill: ctx.style().visuals.panel_fill,
             ..Default::default()
         };
 
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            ctx.request_repaint_after(std::time::Duration::from_millis(150));
-        });
-
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            if let Ok(publish_message) = self.publish_message_rx.try_recv() {
-                // (aux: sí, esto debe ser un match []).
-                if publish_message.get_topic_name() == AppsMqttTopics::CameraTopic.to_str() {
-                    self.handle_camera_message(publish_message);
-                } else if publish_message.get_topic_name() == AppsMqttTopics::DronTopic.to_str() {
-                    self.handle_drone_message(publish_message);
-                } else if publish_message.get_topic_name() == AppsMqttTopics::IncidentTopic.to_str() {
-                    self.handle_incident_message(publish_message);
-                } else if publish_message.get_topic_name() == AppsMqttTopics::DescTopic.to_str() {
-                    let _ = self.handle_disconnection_message(publish_message); // []
-                }
-            }
-        });
-
         egui::CentralPanel::default()
             .frame(rimless)
             .show(ctx, |ui| {
                 let my_position = places::obelisco();
-
                 let tiles = self
                     .providers
                     .get_mut(&self.selected_provider)
                     .unwrap()
                     .as_mut();
-
                 let map = Map::new(Some(tiles), &mut self.map_memory, my_position)
                     .with_plugin(self.places.clone())
                     .with_plugin(super::super::plugins::images(&mut self.images_plugin_data))
@@ -439,76 +464,192 @@ impl eframe::App for UISistemaMonitoreo {
                     .with_plugin(&mut self.click_watcher);
 
                 ui.add(map);
-
-                {
-                    use super::super::windows::*;
-                    zoom(ui, &mut self.map_memory);
-                    go_to_my_position(ui, &mut self.map_memory);
-                    self.click_watcher.show_position(ui);
-                    controls(
-                        ui,
-                        &mut self.selected_provider,
-                        &mut self.providers.keys(),
-                        &mut self.images_plugin_data,
-                    );
-                }
-
-                egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
-                    egui::menu::bar(ui, |ui| {
-                        menu::bar(ui, |ui| {
-                            ui.menu_button("Incidente", |ui| {
-                                if !self.incident_dialog_open
-                                    && ui.button("Alta Incidente").clicked()
-                                {
-                                    self.incident_dialog_open = true;
-                                }
-                                if self.incident_dialog_open {
-                                    ui.add_space(5.0);
-                                    ui.horizontal(|ui| {
-                                        ui.label("Latitud:");
-                                        let _latitude_input = ui.add_sized(
-                                            [100.0, 20.0],
-                                            egui::TextEdit::singleline(&mut self.latitude),
-                                        );
-                                        ui.label("Longitud:");
-                                        let _longitude_input = ui.add_sized(
-                                            [100.0, 20.0],
-                                            egui::TextEdit::singleline(&mut self.longitude),
-                                        );
-
-                                        if ui.button("OK").clicked() {
-                                            let latitude_text = self.latitude.to_string();
-                                            let longitude_text = self.longitude.to_string();
-
-                                            println!("Latitud: {}", latitude_text);
-                                            println!("Longitud: {}", longitude_text);
-
-                                            let latitude = latitude_text.parse::<f64>().unwrap();
-                                            let longitude: f64 =
-                                                longitude_text.parse::<f64>().unwrap();
-                                            let location = (latitude, longitude);
-                                            let incident = Incident::new(
-                                                self.get_next_incident_id(),
-                                                location,
-                                                IncidentSource::Manual,
-                                            );
-                                            self.add_incident(&incident);
-                                            self.send_incident_for_publish(incident); // lo publica
-                                            self.incident_dialog_open = false;
-                                        }
-                                    });
-                                }
-                            });
-                            if ui.button("Salir").clicked() {
-                                // Indicar que se desea salir
-                                match self.exit_tx.send(true) {
-                                    Ok(_) => println!("Iniciando proceso para salir"),
-                                    Err(_) => println!("Error al intentar salir"),
-                                }
-                            }
-                        });
-                    });
-                });
+                self.setup_map_controls(ui);
             });
+    }
+
+    fn setup_map_controls(&mut self, ui: &mut egui::Ui) {
+        use super::super::windows::*;
+        zoom(ui, &mut self.map_memory);
+        go_to_my_position(ui, &mut self.map_memory);
+        self.click_watcher.show_position(ui);
+        controls(
+            ui,
+            &mut self.selected_provider,
+            &mut self.providers.keys(),
+            &mut self.images_plugin_data,
+        );
+    }
+
+    fn setup_top_menu(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                self.incident_menu(ui);
+                self.exit_menu(ui);
+            });
+        });
+    }
+
+    fn incident_menu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("Incidente", |ui| {
+            if !self.incident_dialog_open && ui.button("Alta Incidente").clicked() {
+                self.incident_dialog_open = true;
+            }
+            if self.incident_dialog_open {
+                self.incident_dialog(ui);
+            }
+        });
+    }
+
+    fn incident_dialog(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(5.0);
+        ui.horizontal(|ui| {
+            self.incident_position_inputs(ui);
+            if ui.button("OK").clicked() {
+                self.process_incident();
+            }
+        });
+    }
+
+    fn incident_position_inputs(&mut self, ui: &mut egui::Ui) {
+        ui.label("Latitud:");
+        let _latitude_input = ui.add_sized(
+            [100.0, 20.0],
+            egui::TextEdit::singleline(&mut self.latitude),
+        );
+        ui.label("Longitud:");
+        let _longitude_input = ui.add_sized(
+            [100.0, 20.0],
+            egui::TextEdit::singleline(&mut self.longitude),
+        );
+    }
+
+    fn process_incident(&mut self) {
+        let latitude_text = self.latitude.to_string();
+        let longitude_text = self.longitude.to_string();
+        println!("Latitud: {}", latitude_text);
+        println!("Longitud: {}", longitude_text);
+
+        match (latitude_text.parse::<f64>(), longitude_text.parse::<f64>()) {
+            (Ok(latitude), Ok(longitude)) => {
+                let location: (f64, f64) = (latitude, longitude);
+                let incident = Incident::new(
+                    self.get_next_incident_id(),
+                    location,
+                    IncidentSource::Manual,
+                );
+                self.add_incident(&incident);
+                self.send_incident_for_publish(incident);
+                self.incident_dialog_open = false;
+            }
+            (Err(_), _) => {
+                println!("Latitud ingresada incorrectamente. Por favor, intente de nuevo.");
+
+                let res_send = self.error_tx.send(
+                    "Latitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
+                );
+                match res_send {
+                    Ok(_) => println!("Mensaje de error enviado correctamente."),
+                    Err(_) => println!("Error al enviar mensaje de error."),
+                }
+            }
+            (_, Err(_)) => {
+                println!("Longitud ingresada incorrectamente. Por favor, intente de nuevo.");
+
+                let res_send = self.error_tx.send(
+                    "Longitud ingresada incorrectamente. Por favor, intente de nuevo.".to_string(),
+                );
+                match res_send {
+                    Ok(_) => println!("Mensaje de error enviado correctamente."),
+                    Err(_) => println!("Error al enviar mensaje de error."),
+                }
+            }
+        }
+    }
+
+    fn exit_menu(&mut self, ui: &mut egui::Ui) {
+        if ui.button("Salir").clicked() {
+            match self.exit_tx.send(true) {
+                Ok(_) => println!("Iniciando proceso para salir"),
+                Err(_) => println!("Error al intentar salir"),
+            }
+        }
+    }
+
+    fn request_repaint_after(&mut self, milliseconds: u64, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |_ui| {
+            ctx.request_repaint_after(std::time::Duration::from_millis(milliseconds));
+        });
+    }
+
+    // fn draw_ui(&mut self, ui: &mut egui::Ui) {
+    //     if let Ok(error) = self.error_rx.try_recv() {
+    //         // Crea una ventana emergente para mostrar el error
+    //         egui::Window::new("Error")
+    //             .collapsible(false) // Hace que la ventana no se pueda colapsar
+    //             .title_bar(true) // Muestra la barra de título
+    //             .show(ui.ctx(), |ui| {
+    //                 // Muestra el mensaje de error dentro de la ventana
+    //                 ui.label(error);
+    //             });
+    //     }
+    // }
+
+    fn draw_ui(&mut self, ui: &mut egui::Ui) {
+        self.check_for_errors();
+        let error_msg = &self.error_message.clone();
+        if let Some(error) = error_msg {
+            self.display_error_window(ui, error);
+        }
+    }
+    
+    fn check_for_errors(&mut self) {
+        if let Ok(error) = self.error_rx.try_recv() {
+            self.error_message = Some(error);
+            self.error_display_start = Some(Instant::now());
+        }
+    }
+
+    fn display_error_window(&mut self, ui: &mut egui::Ui, error: &String) {
+        if self.error_display_start.unwrap().elapsed() < Duration::from_secs(5) {
+            let screen_size = ui.ctx().screen_rect().size();
+            let window_size = egui::vec2(200.0, 200.0);
+            let pos = self.calculate_center_position(screen_size, window_size);
+
+            egui::Window::new("Error")
+                .collapsible(false)
+                .title_bar(true)
+                .fixed_pos(pos)
+                .min_size(window_size)
+                .show(ui.ctx(), |ui| {
+                    ui.heading(error);
+                });
+        } else {
+            self.error_message = None;
+            self.error_display_start = None;
+        }
+    }
+
+    fn calculate_center_position(&mut self, screen_size: egui::Vec2, window_size: egui::Vec2) -> egui::Pos2 {
+        egui::pos2(
+            (screen_size.x - window_size.x) / 2.0,
+            (screen_size.y - window_size.y) / 2.0,
+        )
+    }
+
+    fn draw_ui_with_error_handling(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.draw_ui(ui);
+        });
+    }
+}
+
+impl eframe::App for UISistemaMonitoreo {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.request_repaint_after(150, ctx);
+        self.draw_ui_with_error_handling(ctx);
+        self.handle_mqtt_messages(ctx);
+        self.setup_map(ctx);
+        self.setup_top_menu(ctx);
     }
 }
