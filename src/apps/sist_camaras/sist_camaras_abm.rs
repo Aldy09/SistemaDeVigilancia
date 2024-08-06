@@ -37,6 +37,9 @@ impl ABMCameras {
     /// Pone en funcionamiento el menú del abm para cámaras.
     /// Como cameras es un arc, quien haya llamado a esta función podrá ver reflejados los cambios.
     pub fn run(&mut self) {
+        // Publica cámaras al inicio
+        self.send_cameras_from_file_to_publish();
+        // Ejecuta el menú
         loop {
             self.print_menu_abm();
             let input = self.get_input_abm(None);
@@ -194,6 +197,32 @@ impl ABMCameras {
         match self.exit_tx.send(true) {
             Ok(_) => println!("Saliendo del programa."),
             Err(e) => println!("Error al intentar salir: {:?}", e),
+        }
+    }
+
+    /// Recorre las cámaras y envía cada una por el channel, para que quien lea del rx haga el publish.
+    fn send_cameras_from_file_to_publish(&self) {
+        match self.cameras.lock() {
+            Ok(cams) => {
+                for camera in (*cams).values() {
+                    println!("Iniciando, enviando cámara: {:?}", camera);
+                    self.send_camera_bytes(camera, &self.camera_tx);
+                }
+            }
+            Err(_) => println!("Error al tomar lock de cámaras."),
+        }
+    }
+
+    /// Envía la cámara recibida, por el channel, para que quien la reciba por rx haga el publish.
+    /// Además logguea la operación.
+    fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
+        self.logger
+            .log(format!("Sistema-Camaras: envío cámara: {:?}", camera));
+
+        if camera_tx.send(camera.to_bytes()).is_err() {
+            println!("Error al enviar cámara por tx desde hilo abm.");
+            self.logger
+                .log("Sistema-Camaras: error al enviar cámara por tx desde hilo abm.".to_string());
         }
     }
 }

@@ -77,6 +77,9 @@ impl SistemaCamaras {
 
         let mqtt_sh = Arc::new(Mutex::new(mqtt_client));
 
+        // Recibe las cámaras que envía el abm y las publica por MQTT
+        children.push(self.spawn_publish_to_topic_thread(mqtt_sh.clone(), cameras_rx));
+
         // ABM
         children.push(self.spawn_abm_cameras_thread(
             &self.cameras,
@@ -84,8 +87,6 @@ impl SistemaCamaras {
             self.exit_tx.clone(),
         ));
 
-        // Recibe las cámaras que envía el abm y las publica por MQTT
-        children.push(self.spawn_publish_to_topic_thread(mqtt_sh.clone(), cameras_rx));
         // Exit
         children.push(spawn_exit_when_asked_thread(mqtt_sh.clone(), exit_rx));
 
@@ -98,153 +99,6 @@ impl SistemaCamaras {
         children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx));
 
         children
-    }
-
-    /// Recibe los incidentes que envía el detector, y los publica por MQTT al topic de incidentes.
-    fn spawn_recv_and_publish_inc_thread(
-        &self,
-        rx: Receiver<Incident>,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-    ) -> JoinHandle<()> {
-        let qos = self.qos;
-        let logger_thread = self.logger.clone_ref();
-        thread::spawn(move || {
-            for inc in rx {
-                println!("Se recibe por rx para publicar el inc: {:?}", inc);
-                if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                    let res_publish = mqtt_client_lock.mqtt_publish(
-                        AppsMqttTopics::IncidentTopic.to_str(),
-                        &inc.to_bytes(),
-                        qos,
-                    );
-                    match res_publish {
-                        Ok(publish_message) => {
-                            logger_thread.log(format!(
-                                "Sistema-Camaras: publico inc: {:?}",
-                                publish_message
-                            ));
-                        }
-                        Err(e) => {
-                            println!("Sistema-Camara: Error al hacer el publish {:?}", e);
-                            logger_thread.log(format!(
-                                "Sistema-Camaras: Error al hacer el publish {:?}",
-                                e
-                            ));
-                        }
-                    };
-                }
-            }
-        })
-    }
-
-    fn clone_ref(&self) -> Self {
-        Self {
-            cameras_tx: self.cameras_tx.clone(),
-            exit_tx: self.exit_tx.clone(),
-            cameras: self.cameras.clone(),
-            qos: self.qos,
-            logger: self.logger.clone_ref(),
-        }
-    }
-
-    /// Recorre las cámaras y envía cada una por el channel, para que quien lea del rx haga el publish.
-    fn send_cameras_from_file_to_publish(&self) {
-        match self.cameras.lock() {
-            Ok(cams) => {
-                for camera in (*cams).values() {
-                    println!("CÁMARAS: iniciando, enviando cámara: {:?}", camera);
-                    self.send_camera_bytes(camera, &self.cameras_tx);
-                }
-            }
-            Err(_) => println!("Error al tomar lock de cámaras."),
-        }
-    }
-
-    /// Envía la cámara recibida, por el channel, para que quien la reciba por rx haga el publish.
-    /// Además logguea la operación.
-    fn send_camera_bytes(&self, camera: &Camera, camera_tx: &Sender<Vec<u8>>) {
-        self.logger
-            .log(format!("Sistema-Camaras: envío cámara: {:?}", camera));
-
-        if camera_tx.send(camera.to_bytes()).is_err() {
-            println!("Error al enviar cámara por tx desde hilo abm.");
-            self.logger
-                .log("Sistema-Camaras: error al enviar cámara por tx desde hilo abm.".to_string());
-        }
-    }
-
-    /// Envía todas las cámaras al otro hilo para ser publicadas.
-    /// Y lanza el hilo encargado de ejecutar el abm.
-    fn spawn_abm_cameras_thread(
-        &self,
-        cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
-        cameras_tx: Sender<Vec<u8>>,
-        exit_tx: Sender<bool>,
-    ) -> JoinHandle<()> {
-        // Publica cámaras al inicio
-        self.send_cameras_from_file_to_publish();
-        // Lanza el hilo para el abm
-        let cameras_c = cameras.clone();
-        let logger_c = self.logger.clone_ref();
-        thread::spawn(move || {
-            // Ejecuta el menú del abm
-            let mut abm_cameras = ABMCameras::new(cameras_c, cameras_tx, exit_tx, logger_c);
-            abm_cameras.run();
-        })
-    }
-
-    fn subscribe_to_topics(
-        &self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-        topics: Vec<String>,
-    ) -> Result<(), Error> {
-        let topics_to_log = topics.to_vec();
-        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-            let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
-            match res_subscribe {
-                Ok(_) => {
-                    self.logger.log(format!(
-                        "Sistema-Camaras: subscripto a topic: {:?}",
-                        topics_to_log
-                    ));
-                }
-                Err(e) => {
-                    println!("Sistema-Camara: Error al subscribirse {:?}", e);
-                    self.logger
-                        .log(format!("Sistema-Camaras: Error al subscribirse: {:?}", e));
-                    return Err(e);
-                }
-            };
-        }
-        Ok(())
-    }
-
-    fn publish_to_topic(
-        &self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-        topic: &str,
-        rx: Receiver<Vec<u8>>,
-    ) {
-        while let Ok(cam_bytes) = rx.recv() {
-            if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
-                match res_publish {
-                    Ok(publish_message) => {
-                        self.logger.log(format!(
-                            "Sistema-Camaras: envió mensaje: {:?}",
-                            publish_message
-                        ));
-                    }
-                    Err(e) => {
-                        println!("Sistema-Camara: Error al hacer el publish {:?}", e);
-                        self.logger.log(format!(
-                            "Sistema-Camaras: Error al hacer el publish {:?}",
-                            e
-                        ));
-                    }
-                };
-            }
-        }
     }
 
     fn spawn_publish_to_topic_thread(
@@ -262,6 +116,24 @@ impl SistemaCamaras {
         })
     }
 
+    /// Envía todas las cámaras por tx para que la parte que las reciba las publique por MQTT.
+    /// Y lanza el hilo encargado de ejecutar el abm.
+    fn spawn_abm_cameras_thread(
+        &self,
+        cameras: &Arc<Mutex<HashMap<u8, Camera>>>,
+        cameras_tx: Sender<Vec<u8>>,
+        exit_tx: Sender<bool>,
+    ) -> JoinHandle<()> {
+        // Lanza el hilo para el abm
+        let cameras_c = cameras.clone();
+        let logger_c = self.logger.clone_ref();
+        thread::spawn(move || {
+            // Ejecuta el abm
+            let mut abm_cameras = ABMCameras::new(cameras_c, cameras_tx, exit_tx, logger_c);
+            abm_cameras.run();
+        })
+    }
+
     /// Pone en ejecución el módulo de detección automática de incidentes.
     fn spawn_ai_detector_thread(&self, tx: Sender<Incident>) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
@@ -275,7 +147,93 @@ impl SistemaCamaras {
         })
     }
 
-    /// Recibe mensajes de los topics a los que se ha suscrito.
+    /// Recibe los incidentes que envía el detector, y los publica por MQTT al topic de incidentes.
+    fn spawn_recv_and_publish_inc_thread(
+        &self,
+        rx: Receiver<Incident>,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+    ) -> JoinHandle<()> {
+        let qos = self.qos;
+        let logger_thread = self.logger.clone_ref();
+        thread::spawn(move || {
+            for inc in rx {
+                if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+                    let res_publish = mqtt_client_lock.mqtt_publish(
+                        AppsMqttTopics::IncidentTopic.to_str(),
+                        &inc.to_bytes(),
+                        qos,
+                    );
+                    match res_publish {
+                        Ok(publish_message) => {
+                            logger_thread.log(format!("Publico inc: {:?}", publish_message));
+                        }
+                        Err(e) => {
+                            println!("Error al hacer el publish {:?}", e);
+                            logger_thread.log(format!("Error al hacer el publish {:?}", e));
+                        }
+                    };
+                }
+            }
+        })
+    }
+
+    fn subscribe_to_topics(
+        &self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        topics: Vec<String>,
+    ) {
+        let topics_log = topics.to_vec();
+        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+            let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
+            match res_subscribe {
+                Ok(_) => {
+                    self.logger
+                        .log(format!("Subscripto a topic: {:?}", topics_log));
+                }
+                Err(e) => {
+                    self.logger.log(format!("Error al subscribirse: {:?}", e));
+                }
+            };
+        }
+    }
+
+    fn publish_to_topic(
+        &self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        topic: &str,
+        rx: Receiver<Vec<u8>>,
+    ) {
+        while let Ok(cam_bytes) = rx.recv() {
+            if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+                let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
+                match res_publish {
+                    Ok(publish_msg) => {
+                        self.logger.log(format!("Enviado msj: {:?}", publish_msg));
+                    }
+                    Err(e) => {
+                        println!("Error al hacer publish {:?}", e);
+                        self.logger.log(format!("Error al hacer publish {:?}", e));
+                    }
+                };
+            }
+        }
+    }
+
+    fn spawn_subscribe_to_topics_thread(
+        &mut self,
+        mqtt_client: Arc<Mutex<MQTTClient>>,
+        msg_rx: Receiver<PublishMessage>,
+    ) -> JoinHandle<()> {
+        let mut cameras_cloned = self.cameras.clone();
+        let mut self_clone = self.clone_ref();
+        let topic = AppsMqttTopics::IncidentTopic.to_str();
+        thread::spawn(move || {
+            self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]); 
+            self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned);
+        })
+    }
+
+    /// Recibe mensajes de los topics a los que se ha suscrito, y delega el procesamiento a `CamerasLogic`.
     fn receive_messages_from_subscribed_topics(
         &mut self,
         rx: Receiver<PublishMessage>,
@@ -297,26 +255,14 @@ impl SistemaCamaras {
         there_are_no_more_publish_msgs(&self.logger);
     }
 
-    fn spawn_subscribe_to_topics_thread(
-        &mut self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-        msg_rx: Receiver<PublishMessage>,
-    ) -> JoinHandle<()> {
-        let mut cameras_cloned = self.cameras.clone();
-        let mut self_clone = self.clone_ref();
-        let topic = AppsMqttTopics::IncidentTopic.to_str();
-        thread::spawn(move || {
-            let res =
-                self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]);
-            match res {
-                Ok(_) => {
-                    println!("Sistema-Camara: Subscripción a exitosa");
-                    self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned);
-                }
-                Err(e) => println!("Sistema-Camara: Error al subscribirse {:?}", e),
-            };
-            println!("Saliendo del hilo que recibe los PublishMessage's.");
-        })
+    fn clone_ref(&self) -> Self {
+        Self {
+            cameras_tx: self.cameras_tx.clone(),
+            exit_tx: self.exit_tx.clone(),
+            cameras: self.cameras.clone(),
+            qos: self.qos,
+            logger: self.logger.clone_ref(),
+        }
     }
 }
 
