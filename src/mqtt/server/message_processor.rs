@@ -16,7 +16,7 @@ use std::io::Error;
 
 use super::{
     mqtt_server::MQTTServer,
-    packet::{self, Packet},
+    packet::Packet,
 };
 
 #[derive(Debug)]
@@ -24,9 +24,9 @@ pub struct MessageProcessor {
     mqtt_server: MQTTServer,
 }
 
-fn contains_dron(input: &str) -> bool {
-    input.to_lowercase().contains("dron")
-}
+// fn contains_dron(input: &str) -> bool {
+//     input.to_lowercase().contains("dron")
+// }
 
 impl MessageProcessor {
     pub fn new(mqtt_server: MQTTServer) -> Self {
@@ -34,18 +34,21 @@ impl MessageProcessor {
     }
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
-        let thread_pool = create_thread_pool_with(15)?;
 
-        for packet in rx_1 {
-            let self_clone = self.clone_ref();
-            if !contains_dron(&packet.get_username()) {
-                println!("SE ESTA EJECTUANDO EN UN THREAD DIFERENTE EN EL USUARIO {:?} ", packet.get_username());
-                thread_pool.spawn(move || {
-                    self_clone.process_packet(packet);
-                });
-            } else {
-                println!("SE ESTA EJECTUANDO EN EL MISMO THREAD EN EL USUARIO {:?} ", packet.get_username());
-                self.process_packet(packet);
+        match create_thread_pool_with(10) {
+            Ok(thread_pool) => {
+                for packet in rx_1 {
+                    let self_clone = self.clone_ref();
+                    thread_pool.spawn(move || {
+                        self_clone.process_packet(packet);
+                    });
+                }
+            }
+            Err(e) => {
+                println!("   ERROR: {:?}", e);
+                for packet in rx_1 {
+                    self.process_packet(packet);
+                }
             }
         }
 

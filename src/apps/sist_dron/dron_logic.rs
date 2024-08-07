@@ -345,7 +345,7 @@ impl DronLogic {
                 .increment_current_position_in(dir, false)?;
 
             // Simula el vuelo, el dron se desplaza
-            let a = 1/2; // aux
+            let a = 3/2; // aux
             sleep(Duration::from_secs(a));
             self.logger.log(format!(
                 "   incrementada la posición actual: {:?}",

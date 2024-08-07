@@ -1,10 +1,14 @@
-use notify::event::EventKind;
-use notify::{RecursiveMode, Watcher};
-use rayon::ThreadPoolBuilder;
+
+
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::error::Error;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use notify::{self, Event, EventKind, RecursiveMode, Watcher};
+use std::sync::mpsc::{Receiver, Sender};
+
+
 
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
@@ -38,59 +42,84 @@ impl AIDetectorManager {
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
-        let properties = DetectorProperties::new(PROPERTIES_FILE)?;
-        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
-        let path = Path::new(properties.get_base_dir());
-        self.create_dirs_tree(path)?;
-    
+        let properties = self.initialize_detector_properties()?;
+        let path = self.create_and_watch_directories(&properties)?;
         let (tx_fs, rx_fs) = mpsc::channel();
+        self.start_watching_directories(&path, tx_fs)?;
+        let ai_detector = self.initialize_ai_detector(&properties);
+        let pool = self.create_thread_pool()?;
+        self.process_filesystem_events(rx_fs, &ai_detector, &pool)?;
+        Ok(())
+    }
+
+    fn initialize_detector_properties(&self) -> Result<DetectorProperties, Box<dyn Error>> {
+        let properties = DetectorProperties::new(PROPERTIES_FILE)?;
+        Ok(properties)
+    }
+
+    fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<PathBuf, Box<dyn Error>> {
+        let path = PathBuf::from(properties.get_base_dir());
+        self.create_dirs_tree(&path)?;
+        Ok(path)
+    }
+
+    fn initialize_ai_detector(&self, properties: &DetectorProperties) -> AutomaticIncidentDetector {
+        let logger_ai = self.logger.clone_ref();
+        AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties.clone(), logger_ai)
+    }
+
+    fn create_thread_pool(&self) -> Result<ThreadPool, Box<dyn Error>> {
+        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
+        Ok(pool)
+    }
+
+    fn start_watching_directories(&self, path: &Path, tx_fs: Sender<notify::Result<Event>>) -> Result<(), Box<dyn Error>> {
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         watcher.watch(path, RecursiveMode::Recursive)?;
         println!("Detector: Monitoreando subdirs.");
         self.logger.log("Detector: Monitoreando subdirs".to_string());
-    
-        // Se inicializa el detector
-        let logger_ai = self.logger.clone_ref();
-        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties, logger_ai);
-    
-        // Crear un pool de threads con el número de threads deseado
-        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
-    
+        Ok(())
+    }
+
+    fn process_filesystem_events(&self, rx_fs: Receiver<notify::Result<Event>>, ai_detector: &AutomaticIncidentDetector, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
         for event_res in rx_fs {
             let event = event_res?;
-    
-            // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
             if let EventKind::Create(_) = event.kind {
                 self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
-                    if path.is_file() {
-                        let image_path = path.clone();
-                        // Validar la extensión del archivo
-                        if let Some(extension) = image_path.extension() {
-                            // Si es jpg o jpeg, procesar
-                            if extension == "jpg" || extension == "jpeg" {
-                                // Lanza un hilo por cada imagen a procesar []
-                                let mut aidetector = ai_detector.clone_refs();
-                                pool.spawn(move || {
-                                    match read_image(&image_path) {
-                                        Ok(image) => {
-                                            if let Some(cam_id) = extract_camera_id(&image_path) {
-                                                if aidetector.process_image(image, cam_id).is_err() {
-                                                    println!("Detector: Error en process_image.");
-                                                }
-                                            }
-                                        },
-                                        Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
-                                    };
-                                });
-                            }
-                        }
+                    if path.is_file() && self.is_jpeg_or_jpg(path) {
+                        self.process_image_file(path, ai_detector, pool)?;
                     }
                 }
             }
         }
-        
         Ok(())
+    }
+
+    fn process_image_file(&self, image_path: &Path, ai_detector: &AutomaticIncidentDetector, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
+        let mut aidetector = ai_detector.clone_refs();
+        let image_path = image_path.to_path_buf();
+        pool.spawn(move || {
+            match read_image(&image_path) {
+                Ok(image) => {
+                    if let Some(cam_id) = extract_camera_id(&image_path) {
+                        if aidetector.process_image(image, cam_id).is_err() {
+                            println!("Detector: Error en process_image.");
+                        }
+                    }
+                },
+                Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
+            };
+        });
+        Ok(())
+    }
+
+    fn is_jpeg_or_jpg(&self, path: &Path) -> bool {
+        if let Some(extension) = path.extension() {
+            extension == "jpg" || extension == "jpeg"
+        } else {
+            false
+        }
     }
     
     /// Crea, si no existía, la estructura de directorios necesaria para las imágenes de las cámaras.
