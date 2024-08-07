@@ -95,27 +95,29 @@ impl CamerasLogic {
     /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
     /// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
     fn process_first_time_incident(&mut self, inc: Incident) {
-        match self.cameras.lock() {
-            Ok(mut cams) => {
-                println!("Proceso el incidente {:?} por primera vez", inc.get_info());
-                self.logger.log(format!(
-                    "Proceso el incidente {:?} por primera vez",
-                    inc.get_info()
-                ));
-                let cameras_that_follow_inc =
-                    self.get_id_of_cams_that_will_change_state_to_active(&mut cams, &inc);
+        if !inc.is_resolved() { // inc no resuelto
+            match self.cameras.lock() {
+                Ok(mut cams) => {
+                    println!("Proceso el incidente {:?} por primera vez", inc.get_info());
+                    self.logger.log(format!(
+                        "Proceso el incidente {:?} por primera vez",
+                        inc.get_info()
+                    ));
+                    let cameras_that_follow_inc =
+                        self.get_id_of_cams_that_will_change_state_to_active(&mut cams, &inc);
 
-                // El vector tiene los ids de todas las cámaras que deben cambiar a activo
-                for cam_id in &cameras_that_follow_inc {
-                    if let Some(bordering_cam) = cams.get_mut(cam_id) {
-                        self.start_paying_attention_to(&inc, bordering_cam);
-                    };
+                    // El vector tiene los ids de todas las cámaras que deben cambiar a activo
+                    for cam_id in &cameras_that_follow_inc {
+                        if let Some(bordering_cam) = cams.get_mut(cam_id) {
+                            self.start_paying_attention_to(&inc, bordering_cam);
+                        };
+                    }
+                    // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
+                    self.incs_being_managed
+                        .insert(inc.get_info(), cameras_that_follow_inc);
                 }
-                // Y se guarda las cámaras que le dan seguimiento al incidente, para luego poder encontrarlas fácilmente sin recorrer
-                self.incs_being_managed
-                    .insert(inc.get_info(), cameras_that_follow_inc);
+                Err(_) => todo!(),
             }
-            Err(_) => todo!(),
         }
     }
 

@@ -75,8 +75,8 @@ impl AIDetectorManager {
                                     match read_image(&image_path) {
                                         Ok(image) => {
                                             if let Some(cam_id) = extract_camera_id(&image_path) {
-                                                if aidetector.process_image(image, cam_id).is_err() {
-                                                    println!("Detector: Error en process_image.");
+                                                if let Err(e) = aidetector.process_image(image, cam_id) {
+                                                    println!("Detector: Error en process_image: {:?}.", e);
                                                 }
                                             }
                                         },
@@ -102,10 +102,12 @@ impl AIDetectorManager {
     
     /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
     fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
-        // Si no existe, lo crea
-        if !base_dir.exists() {
-            fs::create_dir(base_dir)?;
+        // Si ya existe, lo borra y a todo su contenido, y
+        if base_dir.exists() {
+            fs::remove_dir_all(base_dir)?;
         }
+        // lo crea
+        fs::create_dir(base_dir)?;
     
         Ok(())
     }
