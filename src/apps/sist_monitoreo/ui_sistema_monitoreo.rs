@@ -23,7 +23,6 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use egui::Color32;
 use egui::Context;
-use egui_winit::winit::raw_window_handle::HasWindowHandle;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -654,7 +653,7 @@ impl UISistemaMonitoreo {
 }
 
 impl eframe::App for UISistemaMonitoreo {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.request_repaint_after(150, ctx);
         self.draw_ui_wrapper(ctx);
         self.handle_mqtt_messages(ctx);
