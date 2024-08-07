@@ -434,21 +434,23 @@ impl UISistemaMonitoreo {
     }
 
     fn route_message(&mut self, publish_message: PublishMessage) {
-        match publish_message.get_topic_name() {
-            topic if topic == AppsMqttTopics::CameraTopic.to_str() => {
-                self.handle_camera_message(publish_message)
-            },
-            topic if topic == AppsMqttTopics::DronTopic.to_str() => {
-                self.handle_drone_message(publish_message)
-            },
-            topic if topic == AppsMqttTopics::IncidentTopic.to_str() => {
-                self.handle_incident_message(publish_message)
-            },
-            topic if topic == AppsMqttTopics::DescTopic.to_str() => {
-                println!("Recibido mensaje de desconexión.");
-                let _ = self.handle_disconnection_message(publish_message);
-            },
-            _ => (),
+        let topic_str = publish_message.get_topic_name();
+        if let Ok(topic) = AppsMqttTopics::topic_from_str(&topic_str) {
+            match topic {
+                AppsMqttTopics::CameraTopic => {
+                    self.handle_camera_message(publish_message)
+                },
+                AppsMqttTopics::DronTopic => {
+                    self.handle_drone_message(publish_message)
+                },
+                AppsMqttTopics::IncidentTopic => {
+                    self.handle_incident_message(publish_message)
+                },
+                AppsMqttTopics::DescTopic => {
+                    println!("Recibido mensaje de desconexión.");
+                    let _ = self.handle_disconnection_message(publish_message);
+                },
+            }
         }
     }
 
@@ -627,7 +629,7 @@ impl UISistemaMonitoreo {
         )
     }
 
-    fn draw_ui_with_error_handling(&mut self, ctx: &egui::Context) {
+    fn draw_ui_wrapper(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.draw_ui(ui);
         });
@@ -637,7 +639,7 @@ impl UISistemaMonitoreo {
 impl eframe::App for UISistemaMonitoreo {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.request_repaint_after(150, ctx);
-        self.draw_ui_with_error_handling(ctx);
+        self.draw_ui_wrapper(ctx);
         self.handle_mqtt_messages(ctx);
         self.setup_map(ctx);
         self.setup_top_menu(ctx);
