@@ -23,6 +23,7 @@ use crate::mqtt::mqtt_utils::will_message_utils::will_content::WillContent;
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use egui::Color32;
 use egui::Context;
+use egui_winit::winit::raw_window_handle::HasWindowHandle;
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -572,12 +573,15 @@ impl UISistemaMonitoreo {
         }
     }
 
+    /// Se encarga de ver si se hizo click en el botón `Salir` del panel superior (arriba a la izquierda)
+    /// y en ese caso sale.
     fn exit_menu(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         if ui.button("Salir").clicked() {
             self.exit(ctx);
         }
     }
 
+    /// Sale.
     fn exit(&self, ctx: &egui::Context) {
         if let Err(e) = self.exit_tx.send(true) {                
             println!("Error al intentar salir: {:?}", e);
@@ -585,6 +589,13 @@ impl UISistemaMonitoreo {
         }
         println!("Iniciando proceso para salir");
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Se fija si se hizo click en la cruz roja de arriba a la derecha de la ventana, y sale.
+    fn check_if_window_is_closed(&self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.exit(ctx);
+        }
     }
 
     fn request_repaint_after(&mut self, milliseconds: u64, ctx: &egui::Context) {
@@ -643,11 +654,12 @@ impl UISistemaMonitoreo {
 }
 
 impl eframe::App for UISistemaMonitoreo {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.request_repaint_after(150, ctx);
         self.draw_ui_wrapper(ctx);
         self.handle_mqtt_messages(ctx);
         self.setup_map(ctx);
         self.setup_top_menu(ctx);
+        self.check_if_window_is_closed(ctx);
     }
 }
