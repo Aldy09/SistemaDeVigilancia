@@ -497,7 +497,7 @@ impl UISistemaMonitoreo {
         egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 self.incident_menu(ui);
-                self.exit_menu(ui);
+                self.exit_menu(ui, ctx);
             });
         });
     }
@@ -572,13 +572,19 @@ impl UISistemaMonitoreo {
         }
     }
 
-    fn exit_menu(&mut self, ui: &mut egui::Ui) {
+    fn exit_menu(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         if ui.button("Salir").clicked() {
-            match self.exit_tx.send(true) {
-                Ok(_) => println!("Iniciando proceso para salir"),
-                Err(_) => println!("Error al intentar salir"),
-            }
+            self.exit(ctx);
         }
+    }
+
+    fn exit(&self, ctx: &egui::Context) {
+        if let Err(e) = self.exit_tx.send(true) {                
+            println!("Error al intentar salir: {:?}", e);
+            return;
+        }
+        println!("Iniciando proceso para salir");
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
     fn request_repaint_after(&mut self, milliseconds: u64, ctx: &egui::Context) {
