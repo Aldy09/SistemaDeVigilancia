@@ -157,8 +157,8 @@ impl DronLogic {
     ) -> Result<bool, Error> {
         let mut should_move = false;
 
-        //thread::sleep(Duration::from_millis(500));
-        thread::sleep(Duration::from_millis(3500)); // Aux Probando
+        // Este sleep es necesario. No quitar.
+        thread::sleep(Duration::from_millis(3500));
         if let Ok(mut distances) = self.drone_distances_by_incident.lock() {
             if let Some((_incident_position, candidate_drones)) =
                 distances.get_mut(&incident.get_info())
@@ -345,8 +345,8 @@ impl DronLogic {
                 .increment_current_position_in(dir, false)?;
 
             // Simula el vuelo, el dron se desplaza
-            let a = 300; // aux
-            sleep(Duration::from_micros(a));
+            let a = 1/2; // aux
+            sleep(Duration::from_secs(a));
             self.logger.log(format!(
                 "   incrementada la posición actual: {:?}",
                 self.current_data.get_current_position()
