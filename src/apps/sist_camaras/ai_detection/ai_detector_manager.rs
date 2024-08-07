@@ -137,17 +137,6 @@ impl AIDetectorManager {
                 let logger_c = self.logger.clone_ref();
                 pool.spawn(move || {
                     if let Err(e) = read_and_process_image(&mut aidetector, &image_path){
-                        // if let Ok(img) = read_image(image_path){
-                        //     if let Some(cam_id) = extract_camera_id(image_path) {
-                        //         if let Err(e) = aidetector.process_image(img, cam_id){
-                        //             println!("Detector: Error en read_and_process_image: {:?}.", e);
-                        //             logger_c.log(format!("Detector: Error en read_and_process_image: {:?}.", e));
-                        //         }
-                        //     };
-                        // } else {
-                        //     println!("Detector: Error en read_image.");
-                        //     logger_c.log(format!("Detector: Error en read_image."));
-                        // }
                         println!("Detector: Error en read_and_process_image: {:?}.", e);
                         logger_c.log(format!("Detector: Error en read_and_process_image: {:?}.", e));
                     }
@@ -156,10 +145,6 @@ impl AIDetectorManager {
             }
         Ok(())        
     }
-
-    
-    
-    
     
 }
 
