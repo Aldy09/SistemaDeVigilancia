@@ -8,6 +8,7 @@ use crate::mqtt::mqtt_utils::utils::{
 };
 
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
+use crate::mqtt::server::disconnect_reason::DisconnectReason;
 use crate::mqtt::server::packet::Packet;
 use crate::mqtt::stream_type::StreamType;
 
@@ -105,12 +106,25 @@ impl ClientReader {
     // Hilo para obtener los bytes que llegan al servidor en el stream
     fn spawn_stream_handler(
         &self,
-        client_id_clone: String,
+        client_id: String,
         tx_1: Sender<Packet>,
     ) -> JoinHandle<()> {
         let mut self_clone = self.clone_ref();
         std::thread::spawn(move || {
-            let _ = self_clone.read_packets_from_stream(client_id_clone.as_str(), tx_1);
+            if let Ok(disconnect_reason) = self_clone.read_packets_from_stream(client_id.as_str(), tx_1){
+                match disconnect_reason {
+                    DisconnectReason::Voluntaria => {
+                        let _ = self_clone.server_handle_disconnect(client_id.as_str());
+
+                    },
+                    DisconnectReason::Involuntaria => {
+                        let  _ = self_clone.server_handle_client_disconnection(client_id.as_str());
+                        // (aux: tengo sueño y no quiero manejar errores :), mañana vuelvo).
+
+                    },
+                }
+            }
+            
         })
     }
 
@@ -122,7 +136,7 @@ impl ClientReader {
         })
     }
     // Espera por paquetes que llegan desde su stream y los envia al hilo de arriba
-    pub fn read_packets_from_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
+    pub fn read_packets_from_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<DisconnectReason, Error> {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
@@ -130,25 +144,47 @@ impl ClientReader {
                 Ok(Some((fixed_h_buf, fixed_h))) => {
                     if is_disconnect_msg(&fixed_h) {
                         self.handle_disconnect(client_id)?; // aux: llama a mqtt []
-                        break;
+                        return Ok(DisconnectReason::Voluntaria);
+                        // AUX, hace:
+                        // aux: self.mqtt_server.publish_users_will_message(client_id)?;
+                        // aux: self.mqtt_server.remove_user(client_id);
+                        //break;
                     }
                     // Completa la lectura del stream, y envía al otro hilo para ser procesado
                     self.handle_packet(fixed_h, fixed_h_buf, client_id, &tx_1)?;
                 }
                 Ok(None) => {
                     self.handle_client_disconnection(client_id)?; // aux: llama a mqtt []
-                    break;
+                    return Ok(DisconnectReason::Involuntaria);
+                    // Aux hace:
+                    //aux: self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+                    //aux: self.mqtt_server.publish_users_will_message(client_id)?;
+                    //break;
                 }
                 Err(_) => todo!(),
             }
         }
+        //Ok(())
+    }
+
+    /// Desconexión voluntaria.
+    fn server_handle_disconnect(&mut self, client_id: &str) -> Result<(), Error> {
+        self.mqtt_server.publish_users_will_message(client_id)?;
+        self.mqtt_server.remove_user(client_id);
+        Ok(())
+    }
+
+    /// Desconexión involuntaria (ie se le fue internet).
+    fn server_handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
+        self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+        self.mqtt_server.publish_users_will_message(client_id)?;
         Ok(())
     }
 
     /// Desconexión voluntaria.
     fn handle_disconnect(&mut self, client_id: &str) -> Result<(), Error> {
-        self.mqtt_server.publish_users_will_message(client_id)?;
-        self.mqtt_server.remove_user(client_id);
+        //self.mqtt_server.publish_users_will_message(client_id)?;
+        //self.mqtt_server.remove_user(client_id);
         println!("Mqtt cliente leyendo: recibo disconnect");
         shutdown(&self.stream);
         Ok(())
@@ -169,9 +205,8 @@ impl ClientReader {
     /// Desconexión involuntaria (ie se le fue internet).
     fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
         println!("Se desconectó el cliente: {:?}.", client_id);
-        self.mqtt_server
-            .set_user_as_temporally_disconnected(client_id)?; 
-        self.mqtt_server.publish_users_will_message(client_id)?;
+        //self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+        //self.mqtt_server.publish_users_will_message(client_id)?;
         Ok(())
     }
 
