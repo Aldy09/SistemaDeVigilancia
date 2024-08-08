@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use std::io::Error;
 
 use rustx::logging::string_logger::StringLogger;
@@ -13,19 +11,6 @@ use rustx::{
     mqtt::client::mqtt_client::MQTTClient,
 };
 
-type Channels = (
-    mpsc::Sender<Vec<u8>>,
-    mpsc::Receiver<Vec<u8>>,
-    mpsc::Sender<bool>,
-    mpsc::Receiver<bool>,
-);
-
-fn create_channels() -> Channels {
-    let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
-    let (exit_tx, exit_rx) = mpsc::channel::<bool>();
-    (cameras_tx, cameras_rx, exit_tx, exit_rx)
-}
-
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
 }
@@ -36,7 +21,6 @@ fn get_app_will_msg_content() -> WillContent {
 
 fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
-    let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
     let cameras = create_cameras();
 
     // Se crean y configuran ambos extremos del string logger
@@ -52,10 +36,10 @@ fn main() -> Result<(), Error> {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
-            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
+            let mut sistema_camaras = SistemaCamaras::new(cameras, logger);
 
             let mut handles =
-                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_msg_rx, mqtt_client);
+                sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
 
             handles.push(handle);
             join_all_threads(handles);
