@@ -29,10 +29,10 @@ pub struct AIDetectorManager {
 }
 
 impl AIDetectorManager {
-    pub fn new(cameras: ShCamerasType, inc_tx: mpsc::Sender<Incident>, exit_rx: mpsc::Receiver<()>, logger: StringLogger) -> Self {
+    /// Crea y ejecuta lo necesario para la detección de incidentes de manera automática haciendo uso de inteligencia artificial,
+    pub fn run(cameras: ShCamerasType, inc_tx: mpsc::Sender<Incident>, exit_rx: mpsc::Receiver<()>, logger: StringLogger) -> Self {
         
         let er = Arc::new(Mutex::new(false));
-
         let detector_manager = Self {
             cameras,
             inc_tx,
@@ -40,13 +40,20 @@ impl AIDetectorManager {
             logger,
         };
 
+        // Lanza hilo que pondrá en true la `er` si se solicita salir desde abm
         let handle = thread::spawn(move || {
             modify_if_exit_requested(er, exit_rx);
         });
 
-        handle.join().unwrap(); // aux, ahora lo cambio
-
-        detector_manager.run();
+        // Se ejecuta el detector
+        if let Err(e) = detector_manager.run_internal() {
+            detector_manager.logger.log(format!("Error en ejecución de detector: {:?}.", e));
+        }
+        
+        // Espera al hilo lanzado
+        if let Err(e) = handle.join(){
+            detector_manager.logger.log(format!("Error al joinear hilo de exit de detector: {:?}.", e));
+        }
 
         detector_manager
     }
@@ -54,12 +61,7 @@ impl AIDetectorManager {
     /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
-    pub fn run(&self) -> Result<(), Box<dyn Error>> {
-        
-
-
-
-
+    fn run_internal(&self) -> Result<(), Box<dyn Error>> {
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
         let path = Path::new(properties.get_base_dir());
@@ -78,14 +80,9 @@ impl AIDetectorManager {
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
 
-        if self.exit_requested() {
-            println!("   hilo detector pre for: por hacer return");
-            return Ok(());
-        }
         for event_res in rx_fs {
             // Sale, si lo solicitaron desde abm
             if self.exit_requested() {
-                println!("   hilo detector pre for: por hacer return");
                 break;
             }
 
@@ -191,7 +188,7 @@ impl AIDetectorManager {
 /// Si recibe por el `rx` que se solicitó salir, lo deja asentado en la variable compartida `exit_requested`,
 /// para que en la próxima vuelta del for el detector manager se entere y finalice la ejecución.
 fn modify_if_exit_requested(exit_requested: Arc<Mutex<bool>>, rx: Receiver<()>) {
-    if let Ok(_) = rx.recv() {
+    if rx.recv().is_ok() {
         if let Ok(mut var) = exit_requested.lock(){
             *var = true;
         }

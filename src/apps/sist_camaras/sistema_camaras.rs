@@ -136,11 +136,7 @@ impl SistemaCamaras {
         let cameras_ref = Arc::clone(&self.cameras);
         let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
-            let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx, exit_detector_rx, logger_ai.clone_ref());
-            /*if ai_inc_detector.run().is_err() {
-                println!("Error en detector, desde hilo para detector.");
-                logger_ai.log("Error en detector, desde hilo para detector.".to_string());
-            }*/
+            let _ai_inc_detector = AIDetectorManager::run(cameras_ref, tx, exit_detector_rx, logger_ai.clone_ref());
         })
     }
 
