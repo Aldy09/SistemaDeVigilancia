@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, fmt::format, io::{stdin, stdout, Error, Write}, sync::{
+    collections::HashMap, io::{stdin, stdout, Error, Write}, sync::{
         mpsc::Sender,
         Arc, Mutex,
     }
@@ -97,7 +97,7 @@ impl ABMCameras {
             .get_input_abm(Some(format!("Ingrese {} de la cámara: ", pm_name).as_str()))
             .parse();
 
-        while let Err(_) = res {
+        while res.is_err() {
             res = self
             .get_input_abm(Some(format!("Error, intente nuevamente. Ingrese {} de la cámara: ", pm_name).as_str()))
             .parse();
@@ -117,7 +117,7 @@ impl ABMCameras {
             .get_input_abm(Some(format!("Ingrese {} de la cámara: ", pm_name).as_str()))
             .parse();
 
-        while let Err(_) = res {
+        while res.is_err() {
             res = self
             .get_input_abm(Some(format!("Error, intente nuevamente. Ingrese {} de la cámara: ", pm_name).as_str()))
             .parse();
@@ -212,6 +212,8 @@ impl ABMCameras {
                             println!("Cámara eliminada con éxito.\n");
                         }
                     };
+                } else {
+                    println!("La cámara no existe.\n");
                 }
             }
             Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),
