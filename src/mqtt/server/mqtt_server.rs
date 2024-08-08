@@ -177,6 +177,7 @@ impl MQTTServer {
         if let Ok(mut users) = self.connected_users.lock() {
             println!("Username agregado a la lista del server: {:?}", username);
             users.insert(username_c, user); //inserta el usuario en el hashmap
+            // Aux: Ver Acá [].
         }
         Ok(())
     }
