@@ -1,10 +1,12 @@
 
 use std::io::Error;
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 
 use std::result::Result;
 //use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
+
+use crate::mqtt::stream_type::StreamType;
 
 use super::client_reader::ClientReader;
 use super::mqtt_server::MQTTServer;
@@ -22,13 +24,13 @@ impl ClientListener {
         listener: TcpListener,
         mqtt_server: MQTTServer,
     ) -> Result<(), Error> {
-        let mut handlers = Vec::<JoinHandle<()>>::new();
+        let mut handles = Vec::<JoinHandle<()>>::new();
         println!("Servidor iniciado. Esperando conexiones.\n");
         for stream in listener.incoming() {
-            handlers.push(self.handle_stream(stream?, mqtt_server.clone_ref())?);
+            handles.push(self.handle_stream(stream?, mqtt_server.clone_ref())?);
         }
 
-        for h in handlers {
+        for h in handles {
             let _ = h.join();
         }
 
@@ -37,15 +39,15 @@ impl ClientListener {
 
     fn handle_stream(
         &mut self,
-        stream: TcpStream,
+        mut stream: StreamType,
         mqtt_server: MQTTServer,
     ) -> Result<JoinHandle<()>, Error> {
         println!("DEBUG: CREANDO NUEVO CLIENT READER");
-        let mut client_reader = ClientReader::new(stream, mqtt_server)?;
+        let mut client_reader = ClientReader::new(stream.try_clone()?, mqtt_server)?; // Aux: sí, sí, ya sé que queremos SACAR los try_clone, es para que siga compilando mientras hay refactor.
 
         // Hilo para cada cliente
         Ok(std::thread::spawn(move || {
-            let _ = client_reader.handle_client();
+            let _ = client_reader.handle_client(&mut stream);
         }))
     }
 }

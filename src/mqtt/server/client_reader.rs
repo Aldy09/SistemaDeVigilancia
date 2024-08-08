@@ -9,9 +9,9 @@ use crate::mqtt::mqtt_utils::utils::{
 
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::server::packet::Packet;
+use crate::mqtt::stream_type::StreamType;
 
 use std::io::Error;
-use std::net::TcpStream;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 
@@ -21,12 +21,12 @@ use super::mqtt_server::MQTTServer;
 
 #[derive(Debug)]
 pub struct ClientReader {
-    stream: TcpStream,
+    stream: StreamType,
     mqtt_server: MQTTServer,
 }
 
 impl ClientReader {
-    pub fn new(stream: TcpStream, mqtt_server: MQTTServer) -> Result<ClientReader, Error> {
+    pub fn new(stream: StreamType, mqtt_server: MQTTServer) -> Result<ClientReader, Error> {
         Ok(ClientReader {
             stream,
             mqtt_server,
@@ -34,16 +34,16 @@ impl ClientReader {
     }
 
     /// Procesa los mensajes entrantes de un dado cliente.
-    pub fn handle_client(&mut self) -> Result<(), Error> {
-        let (fixed_header_buf, fixed_header) = self.read_and_validate_header()?;
+    pub fn handle_client(&mut self, stream: &mut StreamType) -> Result<(), Error> {
+        let (fixed_header_buf, fixed_header) = self.read_and_validate_header(stream)?;
 
         let authenticator = AuthenticateClient::new();
-        self.authenticate_and_handle_connection(&fixed_header, &fixed_header_buf, &authenticator)
+        self.authenticate_and_handle_connection(&fixed_header, &fixed_header_buf, &authenticator, stream)
     }
 
-    fn read_and_validate_header(&mut self) -> Result<([u8; 2], FixedHeader), Error> {
+    fn read_and_validate_header(&mut self, stream: &mut StreamType) -> Result<([u8; 2], FixedHeader), Error> {
         let (fixed_header_buf, fixed_header) =
-            get_fixed_header_from_stream_for_conn(&mut self.stream)?;
+            get_fixed_header_from_stream_for_conn(stream)?;
         Ok((fixed_header_buf, fixed_header))
     }
 
@@ -52,55 +52,57 @@ impl ClientReader {
         fixed_header: &FixedHeader,
         fixed_header_buf: &[u8; 2],
         authenticator: &AuthenticateClient,
+        stream: &mut StreamType
     ) -> Result<(), Error> {
         match fixed_header.get_message_type() {
             PacketType::Connect => {
                 let connect_msg =
-                    get_connect_message(fixed_header, &mut self.stream, fixed_header_buf)?;
+                    get_connect_message(fixed_header, stream, fixed_header_buf)?;
                 if authenticator.is_it_a_valid_connection(
                     &connect_msg,
-                    &mut self.stream,
+                    stream,
                     &self.mqtt_server,
                 )? {
+                    // Aux: ok en realidad acá arriba al terminar el authenticator se crea el User. [].
+                    // aux: o sea que acá abajo en realidad ya no debería usar el stream...;
                     if let Some(client_id) = connect_msg.get_client_id() {
                         self.handle_packets(client_id)?;
                     }
                 }
             }
-            _ => self.handle_invalid_message(fixed_header),
+            _ => self.handle_invalid_message(fixed_header, stream),
         }
         Ok(())
     }
 
-    fn handle_invalid_message(&self, fixed_header: &FixedHeader) {
+    fn handle_invalid_message(&self, fixed_header: &FixedHeader, stream: &mut StreamType) {
         println!("Error, el primer mensaje recibido DEBE ser un connect.");
         println!("   recibido: {:?}", fixed_header);
         println!("Cerrando la conexión.");
-        shutdown(&self.stream);
+        shutdown(stream);
     }
 
     // Función modificada para usar las nuevas funciones modulares
-    pub fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
+    // Aux: dsp de lo de is_authentic, una vez que ya fue connect msg todo bien, viene esto:
+    fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
 
-        let mut handlers = Vec::<JoinHandle<()>>::new();
+        let mut handles = Vec::<JoinHandle<()>>::new();
 
-        let client_id_clone = client_id.to_owned();
-
-        // Hilo para obtener los bytes que llegan al servidor en el TCPStream
-        handlers.push(self.spawn_stream_handler(client_id_clone, tx_1));
+        // Hilo para obtener los bytes que llegan al servidor en el stream
+        handles.push(self.spawn_stream_handler(client_id.to_owned(), tx_1));
 
         // Hilo para manejar la recepción y procesamiento de mensajes
-        handlers.push(self.spawn_message_processor(rx_1));
+        handles.push(self.spawn_message_processor(rx_1));
 
-        for h in handlers {
+        for h in handles {
             let _ = h.join();
         }
 
         Ok(())
     }
 
-    // Hilo para obtener los bytes que llegan al servidor en el TCPStream
+    // Hilo para obtener los bytes que llegan al servidor en el stream
     fn spawn_stream_handler(
         &self,
         client_id_clone: String,
@@ -119,7 +121,7 @@ impl ClientReader {
             let _ = message_processor.handle_packets(rx_1);
         })
     }
-    // Espera por paquetes que llegan desde su TcpStream y los envia al hilo de arriba
+    // Espera por paquetes que llegan desde su stream y los envia al hilo de arriba
     pub fn handle_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
@@ -127,13 +129,14 @@ impl ClientReader {
             match get_fixed_header_from_stream(&mut self.stream) {
                 Ok(Some((fixed_h_buf, fixed_h))) => {
                     if is_disconnect_msg(&fixed_h) {
-                        self.handle_disconnect(client_id)?;
+                        self.handle_disconnect(client_id)?; // aux: llama a mqtt []
                         break;
                     }
+                    // Completa la lectura del stream, y envía al otro hilo para ser procesado
                     self.handle_packet(fixed_h, fixed_h_buf, client_id, &tx_1)?;
                 }
                 Ok(None) => {
-                    self.handle_client_disconnection(client_id)?;
+                    self.handle_client_disconnection(client_id)?; // aux: llama a mqtt []
                     break;
                 }
                 Err(_) => todo!(),
@@ -181,29 +184,21 @@ impl ClientReader {
 
 fn create_packet(
     fixed_header: &FixedHeader,
-    stream: &mut TcpStream,
-    fixed_header_buf: &[u8; 2],
+    stream: &mut StreamType, // []
+    fixed_header_bytes: &[u8; 2],
     client_id: &str,
 ) -> Result<Packet, Error> {
-    let msg_bytes = get_message_in_bytes(fixed_header, stream, fixed_header_buf)?;
+    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     let message_type = fixed_header.get_message_type();
     Ok(Packet::new(message_type, msg_bytes, client_id.to_string()))
 }
 
+/// Completa la lectura y devuelve el `ConnectMessage`.
 fn get_connect_message(
     fixed_header: &FixedHeader,
-    stream: &mut TcpStream,
-    fixed_header_buf: &[u8; 2],
+    stream: &mut StreamType,
+    fixed_header_bytes: &[u8; 2],
 ) -> Result<ConnectMessage, Error> {
-    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
+    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     Ok(ConnectMessage::from_bytes(&msg_bytes))
-}
-
-fn get_message_in_bytes(
-    fixed_header: &FixedHeader,
-    stream: &mut TcpStream,
-    fixed_header_buf: &[u8; 2],
-) -> Result<Vec<u8>, Error> {
-    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_buf)?;
-    Ok(msg_bytes)
 }

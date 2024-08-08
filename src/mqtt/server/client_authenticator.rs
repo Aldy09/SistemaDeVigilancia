@@ -29,12 +29,11 @@ impl AuthenticateClient {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(connect_msg)?;
 
-        self.send_connection_response(&connack_response, stream)?;
+        self.send_connection_response(&connack_response, stream)?; // aux: y si mejor le devuelve el connack? []
 
         if is_authentic {
-            self.handle_successful_authentication(connect_msg, stream, mqtt_server)
+            self.handle_successful_authentication(connect_msg, stream, mqtt_server) // aux: llama todo de server adentro, para mí iría mejor en mqtt_server []
         } else {
-            self.handle_failed_authentication();
             Ok(false)
         }
     }
@@ -44,9 +43,10 @@ impl AuthenticateClient {
         connack_response: &ConnackMessage,
         stream: &mut TcpStream,
     ) -> Result<(), Error> {
-        write_message_to_stream(&connack_response.to_bytes(), stream)
+        write_message_to_stream(&connack_response.to_bytes(), stream) // aux: (ok xq todavía no existe el User).
     }
 
+    /// Devuelve true si el cliente que se conecta posee client_id.
     fn handle_successful_authentication(
         &self,
         connect_msg: &ConnectMessage,
@@ -57,20 +57,13 @@ impl AuthenticateClient {
             let is_reconnection =
                 mqtt_server.manage_possible_reconnecting_or_duplicate_user(username, stream)?;
             if !is_reconnection {
-                println!(
-                    "DEBUG: Agregando nuevo usuario al servidor con username {:?}",
-                    username
-                );
+                println!("Agregando nuevo user al server con username {:?}", username);
                 mqtt_server.add_new_user(stream, username, connect_msg)?;
             }
             Ok(true)
         } else {
             Ok(false)
         }
-    }
-
-    fn handle_failed_authentication(&self) {
-        println!("   ERROR: No se pudo autenticar al cliente.");
     }
 
     /// Verifica si la sesión fue creada exitosamente: usuario valido o invitado
@@ -140,7 +133,6 @@ impl AuthenticateClient {
         }
     }
 }
-
 
 impl Default for AuthenticateClient {
     fn default() -> Self {
