@@ -4,7 +4,7 @@ use super::string_logger_writer::StringLoggerWriter;
 
 #[derive(Debug)]
 pub struct StringLogger {
-    tx: Sender<String>,
+    tx: Option<Sender<String>>,
 }
 
 impl StringLogger {
@@ -23,18 +23,37 @@ impl StringLogger {
     /// Extremo de envío del string logger.
     /// Es el encargado de enviar las strings a ser loggueadas.
     pub fn new(tx: Sender<String>) -> Self {
-        StringLogger { tx }
+        Self { tx: Some(tx) }
     }
 
+    
     // Ejemplo: logger.log(format!("Ha ocurrido un evento: {}", string_event));
     /// Función a llamar para grabar en el log el evento pasado por parámetro.
     pub fn log(&self, event: String) {
-        if self.tx.send(event).is_err() {
-            println!("Error al intentar loggear.");
+        if let Some(tx) = &self.tx{
+            
+            if let Err(e) = tx.send(event) {
+                println!("Error al intentar loggear: {:?}.", e);
+            }
         }
     }
-
+    
+    /// Función que debe ser llamada antes del final de cada programa, para no impedir la finalización del mismo.
+    pub fn stop_logging(&mut self) {
+        // Droppea el tx, para que se cierre el rx y el programa termine correctamente.
+        self.tx = None;
+    }
+    
     pub fn clone_ref(&self) -> StringLogger {
-        Self::new(self.tx.clone())
+        /*match &self.tx {
+            Some(tx) => Self::new_for_internal_use(self.tx.clone()),
+            None => Self::new_for_internal_use(None),
+        }*/
+        Self::new_for_internal_use(self.tx.clone())        
+    }
+
+    /// Para ser utilizado por clone_ref, ahora que el tx es un option para poder dropearlo con el stop_logging.
+    fn new_for_internal_use(tx: Option<Sender<String>>) -> Self {
+        Self { tx }
     }
 }

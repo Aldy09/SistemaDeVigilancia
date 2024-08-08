@@ -24,7 +24,7 @@ fn main() -> Result<(), Error> {
     let cameras = create_cameras();
 
     // Se crean y configuran ambos extremos del string logger
-    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
+    let (mut logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
     let qos = 1; // []
     let client_id = get_formatted_app_id();
@@ -36,7 +36,7 @@ fn main() -> Result<(), Error> {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
-            let mut sistema_camaras = SistemaCamaras::new(cameras, logger);
+            let mut sistema_camaras = SistemaCamaras::new(cameras, logger.clone_ref());
 
             let mut handles = sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
 
@@ -46,10 +46,16 @@ fn main() -> Result<(), Error> {
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
 
+    logger.stop_logging();
+
+    println!("Hola.");
+
     // Se espera al hijo para el logger
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
+    
+    println!("Hola.");
 
     Ok(())
 }

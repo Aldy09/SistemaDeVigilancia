@@ -36,6 +36,7 @@ impl StringLoggerWriter {
                     println!("LoggerWriter: error al escribir al archivo de log.");
                 }
             }
+            println!("Saliendo logger"); // DEBUG
         })
     }
 }

@@ -15,7 +15,7 @@ fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
 
     // Se crean y configuran ambos extremos del string logger
-    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
+    let (mut logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
     let client_id = get_formatted_app_id();
     let sistema_monitoreo = SistemaMonitoreo::new(logger.clone_ref());
@@ -36,6 +36,8 @@ fn main() -> Result<(), Error> {
             e
         ),
     }
+    logger.stop_logging();
+    drop(sistema_monitoreo); // porque le hicimos clone_ref al logger.
 
     println!("Hola.");
 
