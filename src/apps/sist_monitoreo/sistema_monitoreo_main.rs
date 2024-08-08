@@ -27,7 +27,6 @@ fn main() -> Result<(), Error> {
             let mut handles = sistema_monitoreo.spawn_threads(publish_message_rx, mqtt_client);
 
             handles.push(handle);
-            println!("Hola.");
             join_all_threads(handles);
 
         }
@@ -39,14 +38,10 @@ fn main() -> Result<(), Error> {
     logger.stop_logging();
     drop(sistema_monitoreo); // porque le hicimos clone_ref al logger.
 
-    println!("Hola.");
-
     // Se espera al hijo para el logger writer
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
-
-    println!("Hola.");
 
     Ok(())
 }

@@ -48,14 +48,10 @@ fn main() -> Result<(), Error> {
 
     logger.stop_logging();
 
-    println!("Hola.");
-
     // Se espera al hijo para el logger
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
     
-    println!("Hola.");
-
     Ok(())
 }

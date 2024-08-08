@@ -40,15 +40,12 @@ impl StringLogger {
     
     /// Función que debe ser llamada antes del final de cada programa, para no impedir la finalización del mismo.
     pub fn stop_logging(&mut self) {
-        // Droppea el tx, para que se cierre el rx y el programa termine correctamente.
+        // Droppea el tx, para que se cierre el rx y el programa termine.
         self.tx = None;
     }
     
+    /// Devuelve una instancia de `Self` que escribirá al mismo archivo (usa clone de su tx interno).
     pub fn clone_ref(&self) -> StringLogger {
-        /*match &self.tx {
-            Some(tx) => Self::new_for_internal_use(self.tx.clone()),
-            None => Self::new_for_internal_use(None),
-        }*/
         Self::new_for_internal_use(self.tx.clone())        
     }
 

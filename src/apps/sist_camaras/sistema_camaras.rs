@@ -196,7 +196,6 @@ impl SistemaCamaras {
         topic: &str,
         rx: Receiver<Vec<u8>>,
     ) {
-        println!("Hola spawn_publish_to_topic_thread");
         while let Ok(cam_bytes) = rx.recv() {
             if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
                 let res_publish = mqtt_client_lock.mqtt_publish(topic, &cam_bytes, self.qos);
@@ -211,7 +210,6 @@ impl SistemaCamaras {
                 };
             }
         }
-        println!("Saliendo de spawn_publish_to_topic_thread");
     }
 
     fn spawn_subscribe_to_topics_thread(
