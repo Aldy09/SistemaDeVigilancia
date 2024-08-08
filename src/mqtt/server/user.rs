@@ -39,13 +39,8 @@ impl User {
         }
     }
 
-    /// Devuelve el username del user.
-    pub fn get_username(&self) -> String {
-        self.username.to_string()
-    }
-
     /// Devuelve si el user no está desconectado.
-    pub fn is_not_disconnected(&self) -> bool {
+    fn is_not_disconnected(&self) -> bool {
         self.state != UserState::TemporallyDisconnected
     }
 
@@ -81,7 +76,6 @@ impl User {
         if let Some(last_id) = self.last_id_by_topic.get(topic) {
             return *last_id;
         }
-        println!("PRINT DEBUG PROBANDO"); // []
         0 // <---. // Aux. Por qué podría no encontrarse el topic? xq no se insertó todavía.., pero si se está reconectando debería existir de la conexión anterior;
     }
 

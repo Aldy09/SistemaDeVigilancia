@@ -171,12 +171,12 @@ impl MQTTServer {
         // para luego publicarlo al will_topic cuando user se desconecte
         let will_msg_info = connect_msg.get_will_to_publish();
 
+        let username_c = username.to_string();
         //[] Aux: Nos guardamos el stream, volver a ver esto.
-        let user = User::new(stream.try_clone()?, username.to_string(), will_msg_info); //[]
+        let user = User::new(stream.try_clone()?, username_c.to_owned(), will_msg_info); //[]
         if let Ok(mut users) = self.connected_users.lock() {
-            let username = user.get_username();
             println!("Username agregado a la lista del server: {:?}", username);
-            users.insert(username, user); //inserta el usuario en el hashmap
+            users.insert(username_c, user); //inserta el usuario en el hashmap
         }
         Ok(())
     }

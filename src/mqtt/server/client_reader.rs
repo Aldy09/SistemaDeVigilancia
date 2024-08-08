@@ -64,13 +64,13 @@ impl ClientReader {
                     &self.mqtt_server,
                 )? {
                     // Aux: ok en realidad acá arriba al terminar el authenticator se crea el User. [].
-                    // aux: o sea que acá abajo en realidad ya no debería usar el stream...;
+                    // aux: o sea que a partir de acá (handle_packets) ya no debería usar el stream.
                     if let Some(client_id) = connect_msg.get_client_id() {
                         self.handle_packets(client_id)?;
                     }
                 }
             }
-            _ => self.handle_invalid_message(fixed_header, stream),
+            _ => self.handle_invalid_message(fixed_header, stream), // (aux: está ok xq no pasó por add_new_user).
         }
         Ok(())
     }
@@ -110,7 +110,7 @@ impl ClientReader {
     ) -> JoinHandle<()> {
         let mut self_clone = self.clone_ref();
         std::thread::spawn(move || {
-            let _ = self_clone.handle_stream(client_id_clone.as_str(), tx_1);
+            let _ = self_clone.read_packets_from_stream(client_id_clone.as_str(), tx_1);
         })
     }
 
@@ -122,7 +122,7 @@ impl ClientReader {
         })
     }
     // Espera por paquetes que llegan desde su stream y los envia al hilo de arriba
-    pub fn handle_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
+    pub fn read_packets_from_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
@@ -145,6 +145,7 @@ impl ClientReader {
         Ok(())
     }
 
+    /// Desconexión voluntaria.
     fn handle_disconnect(&mut self, client_id: &str) -> Result<(), Error> {
         self.mqtt_server.publish_users_will_message(client_id)?;
         self.mqtt_server.remove_user(client_id);
@@ -165,12 +166,12 @@ impl ClientReader {
         Ok(())
     }
 
+    /// Desconexión involuntaria (ie se le fue internet).
     fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
         println!("Se desconectó el cliente: {:?}.", client_id);
         self.mqtt_server
-            .set_user_as_temporally_disconnected(client_id)?;
+            .set_user_as_temporally_disconnected(client_id)?; 
         self.mqtt_server.publish_users_will_message(client_id)?;
-        // Acá se manejaría para recuperar la sesión cuando se reconecte.
         Ok(())
     }
 
