@@ -22,7 +22,7 @@ use super::places;
 //     ])
 // }
 
-/// Helper structure for the `Images` plugin.
+/// Estructura de datos para el plugin de imagenes.
 pub struct ImagesPluginData {
     pub texture: Texture,
     pub angle: f32,
@@ -51,12 +51,13 @@ pub fn images(images_plugin_data: &mut ImagesPluginData) -> impl Plugin {
     }])
 }
 
-/// Sample map plugin which draws custom stuff on the map.
+/// Estructura de datos para el plugin de formas personalizadas.
 pub struct CustomShapes {}
 
 impl Plugin for CustomShapes {
+    /// Dibuja un circulo en la posicion del obelisco.
     fn run(&mut self, response: &Response, painter: Painter, projector: &Projector) {
-        // Position of the point we want to put our shapes.
+        // Posicion del obelisco.
         let position = places::capitol();
 
         // Project it into the position on the screen.
