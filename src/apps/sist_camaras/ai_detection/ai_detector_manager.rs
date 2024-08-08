@@ -2,10 +2,11 @@ use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
 use std::error::Error;
-use std::fs;
+use std::sync::mpsc::Receiver;
+use std::{fs, thread};
 use std::io::ErrorKind;
 use std::path::Path;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
@@ -22,23 +23,43 @@ const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.t
 /// de alguna cámara.
 pub struct AIDetectorManager {
     cameras: ShCamerasType,
-    tx: mpsc::Sender<Incident>,
+    inc_tx: mpsc::Sender<Incident>,
+    exit_requested: Arc<Mutex<bool>>,
     logger: StringLogger,
 }
 
 impl AIDetectorManager {
-    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, logger: StringLogger) -> Self {
-        Self {
+    pub fn new(cameras: ShCamerasType, inc_tx: mpsc::Sender<Incident>, exit_rx: mpsc::Receiver<()>, logger: StringLogger) -> Self {
+        
+        let er = Arc::new(Mutex::new(false));
+
+        let detector_manager = Self {
             cameras,
-            tx,
+            inc_tx,
+            exit_requested: er.clone(),
             logger,
-        }
+        };
+
+        let handle = thread::spawn(move || {
+            modify_if_exit_requested(er, exit_rx);
+        });
+
+        handle.join().unwrap(); // aux, ahora lo cambio
+
+        detector_manager.run();
+
+        detector_manager
     }
 
     /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     pub fn run(&self) -> Result<(), Box<dyn Error>> {
+        
+
+
+
+
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
         let path = Path::new(properties.get_base_dir());
@@ -52,15 +73,24 @@ impl AIDetectorManager {
     
         // Se inicializa el detector
         let logger_ai = self.logger.clone_ref();
-        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties, logger_ai);
+        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.inc_tx.clone(), properties, logger_ai);
     
         // Crear un pool de threads con el número de threads deseado
         let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
-    
+
+        if self.exit_requested() {
+            println!("   hilo detector pre for: por hacer return");
+            return Ok(());
+        }
         for event_res in rx_fs {
+            // Sale, si lo solicitaron desde abm
+            if self.exit_requested() {
+                println!("   hilo detector pre for: por hacer return");
+                break;
+            }
+
+            // Procesa el evento, interesa el Create, que es cuando se crea una imagen en algún subdirectorio
             let event = event_res?;
-    
-            // Interesa el evento Create, que es cuando se crea una imagen en algún subdirectorio
             if let EventKind::Create(_) = event.kind {
                 self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
@@ -146,6 +176,26 @@ impl AIDetectorManager {
         Ok(())        
     }
     
+    
+
+    /// Devuelve si se solicitó salir.
+    fn exit_requested(&self) -> bool {
+        if let Ok(var) = self.exit_requested.lock(){
+            return *var 
+        }
+        false
+    }
+    
+}
+
+/// Si recibe por el `rx` que se solicitó salir, lo deja asentado en la variable compartida `exit_requested`,
+/// para que en la próxima vuelta del for el detector manager se entere y finalice la ejecución.
+fn modify_if_exit_requested(exit_requested: Arc<Mutex<bool>>, rx: Receiver<()>) {
+    if let Ok(_) = rx.recv() {
+        if let Ok(mut var) = exit_requested.lock(){
+            *var = true;
+        }
+    }
 }
 
 /// Lee la imagen del archivo path proporcionado y llama a procesarla.
