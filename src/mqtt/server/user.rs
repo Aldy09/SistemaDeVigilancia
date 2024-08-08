@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::write, io::{Error, Write}, net::TcpStream};
+use std::{collections::HashMap, io::{Error, Write}, net::TcpStream};
 
 //use crate::mqtt::mqtt_utils::stream_type::StreamType;
 type StreamType = TcpStream;
@@ -37,11 +37,6 @@ impl User {
             topics: Vec::new(),
             last_id_by_topic: HashMap::new(),
         }
-    }
-
-    /// Devuelve el stream del user.
-    pub fn get_stream(&self) -> Result<StreamType, Error> {
-        self.stream.try_clone()
     }
 
     /// Devuelve el username del user.
