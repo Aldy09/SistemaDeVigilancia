@@ -21,7 +21,7 @@ fn main() -> Result<(), Error> {
     let (id, lat, lon, broker_addr) = get_id_lat_long_and_broker_address()?;
 
     // Se crean y configuran ambos extremos del string logger
-    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
+    let (mut logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id(id));
 
     // Se inicializa la conexión mqtt y el dron
     let qos = 1; // []
@@ -34,7 +34,7 @@ fn main() -> Result<(), Error> {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
-            let mut dron = Dron::new(id, lat, lon, logger)?;
+            let mut dron = Dron::new(id, lat, lon, logger.clone_ref())?;
 
             let mut handles = dron.spawn_threads(mqtt_client, publish_msg_rx)?;
             handles.push(handle);
@@ -42,6 +42,8 @@ fn main() -> Result<(), Error> {
         }
         Err(e) => println!("Dron ID {} : Error al conectar al broker MQTT: {:?}", id, e),
     }
+
+    logger.stop_logging();
 
     // Se espera al hijo para el logger writer
     if handle_logger.join().is_err() {
