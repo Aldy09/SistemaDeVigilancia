@@ -3,6 +3,7 @@ use notify::{RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
 use std::error::Error;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::mpsc;
 
@@ -63,30 +64,12 @@ impl AIDetectorManager {
             if let EventKind::Create(_) = event.kind {
                 self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
-                    if path.is_file() {
-                        let image_path = path.clone();
-                        // Validar la extensión del archivo
-                        if let Some(extension) = image_path.extension() {
-                            // Si es jpg o jpeg, procesar
-                            if extension == "jpg" || extension == "jpeg" {
-                                // Lanza un hilo por cada imagen a procesar []
-                                let mut aidetector = ai_detector.clone_refs();
-                                pool.spawn(move || {
-                                    match read_image(&image_path) {
-                                        Ok(image) => {
-                                            if let Some(cam_id) = extract_camera_id(&image_path) {
-                                                if aidetector.process_image(image, cam_id).is_err() {
-                                                    println!("Detector: Error en process_image.");
-                                                }
-                                            }
-                                        },
-                                        Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
-                                    };
-                                });
-                            }
-                        }
+                    if let Err(e) = self.launch_detection_for_image(&ai_detector, &pool, path){
+                        println!("Detector: Error al procesar la imagen: {:?}, {:?}", path, e);
+                        self.logger.log(format!("Detector: Error al procesar la imagen: {:?}, {:?}", path, e));
                     }
                 }
+                
             }
         }
         
@@ -102,10 +85,12 @@ impl AIDetectorManager {
     
     /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
     fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
-        // Si no existe, lo crea
-        if !base_dir.exists() {
-            fs::create_dir(base_dir)?;
+        // Si ya existe, lo borra y a todo su contenido, y
+        if base_dir.exists() {
+            fs::remove_dir_all(base_dir)?;
         }
+        // lo crea
+        fs::create_dir(base_dir)?;
     
         Ok(())
     }
@@ -140,11 +125,53 @@ impl AIDetectorManager {
         Ok(())
     }
 
+    /// Envía el pedido a la threadpool para detectar incidente en la imagen.
+    fn launch_detection_for_image(&self, ai_detector: &AutomaticIncidentDetector, pool: &rayon::ThreadPool, path: &Path) -> Result<(), Box<dyn Error>>{
+            if path.is_file() {
+                let image_path = path.to_owned();
+                // Validar la extensión del archivo
+                is_valid_extension(&image_path)?;
+                
+                // Lanza un hilo por cada imagen a procesar []
+                let mut aidetector = ai_detector.clone_refs();
+                let logger_c = self.logger.clone_ref();
+                pool.spawn(move || {
+                    if let Err(e) = read_and_process_image(&mut aidetector, &image_path){
+                        println!("Detector: Error en read_and_process_image: {:?}.", e);
+                        logger_c.log(format!("Detector: Error en read_and_process_image: {:?}.", e));
+                    }
+                });
 
+            }
+        Ok(())        
+    }
     
-
 }
 
+/// Lee la imagen del archivo path proporcionado y llama a procesarla.
+fn read_and_process_image(aidetector: &mut AutomaticIncidentDetector, image_path: &Path) -> Result<(), Box<dyn Error>> {
+    let img = read_image(image_path)?;
+    if let Some(cam_id) = extract_camera_id(image_path) {
+        aidetector.process_image(img, cam_id)?;
+    };
+    Ok(())
+}
+
+/// Checkea si la extensión de la imagen es válida.
+fn is_valid_extension(image_path: &Path) -> Result<(), Box<dyn Error>> {
+    if let Some(extension) = image_path.extension() {
+        // Si es jpg o jpeg, procesar
+        if extension == "jpg" || extension == "jpeg" {
+            return Ok(());
+        }
+    }
+    Err(Box::new(std::io::Error::new(
+        ErrorKind::Other,
+        "Extensión inválida.",
+    )))
+}
+
+/// Lee la imagen del `image_path`.
 fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = std::fs::File::open(image_path)?;
     let mut buffer = Vec::new();
