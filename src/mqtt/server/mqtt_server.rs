@@ -4,11 +4,7 @@ use crate::mqtt::messages::{
     publish_message::PublishMessage, suback_message::SubAckMessage,
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
-// Add the missing import
 
-use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
-// use crate::mqtt::mqtt_utils::utils::
-//   write_message_to_stream;
 use crate::mqtt::server::user::User;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
@@ -115,9 +111,7 @@ impl MQTTServer {
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
     fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
         let msg = DisconnectMessage::new();
-        let mut stream = client.get_stream()?;
-        write_message_to_stream(&msg.to_bytes(), &mut stream)?;
-        //self.write_to_client(msg.to_bytes());
+        client.write_message(&msg.to_bytes())?;
         Ok(())
     }
 
@@ -247,17 +241,20 @@ impl MQTTServer {
     }
 
     /// Envía un mensaje de tipo SubAck al cliente.
-    pub fn send_suback(
+    pub fn send_suback_to(
         &self,
+        client_id: &str,
         return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>,
-        stream: &mut TcpStream,
     ) -> Result<(), Error> {
         match return_codes_res {
             Ok(return_codes) => {
                 let ack = SubAckMessage::new(0, return_codes.clone());
                 let ack_msg_bytes = ack.to_bytes();
-                write_message_to_stream(&ack_msg_bytes, stream)?;
-                //self.write_to_client(ack_msg_bytes);
+                if let Ok(mut connected_users_locked) = self.get_connected_users().lock() {
+                    if let Some(user) = connected_users_locked.get_mut(client_id) {
+                        user.write_message(&ack_msg_bytes)?;
+                    }
+                }
                 println!("   tipo subscribe: Enviando el ack: {:?}", ack);
             }
             Err(e) => {
@@ -457,14 +454,17 @@ impl MQTTServer {
 
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
-    pub fn send_puback(&self, msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
+    pub fn send_puback_to(&self, client_id: &str, msg: &PublishMessage) -> Result<(), Error> {
         let option_packet_id = msg.get_packet_identifier();
         let packet_id = option_packet_id.unwrap_or(0);
 
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
-        write_message_to_stream(&ack_msg_bytes, stream)?;
-        //self.write_to_client(ack_msg_bytes);
+        if let Ok(mut connected_users_locked) = self.get_connected_users().lock() {
+            if let Some(user) = connected_users_locked.get_mut(client_id) {
+                user.write_message(&ack_msg_bytes)?;
+            }
+        }
         println!(
             "   tipo publish: Enviado el ack para packet_id: {:?}",
             ack.get_packet_id()
@@ -552,13 +552,8 @@ fn send_unreceived_messages_to_user(
     for _ in 0..diff {
         let next_message_index = user.get_last_id_by_topic(topic) as usize;
         if let Some(msg) = topic_messages.get(next_message_index) {
-            let mut user_stream = user.get_stream()?;
-            if user.is_not_disconnected() {
-                write_message_to_stream(&msg.to_bytes(), &mut user_stream)?;
-                user.update_last_id_by_topic(topic, (next_message_index + 1) as u32);
-            } else {
-                println!("[DEBUG]:   el msg No se envía xq entra al if.");
-            }
+            user.write_message(&msg.to_bytes())?;
+            user.update_last_id_by_topic(topic, (next_message_index + 1) as u32);
         } else {
             println!("ERROR NO SE ENCUENTRA EL TOPIC_MSGS.GET(TOPIC) A ENVIAR!!!");
         }
