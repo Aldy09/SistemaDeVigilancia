@@ -38,8 +38,7 @@ fn main() -> Result<(), Error> {
 
             let mut sistema_camaras = SistemaCamaras::new(cameras, logger);
 
-            let mut handles =
-                sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
+            let mut handles = sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
 
             handles.push(handle);
             join_all_threads(handles);
