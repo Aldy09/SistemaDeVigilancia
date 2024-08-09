@@ -27,7 +27,7 @@ impl StringLoggerWriter {
         Ok(())
     }
 
-    /// Lanza hilo que recibe por rx cada string a logguear, y la escribe en el athcivo.
+    /// Lanza hilo que recibe por rx cada string a logguear, y la escribe en el archivo.
     pub fn spawn_event_listening_thread_to_write_to_file(self
     ) -> JoinHandle<()> {
         thread::spawn(move || {
