@@ -133,6 +133,10 @@ impl SubscribeMessage {
     pub fn get_topic_filters(&self) -> &Vec<(String, u8)> {
         &self.topic_filters
     }
+
+    pub fn get_packet_id(&self) -> u16 {
+        self.packet_identifier
+    }
 }
 
 #[cfg(test)]

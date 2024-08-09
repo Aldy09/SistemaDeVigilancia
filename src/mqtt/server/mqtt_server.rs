@@ -22,6 +22,7 @@ use std::io::{Error, ErrorKind, Write};
 use std::sync::{Arc, Mutex};
 
 use super::incoming_connections::ClientListener;
+use super::packet;
 
 const TOPIC_MESSAGES_LEN: usize = 50;
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
@@ -250,11 +251,11 @@ impl MQTTServer {
     pub fn send_suback(
         &self,
         return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>,
-        stream: &mut TcpStream,
+        stream: &mut TcpStream, packet_id: u16,
     ) -> Result<(), Error> {
         match return_codes_res {
             Ok(return_codes) => {
-                let ack = SubAckMessage::new(0, return_codes.clone());
+                let ack = SubAckMessage::new(packet_id, return_codes.clone());
                 let ack_msg_bytes = ack.to_bytes();
                 write_message_to_stream(&ack_msg_bytes, stream)?;
                 //self.write_to_client(ack_msg_bytes);
@@ -458,7 +459,7 @@ impl MQTTServer {
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
     pub fn send_puback(&self, msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
-        let option_packet_id = msg.get_packet_identifier();
+        let option_packet_id = msg.get_packet_id();
         let packet_id = option_packet_id.unwrap_or(0);
 
         let ack = PubAckMessage::new(packet_id, 0);

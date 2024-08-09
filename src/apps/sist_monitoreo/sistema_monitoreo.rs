@@ -1,23 +1,24 @@
 use std::{
-    io::{self, ErrorKind}, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
+    io::{self, ErrorKind},
+    sync::{mpsc, Arc, Mutex},
+    thread::{self, JoinHandle},
 };
 
-use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
     apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs},
     logging::string_logger::StringLogger,
+    mqtt::messages::subscribe_message::SubscribeMessage,
 };
 
-use crate::mqtt::{
-    client::mqtt_client::MQTTClient,
-    messages::publish_message::PublishMessage,
-};
+use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
+use std::io::Error;
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
@@ -45,10 +46,7 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 
 impl SistemaMonitoreo {
-    pub fn new(
-        egui_tx: CrossbeamSender<PublishMessage>,
-        logger: StringLogger,
-    ) -> Self {
+    pub fn new(egui_tx: CrossbeamSender<PublishMessage>, logger: StringLogger) -> Self {
         let qos =
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
                 .unwrap_or(0);
@@ -124,12 +122,13 @@ impl SistemaMonitoreo {
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
-                while let Ok(inc) = rx.recv() {
-                    self_clone.logger.log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
-                    self_clone.publish_incident(inc, &mqtt_client);
-                }
+            while let Ok(inc) = rx.recv() {
+                self_clone
+                    .logger
+                    .log(format!("Sistema-Monitoreo: envío incidente: {:?}", inc));
+                self_clone.publish_incident(inc, &mqtt_client);
             }
-        )
+        })
     }
 
     fn clone_ref(&self) -> Self {
@@ -159,35 +158,77 @@ impl SistemaMonitoreo {
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
     ) {
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::CameraTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DescTopic.to_str());
+        let topics = vec![
+            AppsMqttTopics::CameraTopic.to_str(),
+            AppsMqttTopics::DronTopic.to_str(),
+            AppsMqttTopics::IncidentTopic.to_str(),
+            AppsMqttTopics::DescTopic.to_str(),
+        ];
+        let suscribe_res = self.subscribe_to_topics_vec(&mqtt_client, topics);
+        match suscribe_res {
+            Ok(suscribe_msg) => {
+                if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
+                    let packet_id = suscribe_msg.get_packet_id();
+                    let res_ack = mqtt_client_lock.wait_to_ack(packet_id);
+                    if let Err(e) = res_ack {
+                        self.logger
+                            .log(format!("Error al esperar ack del subscribe: {:?}", e));
+                        // Se deberia reintentar el subscribe
+                    }
+                }
+            }
+            Err(e) => {
+                self.logger
+                    .log(format!("Sistema-Monitoreo: Error al hacer subscribe"));
+                println!("{:?}", e);
+            }
+        }
         self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 
-    fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
+    fn subscribe_to_topics_vec(
+        &self,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+        topics: Vec<&str>,
+    ) -> Result<SubscribeMessage, Error> {
+        let topics_to_subscribe: Vec<String> =
+            topics.clone().into_iter().map(String::from).collect();
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
+            let res_sub = mqtt_client.mqtt_subscribe(topics_to_subscribe);
             match res_sub {
-                Ok(_) => {
-                    self.logger.log(format!("Sistema-Monitoreo: subscripto a topic {:?}", topic));
+                Ok(suscribe_msg) => {
+                    for topic in &topics {
+                        self.logger.log(format!(
+                            "Sistema-Monitoreo: subscripto a topics {:?}",
+                            topic
+                        ));
+                    }
+                    return Ok(suscribe_msg);
                 }
                 Err(e) => {
-                    println!("Error al hacer un subscribe a topic: {:?}", e);
-                    self.logger.log(format!("Error al hacer un subscribe al topic: {:?}", e));
-                },
+                    self.logger
+                        .log(format!("Error al hacer un subscribe a los topics: {:?}", e));
+                    return Err(e);
+                }
             }
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error al obtener el lock del mqtt_client",
+            ));
         }
     }
 
     // Recibe mensajes de los topics a los que se ha suscrito
     fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
         for publish_msg in mqtt_rx {
-            self.logger.log(format!("Sistema-Monitoreo: recibió mensaje: {:?}", publish_msg));
+            self.logger.log(format!(
+                "Sistema-Monitoreo: recibió mensaje: {:?}",
+                publish_msg
+            ));
             self.send_publish_message_to_ui(publish_msg)
         }
-        
+
         there_are_no_more_publish_msgs(&self.logger);
     }
 
@@ -214,11 +255,18 @@ impl SistemaMonitoreo {
 
         // Hago el publish
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_publish = mqtt_client.mqtt_publish(AppsMqttTopics::IncidentTopic.to_str(), &incident.to_bytes(), self.get_qos());
+            let res_publish = mqtt_client.mqtt_publish(
+                AppsMqttTopics::IncidentTopic.to_str(),
+                &incident.to_bytes(),
+                self.get_qos(),
+            );
             match res_publish {
-                Ok(publish_message) => {                    
-                    self.logger.log(format!("Sistema-Monitoreo: envío mensaje: {:?}", publish_message));
-            }
+                Ok(publish_message) => {
+                    self.logger.log(format!(
+                        "Sistema-Monitoreo: envío mensaje: {:?}",
+                        publish_message
+                    ));
+                }
                 Err(e) => {
                     println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
                 }

@@ -35,7 +35,7 @@ impl MessageProcessor {
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
 
-        match create_thread_pool_with(10) {
+        match create_thread_pool_with(20) {
             Ok(thread_pool) => {
                 for packet in rx_1 {
                     let self_clone = self.clone_ref();
@@ -95,7 +95,8 @@ impl MessageProcessor {
                 if let Err(e) = operation_result {
                     println!("   ERROR: {:?}", e);
                 }
-                let suback_res = self.send_suback_to(client_id, return_codes_res);
+                let packet_id = msg.get_packet_id();
+                let suback_res = self.send_suback_to(client_id, return_codes_res, packet_id);
                 if let Err(e) = suback_res {
                     println!("   ERROR: {:?}", e);
                 }
@@ -129,12 +130,12 @@ impl MessageProcessor {
     fn send_suback_to(
         &self,
         client_id: &str,
-        return_codes_res: Result<Vec<SubscribeReturnCode>, Error>,
+        return_codes_res: Result<Vec<SubscribeReturnCode>, Error>, packet_id: u16,
     ) -> Result<(), Error> {
         if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
             if let Some(user) = connected_users_locked.get_mut(client_id) {
                 self.mqtt_server
-                    .send_suback(&return_codes_res, &mut user.get_stream()?)?;
+                    .send_suback(&return_codes_res, &mut user.get_stream()?, packet_id)?;
             }
         }
         Ok(())

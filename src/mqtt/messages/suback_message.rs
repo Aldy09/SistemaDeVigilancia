@@ -108,6 +108,10 @@ impl SubAckMessage {
 
         Ok(struct_interpretado)
     }
+
+    pub fn get_packet_id(&self) -> u16 {
+        self.packet_identifier
+    }
 }
 
 #[cfg(test)]

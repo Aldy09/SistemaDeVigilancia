@@ -59,7 +59,7 @@ impl MQTTClientWriter {
     pub fn mqtt_subscribe(
         &mut self,
         topics_to_subscribe: Vec<String>,
-    ) -> Result<(), Error> {
+    ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
@@ -74,7 +74,7 @@ impl MQTTClientWriter {
             subs_bytes
         );
 
-        Ok(())
+        Ok(subscribe_msg)
     }
 
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.

@@ -1,8 +1,8 @@
+use std::sync::mpsc::Receiver;
 use std::{net::TcpStream, sync::mpsc::Sender};
 
 use std::io::{Error, ErrorKind};
 
-use crate::mqtt::messages::connack_message::ConnackMessage;
 
 use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::messages::puback_message::PubAckMessage;
@@ -15,17 +15,20 @@ use crate::mqtt::mqtt_utils::utils::{
 };
 use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 
+use super::ack_message::ACKMessage;
+
 type StreamType = TcpStream;
 
 #[derive(Debug)]
 pub struct MQTTClientListener {
     stream: StreamType,
     client_tx: Sender<PublishMessage>,
+    ack_tx: Sender<ACKMessage>,
 }
 
 impl MQTTClientListener {
-    pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>) -> Self {
-        MQTTClientListener { stream, client_tx }
+    pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>, ack_tx:Sender<ACKMessage>) -> Self {
+        MQTTClientListener { stream, client_tx , ack_tx }
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
@@ -69,7 +72,6 @@ impl MQTTClientListener {
         )?;
 
         match tipo {
-            PacketType::Connack => self.handle_connack(msg_bytes)?,
             PacketType::Publish => self.handle_publish(msg_bytes)?,
             PacketType::Puback => self.handle_puback(msg_bytes)?,
             PacketType::Suback => self.handle_suback(msg_bytes)?,
@@ -85,13 +87,7 @@ impl MQTTClientListener {
         Ok(())
     }
 
-    fn handle_connack(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
-        println!("Mqtt cliente leyendo: recibo conn ack");
-        let msg = ConnackMessage::from_bytes(&msg_bytes)?;
-        println!("   Mensaje conn ack completo recibido: {:?}", msg);
-        Ok(())
-    }
-
+    
     fn handle_publish(&mut self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
         let msg = PublishMessage::from_bytes(msg_bytes)?;
@@ -103,18 +99,41 @@ impl MQTTClientListener {
         Ok(())
     }
 
+
     fn handle_puback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
-        println!("Mqtt cliente leyendo: recibo pub ack");
         let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
-        println!("   Mensaje pub ack completo recibido: {:?}", msg);
+        match self.ack_tx.send(ACKMessage::PubAck(msg)) {
+            Ok(_) => println!("PubAck enviado por tx exitosamente."),
+            Err(_) => println!("Error al enviar PubAck por tx."),
+            
+        }
         Ok(())
     }
 
     fn handle_suback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
-        println!("Mqtt cliente leyendo: recibo sub ack");
         let msg = SubAckMessage::from_bytes(msg_bytes)?;
-        println!("   Mensaje sub ack completo recibido: {:?}", msg);
+        match self.ack_tx.send(ACKMessage::SubAck(msg)) {
+            Ok(_) => println!("SubAck enviado por tx exitosamente."),
+            Err(_) => println!("Error al enviar SubAck por tx."),
+            
+        }
         Ok(())
+    }
+    
+    pub fn wait_to_ack(&self, packet_id: u16,  ack_rx: &mut Receiver<ACKMessage>) -> Result<(), Error> {
+        println!("wait to ack");
+        loop {
+            if let Ok(ack_message) = ack_rx.try_recv() {
+                if let Some(packet_identifier) = ack_message.get_packet_id() {
+                    if packet_id == packet_identifier {
+                        println!("packet_id por parametro {:?}", packet_id);
+                        println!("LLEGO EL ACK {:?}", ack_message); 
+                        return Ok(());
+                    }
+                } 
+            }
+        }
+        
     }
 }
 
@@ -122,6 +141,7 @@ impl Clone for MQTTClientListener {
     fn clone(&self) -> Self {
         let stream = self.stream.try_clone().unwrap();
         let client_tx = self.client_tx.clone();
-        MQTTClientListener { stream, client_tx }
+        let ack_tx = self.ack_tx.clone();
+        MQTTClientListener { stream, client_tx , ack_tx }
     }
 }

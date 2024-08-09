@@ -84,10 +84,14 @@ impl Dron {
     }
 
     fn spawn_for_update_battery(&self, ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
-        let s = self.clone_ref();
+        let self_clone = self.clone_ref();
         thread::spawn(move || {
-            let mut battery_manager =
-                BatteryManager::new(s.data, s.dron_properties, s.logger, ci_tx);
+            let mut battery_manager = BatteryManager::new(
+                self_clone.data,
+                self_clone.dron_properties,
+                self_clone.logger,
+                ci_tx,
+            );
             battery_manager.run();
         })
     }
@@ -108,11 +112,12 @@ impl Dron {
         ci_rx: mpsc::Receiver<DronCurrentInfo>,
         mqtt_client: Arc<Mutex<MQTTClient>>,
     ) -> JoinHandle<()> {
-        let s = self.clone_ref();
+        let self_clone = self.clone_ref();
         thread::spawn(move || {
             for ci in ci_rx {
-                if let Err(e) = s.publish_current_info(ci, &mqtt_client) {
-                    s.logger
+                if let Err(e) = self_clone.publish_current_info(ci, &mqtt_client) {
+                    self_clone
+                        .logger
                         .log(format!("Error al publicar la current_info: {:?}.", e));
                 }
             }
@@ -126,9 +131,18 @@ impl Dron {
         ci: DronCurrentInfo,
         mqtt_client: &Arc<Mutex<MQTTClient>>,
     ) -> Result<(), Error> {
-        if let Ok(mut mqtt_client_l) = mqtt_client.lock() {
+        if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let topic = AppsMqttTopics::DronTopic.to_str();
-            mqtt_client_l.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
+            let pub_msg = mqtt_client_lock.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
+            if self.qos > 0 {
+                if let Some(packet_id) = pub_msg.get_packet_id() {
+                    let res_ack = mqtt_client_lock.wait_to_ack(packet_id);
+                    if let Err(_e) = res_ack {
+                        // Si no se pudo enviar el mensaje, se vuelve a intentar.
+                        println!("Error al publicar mensaje.");
+                    }
+                }
+            }
         };
         Ok(())
     }
@@ -155,7 +169,8 @@ impl Dron {
     ) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             mqtt_client.mqtt_subscribe(vec![(String::from(topic))])?;
-            self.logger.log(format!("Dron: Suscripto a topic: {}", topic));                
+            self.logger
+                .log(format!("Dron: Suscripto a topic: {}", topic));
         }
         Ok(())
     }
@@ -168,16 +183,16 @@ impl Dron {
         mqtt_rx: MpscReceiver<PublishMessage>,
         ci_tx: mpsc::Sender<DronCurrentInfo>,
     ) {
-        // Módulo encargado de la lógica del dron al recibir PublishMessage's.
-        let s = self.clone_ref();
+        // Módulo encargado de la lógica del dron al recibir PublishMessage'self_clone.
+        let self_clone = self.clone_ref();
         let dron_logic = DronLogic::new(
-            s.data,
-            s.dron_properties,
-            s.logger,
-            s.drone_distances_by_inc.clone(),
+            self_clone.data,
+            self_clone.dron_properties,
+            self_clone.logger,
+            self_clone.drone_distances_by_inc.clone(),
             ci_tx,
         );
-        
+
         // Recibe de mqtt
         let mut children = vec![];
         for publish_msg in mqtt_rx {
@@ -239,7 +254,7 @@ impl Dron {
         // Se cargan las constantes desde archivo de config.
         let properties_file = "src/apps/sist_dron/sistema_dron.properties";
         let mut dron_properties = SistDronProperties::new(properties_file)?;
-        
+
         let drone_distances_by_incident = Arc::new(Mutex::new(HashMap::new()));
         // Inicia desde el range_center, por lo cual tiene estado activo; y con batería al 100%.
         dron_properties.set_range_center_position(initial_lat, initial_lon);

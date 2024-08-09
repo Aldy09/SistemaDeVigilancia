@@ -38,7 +38,10 @@ impl<'a> PublishMessage {
         content: &'a [u8],
     ) -> Result<Self, Error> {
         if !flags.is_qos_greater_than_0() && packet_identifier.is_some() {
-            return Err(Error::new(ErrorKind::InvalidData, "El packet_identifier debe ser None si qos = 0".to_string()));
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "El packet_identifier debe ser None si qos = 0".to_string(),
+            ));
         }
 
         let variable_header = VariableHeader {
@@ -91,7 +94,7 @@ impl<'a> PublishMessage {
         (rem_len_in_two_bytes + topic_name_length + packet_identifier_length + payload_length) as u8
     }
 
-    pub fn get_packet_identifier(&self) -> Option<u16> {
+    pub fn get_packet_id(&self) -> Option<u16> {
         self.variable_header.packet_identifier
     }
 
