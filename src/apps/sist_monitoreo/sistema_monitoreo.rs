@@ -199,6 +199,7 @@ impl SistemaMonitoreo {
         }
     }
 
+    /// Hilo para salir desde la UI
     fn spawn_exit_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
