@@ -26,8 +26,6 @@ use super::types::channels_type::create_channels;
 
 #[derive(Debug)]
 pub struct SistemaCamaras {
-    //cameras_tx: Sender<Vec<u8>>,
-    //exit_tx: Sender<bool>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
     qos: u8,
     logger: StringLogger,
@@ -49,7 +47,6 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 impl SistemaCamaras {
     pub fn new(
-        //exit_tx: Sender<bool>,
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
         logger: StringLogger,
     ) -> Self {
@@ -68,8 +65,6 @@ impl SistemaCamaras {
 
     pub fn spawn_threads(
         &mut self,
-        // cameras_rx: Receiver<Vec<u8>>,
-        // exit_rx: Receiver<bool>,
         publish_msg_rx: Receiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {

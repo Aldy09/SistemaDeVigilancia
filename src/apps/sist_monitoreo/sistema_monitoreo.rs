@@ -44,7 +44,6 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 
 impl SistemaMonitoreo {
     pub fn new(
-        //egui_tx: CrossbeamSender<PublishMessage>,
         logger: StringLogger,
     ) -> Self {
         let qos =
