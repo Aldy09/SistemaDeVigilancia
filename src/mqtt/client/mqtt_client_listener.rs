@@ -91,6 +91,7 @@ impl MQTTClientListener {
         println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
         let msg = PublishMessage::from_bytes(msg_bytes)?;
         send_puback(&msg, &mut self.stream)?;
+        // Envía PublishMessage a la app
         match self.client_tx.send(msg) {
             Ok(_) => println!("Mqtt cliente leyendo: se envía por tx exitosamente."),
             Err(_) => println!("Mqtt cliente leyendo: error al enviar por tx."),
@@ -101,6 +102,7 @@ impl MQTTClientListener {
 
     fn handle_puback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
+        // Avisa que llegó el ack
         match self.ack_tx.send(ACKMessage::PubAck(msg)) {
             Ok(_) => println!("PubAck enviado por tx exitosamente."),
             Err(_) => println!("Error al enviar PubAck por tx."),
@@ -111,6 +113,7 @@ impl MQTTClientListener {
 
     fn handle_suback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         let msg = SubAckMessage::from_bytes(msg_bytes)?;
+        // Avisa que llegó el ack
         match self.ack_tx.send(ACKMessage::SubAck(msg)) {
             Ok(_) => println!("SubAck enviado por tx exitosamente."),
             Err(_) => println!("Error al enviar SubAck por tx."),

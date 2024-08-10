@@ -12,7 +12,6 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-
 #[derive(Debug)]
 pub struct MQTTClient {
     writer: MQTTClientWriter,
@@ -48,10 +47,6 @@ impl MQTTClient {
         let listener_handle = thread::spawn(move || {
             let _ = listener.read_from_server();
         });
-
-        /*let writer_h = thread::spawn(move || {
-            if let Err(e) = wr // Aux: lanzar hilo iualmente implica un clone del stream, xq necesitarpia un writer_clone ...;
-        })*/
 
         Ok((mqtt_client, publish_msg_rx, listener_handle))
     }
