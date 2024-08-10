@@ -28,7 +28,7 @@ pub struct DronLogic {
     drone_distances_by_incident: DistancesType, // ya es arc mutex.
     ci_tx: Sender<DronCurrentInfo>,
 }
-
+const TIME_TO_UPDATE_CI: u64 = 4/5; //  Hace update de su current_info cada 4/5 segundos.
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 impl DronLogic {
@@ -345,7 +345,7 @@ impl DronLogic {
                 .increment_current_position_in(dir, false)?;
 
             // Simula el vuelo, el dron se desplaza
-            let a = 4/5; // aux
+            let a = TIME_TO_UPDATE_CI; // aux
             sleep(Duration::from_secs(a));
             self.logger.log(format!(
                 "   incrementada la posición actual: {:?}",
