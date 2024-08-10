@@ -34,6 +34,8 @@ impl MQTTClient {
         // Inicializa sus partes internas
         let writer = MQTTClientWriter::new(stream.try_clone()?);
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
+        //let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
+        //let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
         let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
 
@@ -49,6 +51,10 @@ impl MQTTClient {
             let _ = listener.read_from_server();
         });
 
+        /*let writer_h = thread::spawn(move || {
+            if let Err(e) = wr // Aux: lanzar hilo iualmente implica un clone del stream, xq necesitarpia un writer_clone ...;
+        })*/
+
         Ok((mqtt_client, publish_msg_rx, listener_handle))
     }
 
@@ -61,13 +67,16 @@ impl MQTTClient {
         payload: &[u8],
         qos: u8,
     ) -> Result<PublishMessage, Error> {
+        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
         let pub_res = self.writer.mqtt_publish(topic, payload, qos);
+        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         match pub_res {
             Ok(msg) => {
                 if let Err(e) = self.wait_for_ack(&msg, qos) {
                     println!("Error al esperar ack del publish: {:?}", e);
                     // Si no se pudo esperar el ack, se deberia reintentar el publish
-                }
+                };
+                println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.", msg.get_packet_id());
                 Ok(msg)
             }
             Err(e) => Err(e),
@@ -77,7 +86,8 @@ impl MQTTClient {
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: &PublishMessage, qos: u8) -> Result<(), Error> {
         if qos == 1 {
-            self.retransmitter.wait_for_ack(msg.clone()) // nuevo. // le paso el msg para que lo retransmita si no recibió ack.
+            //self.retransmitter.wait_for_ack(msg.clone()) // nuevo. // le paso el msg para que lo retransmita si no recibió ack.
+            self.writer.wait_for_ack(msg.clone())
             
             // aux pensando: este esquema así de que sea una función llamada desde acá, es como llamarlo on demand
             // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.

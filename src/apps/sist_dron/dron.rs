@@ -133,7 +133,9 @@ impl Dron {
     ) -> Result<(), Error> {
         if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let topic = AppsMqttTopics::DronTopic.to_str();
-            let _ = mqtt_client_lock.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
+            println!("[DEBUG TEMA ACK]: por hacer publish:");
+            mqtt_client_lock.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
+            println!("[DEBUG TEMA ACK]: hecho el publish:");
         };
         Ok(())
     }

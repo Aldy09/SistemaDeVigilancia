@@ -23,7 +23,7 @@ impl MQTTClientRetransmitter {
     /// En ese caso devuelve ok.
     /// Si eso no ocurre, debe retransmitir el mensaje original (el msg cuyo ack está esperando)
     /// hasta que llegue su ack o bien se llegue a una cantidad máxima de intentos definida como constante.
-    pub fn wait_for_ack(&self, msg: PublishMessage) -> Result<(), Error> {
+    pub fn wait_for_ack(&self, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
         // Extrae el packet_id
         let packet_id = msg.get_packet_id();
         if let Some(packet_id) = packet_id {
@@ -37,14 +37,14 @@ impl MQTTClientRetransmitter {
     }
     
 
-    fn start_waiting_and_check_for_ack(&self, packet_id: u16, _msg: PublishMessage) -> Result<(), Error> {
+    fn start_waiting_and_check_for_ack(&self, packet_id: u16, _msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
         
         for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
             if let Some(packet_identifier) = ack_message.get_packet_id() {
                 if packet_id == packet_identifier {
                     println!("packet_id por parámetro {:?}", packet_id);
                     println!("   LLEGÓ EL ACK {:?}", ack_message); 
-                    return Ok(());
+                    return Ok(None);
                 }
             } 
         }
@@ -54,6 +54,6 @@ impl MQTTClientRetransmitter {
         // (channel con writer y que sea un hilo corriendo o clone del stream para tenerlo yo acá en Retransmitter?)).
 
 
-        Ok(())
+        Ok(None) // Éste se va a cambiar. Obs: si acá finalm no uso el "msg" se puede devolver algo como Ok(bool)
     }
 }

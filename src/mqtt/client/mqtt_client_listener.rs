@@ -27,7 +27,7 @@ pub struct MQTTClientListener {
 
 impl MQTTClientListener {
     pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>, ack_tx:Sender<ACKMessage>) -> Self {
-        MQTTClientListener { stream, client_tx , ack_tx }
+        MQTTClientListener { stream, client_tx , ack_tx }        
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
@@ -120,11 +120,11 @@ impl MQTTClientListener {
     }
 }
 
-impl Clone for MQTTClientListener {
+/*impl Clone for MQTTClientListener {
     fn clone(&self) -> Self {
         let stream = self.stream.try_clone().unwrap();
         let client_tx = self.client_tx.clone();
         let ack_tx = self.ack_tx.clone();
         MQTTClientListener { stream, client_tx , ack_tx }
     }
-}
+}*/
