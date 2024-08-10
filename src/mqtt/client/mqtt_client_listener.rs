@@ -1,4 +1,3 @@
-use std::sync::mpsc::Receiver;
 use std::{net::TcpStream, sync::mpsc::Sender};
 
 use std::io::{Error, ErrorKind};
