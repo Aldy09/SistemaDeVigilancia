@@ -72,11 +72,11 @@ impl MQTTClient {
         println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         match pub_res {
             Ok(msg) => {
-                if let Err(e) = self.wait_for_ack(&msg, qos) {
+                if let Err(e) = self.wait_for_ack(msg.clone(), qos) {
                     println!("Error al esperar ack del publish: {:?}", e);
                     // Si no se pudo esperar el ack, se deberia reintentar el publish
                 };
-                println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.", msg.get_packet_id());
+                println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.", &msg.get_packet_id());
                 Ok(msg)
             }
             Err(e) => Err(e),
@@ -84,11 +84,18 @@ impl MQTTClient {
     }
 
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
-    fn wait_for_ack(&mut self, msg: &PublishMessage, qos: u8) -> Result<(), Error> {
+    fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
         if qos == 1 {
             //self.retransmitter.wait_for_ack(msg.clone()) // nuevo. // le paso el msg para que lo retransmita si no recibió ack.
-            self.writer.wait_for_ack(msg.clone())
+            //self.writer.wait_for_ack(msg.clone())           
             
+            // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
+            let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
+            if let Some(_msg_to_resend) = option {
+                self.writer.resend_msg(msg)?
+            }
+            
+            Ok(())
             // aux pensando: este esquema así de que sea una función llamada desde acá, es como llamarlo on demand
             // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.
             // (aux:) lo cual tiene sentido si mandamos de a uno y no mandamos más hasta que recibamos el ack. Ok.
@@ -97,6 +104,22 @@ impl MQTTClient {
             Ok(())
         }
     }
+
+    /* // Probando, ésta es la función que puse primero en listener pero no tenía sentido que listener haga write
+       // dsp la moví a writer y se buggueó, y ahora la traigo para acá.
+    /// Al momento de recibir el ack lo habrá enviado / enviará por el ack_tx;
+    /// pero además, desde que se llama a esta función se delega al Retransmitter la responsabilidad de
+    /// ponerse a escuchar por el ack_rx lo que desde el ack_tx que mande el listener.
+    pub fn _wait_for_ack_auxxxx_ahora_la_borro(&mut self, msg: PublishMessage) -> Result<(), Error> {
+        // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
+        let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
+        if let Some(_msg_to_resend) = option {
+            self.resend_msg(msg)?
+        }
+
+        Ok(())
+        
+    }*/
     
     // Aux: P/D, nota para el grupo: Comenté el listener xq dsp de mover esta parte a un Retransmitter para que quede más prolijo
     // aux: el listener quedaba sin usar, y tiene sentido, el listener es el del loop de fixed header y eso, no necstamos hablarle.

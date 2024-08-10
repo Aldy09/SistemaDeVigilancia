@@ -110,13 +110,13 @@ impl MQTTClientWriter {
 
     /// Función para ser usada por el `Retransmitter`, cuando el mismo determinó que el `msg` debe enviarse por el stream
     /// a server.
-    fn resend_msg(&mut self, msg: PublishMessage)-> Result<(), Error> {
+    pub fn resend_msg(&mut self, msg: PublishMessage)-> Result<(), Error> {
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
         Ok(())
     }
 
-    /// Al momento de recibir el ack lo habrá enviado / enviará por el ack_tx;
+    /*/// Al momento de recibir el ack lo habrá enviado / enviará por el ack_tx;
     /// pero además, desde que se llama a esta función se delega al Retransmitter la responsabilidad de
     /// ponerse a escuchar por el ack_rx lo que desde el ack_tx que mande el listener.
     pub fn wait_for_ack(&mut self, msg: PublishMessage) -> Result<(), Error> {
@@ -128,5 +128,5 @@ impl MQTTClientWriter {
 
         Ok(())
         
-    }
+    }*/
 }
