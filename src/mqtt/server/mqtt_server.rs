@@ -22,7 +22,6 @@ use std::io::{Error, ErrorKind, Write};
 use std::sync::{Arc, Mutex};
 
 use super::incoming_connections::ClientListener;
-use super::packet;
 
 const TOPIC_MESSAGES_LEN: usize = 50;
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;

@@ -58,7 +58,7 @@ impl MQTTClientWriter {
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
     pub fn mqtt_subscribe(
         &mut self,
-        topics_to_subscribe: Vec<String>,
+        topics_to_subscribe: Vec<(String, u8)>,
     ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");

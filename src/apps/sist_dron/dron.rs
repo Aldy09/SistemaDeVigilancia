@@ -133,16 +133,7 @@ impl Dron {
     ) -> Result<(), Error> {
         if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let topic = AppsMqttTopics::DronTopic.to_str();
-            let pub_msg = mqtt_client_lock.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
-            if self.qos > 0 {
-                if let Some(packet_id) = pub_msg.get_packet_id() {
-                    let res_ack = mqtt_client_lock.wait_to_ack(packet_id);
-                    if let Err(_e) = res_ack {
-                        // Si no se pudo enviar el mensaje, se vuelve a intentar.
-                        println!("Error al publicar mensaje.");
-                    }
-                }
-            }
+            let _ = mqtt_client_lock.mqtt_publish(topic, &ci.to_bytes(), self.qos)?;
         };
         Ok(())
     }
@@ -168,7 +159,7 @@ impl Dron {
         topic: &str,
     ) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            mqtt_client.mqtt_subscribe(vec![(String::from(topic))])?;
+            mqtt_client.mqtt_subscribe(vec![((String::from(topic)), self.qos)])?;
             self.logger
                 .log(format!("Dron: Suscripto a topic: {}", topic));
         }

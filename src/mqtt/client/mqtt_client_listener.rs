@@ -121,19 +121,16 @@ impl MQTTClientListener {
     }
     
     pub fn wait_to_ack(&self, packet_id: u16,  ack_rx: &mut Receiver<ACKMessage>) -> Result<(), Error> {
-        println!("wait to ack");
-        loop {
-            if let Ok(ack_message) = ack_rx.try_recv() {
-                if let Some(packet_identifier) = ack_message.get_packet_id() {
-                    if packet_id == packet_identifier {
-                        println!("packet_id por parametro {:?}", packet_id);
-                        println!("LLEGO EL ACK {:?}", ack_message); 
-                        return Ok(());
-                    }
-                } 
-            }
+        for ack_message in ack_rx.iter() {
+            if let Some(packet_identifier) = ack_message.get_packet_id() {
+                if packet_id == packet_identifier {
+                    println!("packet_id por parametro {:?}", packet_id);
+                    println!("LLEGO EL ACK {:?}", ack_message); 
+                    return Ok(());
+                }
+            } 
         }
-        
+        Ok(())
     }
 }
 

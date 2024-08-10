@@ -10,7 +10,6 @@ use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 use crate::{
     apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs},
     logging::string_logger::StringLogger,
-    mqtt::messages::subscribe_message::SubscribeMessage,
 };
 
 use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
@@ -26,6 +25,7 @@ pub struct SistemaMonitoreo {
     egui_tx: CrossbeamSender<PublishMessage>,
     qos: u8,
     logger: StringLogger,
+    topics: Vec<(String, u8)>,
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -51,11 +51,18 @@ impl SistemaMonitoreo {
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
                 .unwrap_or(0);
         println!("valor de QoS: {}", qos);
+        let topics = vec![
+            (AppsMqttTopics::CameraTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::DronTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::IncidentTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::DescTopic.to_str().to_string(), qos),
+        ];
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())), // []
             egui_tx,
             qos,
             logger,
+            topics,
         };
 
         sistema_monitoreo
@@ -137,6 +144,7 @@ impl SistemaMonitoreo {
             egui_tx: self.egui_tx.clone(),
             qos: self.qos,
             logger: self.logger.clone_ref(),
+            topics: self.topics.clone(),
         }
     }
 
@@ -158,64 +166,27 @@ impl SistemaMonitoreo {
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
     ) {
-        let topics = vec![
-            AppsMqttTopics::CameraTopic.to_str(),
-            AppsMqttTopics::DronTopic.to_str(),
-            AppsMqttTopics::IncidentTopic.to_str(),
-            AppsMqttTopics::DescTopic.to_str(),
-        ];
-        let suscribe_res = self.subscribe_to_topics_vec(&mqtt_client, topics);
-        match suscribe_res {
-            Ok(suscribe_msg) => {
-                if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
-                    let packet_id = suscribe_msg.get_packet_id();
-                    let res_ack = mqtt_client_lock.wait_to_ack(packet_id);
-                    if let Err(e) = res_ack {
-                        self.logger
-                            .log(format!("Error al esperar ack del subscribe: {:?}", e));
-                        // Se deberia reintentar el subscribe
-                    }
-                }
-            }
-            Err(e) => {
-                self.logger
-                    .log(format!("Sistema-Monitoreo: Error al hacer subscribe"));
-                println!("{:?}", e);
-            }
-        }
+
+        let _ = self.subscribe_to_topics_vec(&mqtt_client);
         self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 
     fn subscribe_to_topics_vec(
         &self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>,
-        topics: Vec<&str>,
-    ) -> Result<SubscribeMessage, Error> {
-        let topics_to_subscribe: Vec<String> =
-            topics.clone().into_iter().map(String::from).collect();
+        mqtt_client: &Arc<Mutex<MQTTClient>>
+    ) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_sub = mqtt_client.mqtt_subscribe(topics_to_subscribe);
-            match res_sub {
-                Ok(suscribe_msg) => {
-                    for topic in &topics {
-                        self.logger.log(format!(
-                            "Sistema-Monitoreo: subscripto a topics {:?}",
-                            topic
-                        ));
-                    }
-                    return Ok(suscribe_msg);
-                }
-                Err(e) => {
-                    self.logger
-                        .log(format!("Error al hacer un subscribe a los topics: {:?}", e));
-                    return Err(e);
-                }
-            }
+            mqtt_client.mqtt_subscribe(self.topics.clone())?;
+            self.logger.log(format!(
+                "Sistema-Monitoreo: subscripto a topics {:?}",
+                &self.topics
+            ));
+            Ok(())
         } else {
-            return Err(Error::new(
+            Err(Error::new(
                 ErrorKind::Other,
                 "Error al obtener el lock del mqtt_client",
-            ));
+            ))
         }
     }
 

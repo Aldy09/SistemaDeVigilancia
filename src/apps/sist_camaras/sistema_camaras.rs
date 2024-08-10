@@ -4,9 +4,8 @@ use crate::apps::{
     incident_data::incident::{self, Incident},
     sist_camaras::{
         ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
-        sistema_camaras_logic::CamerasLogic,
-        sistema_camaras_abm::ABMCameras,
-        types::shareable_cameras_type::ShCamerasType
+        sistema_camaras_abm::ABMCameras, sistema_camaras_logic::CamerasLogic,
+        types::shareable_cameras_type::ShCamerasType,
     },
 };
 use crate::logging::string_logger::StringLogger;
@@ -179,11 +178,7 @@ impl SistemaCamaras {
         })
     }
 
-    fn subscribe_to_topics(
-        &self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-        topics: Vec<String>,
-    ) {
+    fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, topics: Vec<(String, u8)>) {
         let topics_log = topics.to_vec();
         if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
@@ -230,7 +225,10 @@ impl SistemaCamaras {
         let mut self_clone = self.clone_ref();
         let topic = AppsMqttTopics::IncidentTopic.to_str();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]); 
+            self_clone.subscribe_to_topics(
+                mqtt_client.clone(),
+                vec![(String::from(topic), self_clone.qos)],
+            );
             self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned);
         })
     }
