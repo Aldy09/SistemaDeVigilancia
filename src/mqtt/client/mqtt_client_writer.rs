@@ -11,23 +11,17 @@ use crate::mqtt::{
 };
 use std::net::Shutdown;
 
-use super::mqtt_client_retransmitter::MQTTClientRetransmitter;
-
 #[derive(Debug)]
 pub struct MQTTClientWriter {
     stream: StreamType,
     available_packet_id: u16,
-    retransmitter: MQTTClientRetransmitter,
 }
 
 impl MQTTClientWriter {
-    pub fn new(stream: StreamType) -> MQTTClientWriter {
-        let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
-        
+    pub fn new(stream: StreamType) -> MQTTClientWriter {        
         MQTTClientWriter {
             stream,
             available_packet_id: 0,
-            retransmitter,
         }
     }
 
@@ -106,27 +100,12 @@ impl MQTTClientWriter {
         self.available_packet_id
     }
 
-    // Funciones relacionadas con el Retransmitter:
-
-    /// Función para ser usada por el `Retransmitter`, cuando el mismo determinó que el `msg` debe enviarse por el stream
-    /// a server.
+    // Función relacionada con el Retransmitter:
+    /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
+    /// enviarse por el stream a server.
     pub fn resend_msg(&mut self, msg: PublishMessage)-> Result<(), Error> {
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
         Ok(())
     }
-
-    /*/// Al momento de recibir el ack lo habrá enviado / enviará por el ack_tx;
-    /// pero además, desde que se llama a esta función se delega al Retransmitter la responsabilidad de
-    /// ponerse a escuchar por el ack_rx lo que desde el ack_tx que mande el listener.
-    pub fn wait_for_ack(&mut self, msg: PublishMessage) -> Result<(), Error> {
-        // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
-        let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
-        if let Some(_msg_to_resend) = option {
-            self.resend_msg(msg)?
-        }
-
-        Ok(())
-        
-    }*/
 }

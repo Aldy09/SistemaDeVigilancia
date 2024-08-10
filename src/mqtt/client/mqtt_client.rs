@@ -34,8 +34,6 @@ impl MQTTClient {
         // Inicializa sus partes internas
         let writer = MQTTClientWriter::new(stream.try_clone()?);
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
-        //let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
-        //let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
         let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
 
@@ -85,10 +83,7 @@ impl MQTTClient {
 
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
-        if qos == 1 {
-            //self.retransmitter.wait_for_ack(msg.clone()) // nuevo. // le paso el msg para que lo retransmita si no recibió ack.
-            //self.writer.wait_for_ack(msg.clone())           
-            
+        if qos == 1 {            
             // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
             let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
             if let Some(_msg_to_resend) = option {
@@ -96,35 +91,21 @@ impl MQTTClient {
             }
             
             Ok(())
-            // aux pensando: este esquema así de que sea una función llamada desde acá, es como llamarlo on demand
-            // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.
-            // (aux:) lo cual tiene sentido si mandamos de a uno y no mandamos más hasta que recibamos el ack. Ok.
-            // Muevo lo que había acá para el retransmmitter, xq igual el retransmitter tmb necesita el Publish.
         } else {
             Ok(())
         }
     }
-
-    /* // Probando, ésta es la función que puse primero en listener pero no tenía sentido que listener haga write
-       // dsp la moví a writer y se buggueó, y ahora la traigo para acá.
-    /// Al momento de recibir el ack lo habrá enviado / enviará por el ack_tx;
-    /// pero además, desde que se llama a esta función se delega al Retransmitter la responsabilidad de
-    /// ponerse a escuchar por el ack_rx lo que desde el ack_tx que mande el listener.
-    pub fn _wait_for_ack_auxxxx_ahora_la_borro(&mut self, msg: PublishMessage) -> Result<(), Error> {
-        // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
-        let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
-        if let Some(_msg_to_resend) = option {
-            self.resend_msg(msg)?
-        }
-
-        Ok(())
-        
-    }*/
+    // ---------------
+    // aux pensando: este esquema así de que sea una función llamada desde acá, es como llamarlo on demand
+    // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.
+    // (aux:) lo cual tiene sentido si mandamos de a uno y no mandamos más hasta que recibamos el ack. Ok.
+    // Muevo lo que había acá para el retransmmitter, xq igual el retransmitter tmb necesita el Publish.
     
     // Aux: P/D, nota para el grupo: Comenté el listener xq dsp de mover esta parte a un Retransmitter para que quede más prolijo
     // aux: el listener quedaba sin usar, y tiene sentido, el listener es el del loop de fixed header y eso, no necstamos hablarle.
     // aux: (Así que yo hasts borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
     // (Aux: P/D2: ah che una re pavada, se llama handLE y no handLER lo que devuelve el thread spawn, xD).
+    // ------------------------------
 
     /// Función de la librería de MQTTClient para realizar un subscribe.
     pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<SubscribeMessage, Error> {
@@ -135,8 +116,4 @@ impl MQTTClient {
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
         self.writer.mqtt_disconnect()
     }
-
-    // pub fn wait_to_ack(&mut self, packet_id: u16) -> Result<(), Error> {
-    //     self.listener.wait_to_ack(packet_id, &mut self.ack_rx)
-    // }
 }
