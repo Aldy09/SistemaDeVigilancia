@@ -36,24 +36,23 @@ impl MQTTClientRetransmitter {
         }
     }
     
-
+    
+    // Aux: en general, quiero, primero al leer haberme fijado el tiempo, y acá si pasó el tiempo y no recibí el ack
+    // quiero volver a enviar el "msg" (obs: necesito el stream, y no quise hacerle clone otra vez entonces
+    // devuelvo Ok(algo) para que signifique "sí, hay que enviarlo de nuevo" para que desde afuera llamen al writer
+    // o devuelvo Ok(None) como diciendo "listo, me llegó bien el ack y no hay que hacer nada más".
+    // (Podría cambiarse a devolver Result<bool, Error> capaz).
     fn start_waiting_and_check_for_ack(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+        // Comentar una y descomentar la otra, para probar
         // Versión lo que había, sin esperar un tiempo
-        /*for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
-            if let Some(packet_identifier) = ack_message.get_packet_id() {
-                if packet_id == packet_identifier {
-                    println!("packet_id por parámetro {:?}", packet_id);
-                    println!("   LLEGÓ EL ACK {:?}", ack_message); 
-                    return Ok(None);
-                }
-            } 
-        }*/
-        
-        // Acá quiero, primero al leer haberme fijado el tiempo, y acá si pasó el tiempo y no recibí el ack
-        // quiero volver a enviar el "msg" (obs: necesito el stream, o hablar con alguien que tenga el stream (writer?)
-        // (channel con writer y que sea un hilo corriendo o clone del stream para tenerlo yo acá en Retransmitter?)).
+        //self.aux_version_vieja(packet_id, msg)
         
         // Versión nueva, esperando como máx un tiempo para que si no se recibió se retransmita:
+        self.aux_version_nueva(packet_id, msg)
+    }
+    
+    // La versión nueva
+    fn aux_version_nueva(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
         // Leo esperando un cierto tiempo, si en el período [0, ese tiempo) no me llega el ack, lo quiero retransmitir.
         const ACK_WAITING_INTERVAL: u64 = 1000; // Aux: Fijarse un número que tenga sentido.
         match self.ack_rx.recv_timeout(Duration::from_millis(ACK_WAITING_INTERVAL)){
@@ -85,4 +84,19 @@ impl MQTTClientRetransmitter {
         // Conservar este ok de acá abajo por ahora, en ambas versiones de lo de arriba.
         Ok(None) // Veremos en el futuro. Obs: si acá finalm no uso el "msg" se puede devolver algo como Ok(bool)
     }
+    
+    // La versión que había
+    fn aux_version_vieja(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+        for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
+            if let Some(packet_identifier) = ack_message.get_packet_id() {
+                if packet_id == packet_identifier {
+                    println!("packet_id por parámetro {:?}", packet_id);
+                    println!("   LLEGÓ EL ACK {:?}", ack_message); 
+                    return Ok(None);
+                }
+            } 
+        }
+        Ok(None) // Veremos en el futuro. Obs: si acá finalm no uso el "msg" se puede devolver algo como Ok(bool)
+    }
+
 }

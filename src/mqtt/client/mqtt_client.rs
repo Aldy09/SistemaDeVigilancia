@@ -78,8 +78,10 @@ impl MQTTClient {
 
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
-        if qos == 1 {            
+        if qos == 1 {
+            const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
             // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
+            let remaining_retries = AMOUNT_OF_RETRIES;
             let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
             if let Some(_msg_to_resend) = option {
                 self.writer.resend_msg(msg)?
@@ -98,7 +100,7 @@ impl MQTTClient {
     
     // Aux: P/D, nota para el grupo: Comenté el listener xq dsp de mover esta parte a un Retransmitter para que quede más prolijo
     // aux: el listener quedaba sin usar, y tiene sentido, el listener es el del loop de fixed header y eso, no necstamos hablarle.
-    // aux: (Así que yo hasts borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
+    // aux: (Así que yo hasta borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
     // (Aux: P/D2: ah che una re pavada, se llama handLE y no handLER lo que devuelve el thread spawn, xD).
     // ------------------------------
 
