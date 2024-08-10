@@ -53,6 +53,11 @@ pub fn join_all_threads(children: Vec<JoinHandle<()>>) {
         if let Err(e) = child.join() {
             eprintln!("Error al esperar el hilo: {:?}", e);
         }
+        /*// Debug:
+        match child.join() {
+            Ok(o) => println!("Join ok:{:?}.", o),
+            Err(e) => println!("Join error:{:?}.", e),
+        }*/
     }
 }
 

@@ -1,10 +1,8 @@
 use std::{
-    collections::HashMap,
-    io::{stdin, stdout, Write},
-    sync::{
+    collections::HashMap, io::{stdin, stdout, Error, Write}, sync::{
         mpsc::Sender,
         Arc, Mutex,
-    },
+    }
 };
 
 use crate::logging::string_logger::StringLogger;
@@ -76,30 +74,60 @@ impl ABMCameras {
     /// Opción Crear cámara, del abm. Crea una cámara con el input proporcionado.
     /// Procesa la cámara y la envía entre hilos para que sistema cámaras pueda publicarla.
     fn create_camera_abm(&mut self) {
-        let camera = self.create_camera();
-        self.process_and_send_camera(camera);
+        if let Ok(camera) = self.create_camera(){
+            self.process_and_send_camera(camera);
+        }
     }
 
     /// Crea una cámara con el input proporcionado, y la devuelve.
-    fn create_camera(&self) -> Camera {
-        let id: u8 = self
-            .get_input_abm(Some("Ingrese el ID de la cámara: "))
-            .parse()
-            .expect("ID no válido");
-        let latitude: f64 = self
-            .get_input_abm(Some("Ingrese Latitud: "))
-            .parse()
-            .expect("Latitud no válida");
-        let longitude: f64 = self
-            .get_input_abm(Some("Ingrese Longitud: "))
-            .parse()
-            .expect("Longitud no válida");
-        let range: u8 = self
-            .get_input_abm(Some("Ingrese el rango: "))
-            .parse()
-            .expect("Rango no válido");
+    fn create_camera(&self) -> Result<Camera, Error> {
 
-        Camera::new(id, latitude, longitude, range)
+        let id = self.read_input_and_parse_to_u8("el ID")?;
+        let latitude = self.read_input_and_parse_to_f64("la latitud")?;
+        let longitude = self.read_input_and_parse_to_f64("la longitud")?;
+        let range = self.read_input_and_parse_to_u8("el rango")?;
+
+        Ok(Camera::new(id, latitude, longitude, range))
+    }
+
+    /// Lee el input de teclado y devuelve el valor parseado a u8.
+    /// No debería fallar porque en caso de input inválido repregunta hasta obtener un input válido, pero devuelve un result.
+    fn read_input_and_parse_to_u8(&self, pm_name: &str) -> Result<u8, Error> {
+        let mut res: Result<u8, _> = self
+            .get_input_abm(Some(format!("Ingrese {} de la cámara: ", pm_name).as_str()))
+            .parse();
+
+        while res.is_err() {
+            res = self
+            .get_input_abm(Some(format!("Error, intente nuevamente. Ingrese {} de la cámara: ", pm_name).as_str()))
+            .parse();
+        }
+
+        if let Ok(value) = res {
+            return Ok(value);
+        }
+
+        Err(Error::new(std::io::ErrorKind::InvalidInput, "Error al parsear u8 (no debería darse)."))
+    }
+
+    /// Lee el input de teclado y devuelve el valor parseado a f64.
+    /// No debería fallar porque en caso de input inválido repregunta hasta obtener un input válido, pero devuelve un result.
+    fn read_input_and_parse_to_f64(&self, pm_name: &str) -> Result<f64, Error> {
+        let mut res: Result<f64, _> = self
+            .get_input_abm(Some(format!("Ingrese {} de la cámara: ", pm_name).as_str()))
+            .parse();
+
+        while res.is_err() {
+            res = self
+            .get_input_abm(Some(format!("Error, intente nuevamente. Ingrese {} de la cámara: ", pm_name).as_str()))
+            .parse();
+        }
+
+        if let Ok(value) = res {
+            return Ok(value);
+        }
+
+        Err(Error::new(std::io::ErrorKind::InvalidInput, "Error al parsear f64 (no debería darse)."))
     }
 
     /// Obtiene el input por teclado.
@@ -157,11 +185,9 @@ impl ABMCameras {
     /// Opción Eliminar cámara, del abm.
     /// Elimina la cámara indicada, manejando sus lindantes, y la envía por tx para que rx haga publish.
     fn delete_camera_abm(&self) {
-        let id: u8 = self
-            .get_input_abm(Some("Ingrese el ID de la cámara a eliminar: "))
-            .parse()
-            .expect("Id no válido");
-        self.delete_camera(id);
+        if let Ok(id) = self.read_input_and_parse_to_u8("el ID") {
+            self.delete_camera(id);
+        }
     }
 
     /// Elimina a la cámara del id recibido.
@@ -186,6 +212,8 @@ impl ABMCameras {
                             println!("Cámara eliminada con éxito.\n");
                         }
                     };
+                } else {
+                    println!("La cámara no existe.\n");
                 }
             }
             Err(e) => println!("Error tomando lock baja abm, {:?}.\n", e),

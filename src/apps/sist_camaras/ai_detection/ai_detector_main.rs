@@ -18,15 +18,12 @@ fn main() {
     // Crea un AutomaticIncidentDetector y lo pone en funcionamiento.
     let cameras: ShCamerasType = create_cameras();
     let (tx, rx) = mpsc::channel::<Incident>();
+    let (_exit_tx, exit_rx) = mpsc::channel::<()>();
     let (logger, handle_logger) = StringLogger::create_logger("detector_main".to_string());
 
     // Se ejecuta en otro hilo el run.
     let handle = thread::spawn(move || {
-        let ai_inc_detector = AIDetectorManager::new(cameras, tx, logger);
-        match ai_inc_detector.run() {
-            Ok(_) => println!("Finalizado con éxito."),
-            Err(e) => println!("Error en el detector: {:?}.", e),
-        }
+        let _ai_inc_detector = AIDetectorManager::run(cameras, tx, exit_rx, logger);
     });
 
     // Enviará los inc por tx, por lo que escuchamos lo recibido al rx.
