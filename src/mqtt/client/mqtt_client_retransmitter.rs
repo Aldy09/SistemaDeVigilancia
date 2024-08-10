@@ -19,11 +19,12 @@ impl MQTTClientRetransmitter {
     }
 
     
+    // Aux: Cambiando: devuelve true si recibió el ack y false si no.
     /// Espera a que MQTTListener le informe por este rx que llegó el ack.
     /// En ese caso devuelve ok.
     /// Si eso no ocurre, debe retransmitir el mensaje original (el msg cuyo ack está esperando)
     /// hasta que llegue su ack o bien se llegue a una cantidad máxima de intentos definida como constante.
-    pub fn wait_for_ack(&self, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+    pub fn wait_for_ack(&self, msg: &PublishMessage) -> Result<bool, Error> {
         // Extrae el packet_id
         let packet_id = msg.get_packet_id();
         if let Some(packet_id) = packet_id {
@@ -42,17 +43,18 @@ impl MQTTClientRetransmitter {
     // devuelvo Ok(algo) para que signifique "sí, hay que enviarlo de nuevo" para que desde afuera llamen al writer
     // o devuelvo Ok(None) como diciendo "listo, me llegó bien el ack y no hay que hacer nada más".
     // (Podría cambiarse a devolver Result<bool, Error> capaz).
-    fn start_waiting_and_check_for_ack(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+    // Aux: Cambiando: devuelve true si recibió el ack y false si no.
+    fn start_waiting_and_check_for_ack(&self, packet_id: u16, _msg: &PublishMessage) -> Result<bool, Error> {
         // Comentar una y descomentar la otra, para probar
         // Versión lo que había, sin esperar un tiempo
-        //self.aux_version_vieja(packet_id, msg)
+        //self.aux_version_vieja(packet_id)
         
         // Versión nueva, esperando como máx un tiempo para que si no se recibió se retransmita:
-        self.aux_version_nueva(packet_id, msg)
+        self.aux_version_nueva(packet_id)
     }
     
     // La versión nueva
-    fn aux_version_nueva(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+    fn aux_version_nueva(&self, packet_id: u16) -> Result<bool, Error> {
         // Leo esperando un cierto tiempo, si en el período [0, ese tiempo) no me llega el ack, lo quiero retransmitir.
         const ACK_WAITING_INTERVAL: u64 = 1000; // Aux: Fijarse un número que tenga sentido.
         match self.ack_rx.recv_timeout(Duration::from_millis(ACK_WAITING_INTERVAL)){
@@ -62,7 +64,7 @@ impl MQTTClientRetransmitter {
                     if packet_id == packet_identifier {
                         println!("packet_id por parámetro {:?}", packet_id);
                         println!("   LLEGÓ EL ACK {:?}", ack_message); 
-                        return Ok(None);
+                        return Ok(true);
                     }
                 }
             },
@@ -70,7 +72,7 @@ impl MQTTClientRetransmitter {
                 match e {
                     RecvTimeoutError::Timeout => {
                         // Se cumplió el tiempo y el ack No se recibió.
-                        return Ok(Some(msg.clone())); // []
+                        return Ok(false);
 
                     },
                     RecvTimeoutError::Disconnected => {
@@ -80,23 +82,21 @@ impl MQTTClientRetransmitter {
                 }
             },
         }
-        
-        // Conservar este ok de acá abajo por ahora, en ambas versiones de lo de arriba.
-        Ok(None) // Veremos en el futuro. Obs: si acá finalm no uso el "msg" se puede devolver algo como Ok(bool)
+        Ok(false)
     }
     
     // La versión que había
-    fn aux_version_vieja(&self, packet_id: u16, _msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+    fn aux_version_vieja(&self, packet_id: u16) -> Result<bool, Error> {
         for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
             if let Some(packet_identifier) = ack_message.get_packet_id() {
                 if packet_id == packet_identifier {
                     println!("packet_id por parámetro {:?}", packet_id);
                     println!("   LLEGÓ EL ACK {:?}", ack_message); 
-                    return Ok(None);
+                    return Ok(true);
                 }
             } 
         }
-        Ok(None) // Veremos en el futuro. Obs: si acá finalm no uso el "msg" se puede devolver algo como Ok(bool)
+        Ok(false)
     }
 
 }

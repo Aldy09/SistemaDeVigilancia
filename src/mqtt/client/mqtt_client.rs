@@ -67,7 +67,6 @@ impl MQTTClient {
             Ok(msg) => {
                 if let Err(e) = self.wait_for_ack(msg.clone(), qos) {
                     println!("Error al esperar ack del publish: {:?}", e);
-                    // Si no se pudo esperar el ack, se deberia reintentar el publish
                 };
                 println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.", &msg.get_packet_id());
                 Ok(msg)
@@ -75,32 +74,33 @@ impl MQTTClient {
             Err(e) => Err(e),
         }
     }
-
+    
+    // Si no se pudo esperar el ack, se deberia reintentar el publish
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
         if qos == 1 {
-            // Espero la primera vez, para el publish que hicimos arriba. Si dio Ok(None) no hay que hacer nada más.
-            let mut option = self.retransmitter.wait_for_ack(&msg)?;
-            if option.is_none() {
+            // Espero la primera vez, para el publish que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
+            let mut received_ack = self.retransmitter.wait_for_ack(&msg)?;
+            if received_ack {
                 return Ok(())
             }
 
-            // Dio Ok(PublishMessage) entonces tengo que continuar retransmitiendo, hasta un máx de veces.
+            // No recibí ack, entonces tengo que continuar retransmitiendo, hasta un máx de veces.
             const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
-            // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
             let mut remaining_retries = AMOUNT_OF_RETRIES;
             while remaining_retries > 0 {
-                if option.is_some() {
+                // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
+                if !received_ack {
                     self.writer.resend_msg(msg.clone())?
                 }
-                option = self.retransmitter.wait_for_ack(&msg)?;
+                received_ack = self.retransmitter.wait_for_ack(&msg)?;
                 
                 remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
 
             }
 
-            if option.is_none() {
-                // Salí del while, retransmití muchas veces y nunca recibí el ack, desisto
+            if !received_ack {
+                // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto
                 return Err(Error::new(ErrorKind::Other, "MAXRETRIES, se retransmitió sin éxito."))
             }
             
