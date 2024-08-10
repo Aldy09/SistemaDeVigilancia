@@ -103,6 +103,7 @@ impl SistemaCamaras {
         children
     }
 
+    /// Hilo que publica las cámaras.
     fn spawn_publish_to_topic_thread(
         &self,
         mqtt_client_sh: Arc<Mutex<MQTTClient>>,
@@ -221,6 +222,7 @@ impl SistemaCamaras {
         }
     }
 
+    /// Hilo que se encarga de suscribirse a los topics y recibir los mensajes.
     fn spawn_subscribe_to_topics_thread(
         &mut self,
         mqtt_client: Arc<Mutex<MQTTClient>>,

@@ -52,7 +52,7 @@ pub fn controls(
         });
 }
 
-/// Simple GUI to zoom in and out.
+/// Zoom del mapa.
 pub fn zoom(ui: &Ui, map_memory: &mut MapMemory) {
     Window::new("Map")
         .collapsible(false)
@@ -72,7 +72,7 @@ pub fn zoom(ui: &Ui, map_memory: &mut MapMemory) {
         });
 }
 
-/// When map is "detached", show a windows with an option to go back to my position.
+/// Boton para ir a la posicion del centro del mapa asignado.
 pub fn go_to_my_position(ui: &Ui, map_memory: &mut MapMemory) {
     if let Some(position) = map_memory.detached() {
         Window::new("Center")
@@ -82,7 +82,8 @@ pub fn go_to_my_position(ui: &Ui, map_memory: &mut MapMemory) {
             .anchor(Align2::RIGHT_BOTTOM, [-10., -10.])
             .show(ui.ctx(), |ui| {
                 ui.label("map center: ");
-                ui.label(format!("{:.04} {:.04}", position.lon(), position.lat()));
+                // Muestro la latitud y longitud del centro del mapa
+                ui.label(format!("{:.04} {:.04}", position.lat(), position.lon()));
                 if ui
                     .button(RichText::new("go to the starting point").heading())
                     .clicked()
