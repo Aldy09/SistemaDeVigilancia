@@ -5,7 +5,7 @@ use crate::mqtt::client::{
 };
 use crate::mqtt::messages::{publish_message::PublishMessage, subscribe_message::SubscribeMessage};
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
 use std::{
     sync::mpsc::{self, Receiver},
@@ -79,12 +79,29 @@ impl MQTTClient {
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
         if qos == 1 {
+            // Espero la primera vez, para el publish que hicimos arriba. Si dio Ok(None) no hay que hacer nada más.
+            let mut option = self.retransmitter.wait_for_ack(&msg)?;
+            if option.is_none() {
+                return Ok(())
+            }
+
+            // Dio Ok(PublishMessage) entonces tengo que continuar retransmitiendo, hasta un máx de veces.
             const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
             // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
-            let remaining_retries = AMOUNT_OF_RETRIES;
-            let option: Option<PublishMessage> = self.retransmitter.wait_for_ack(&msg)?;
-            if let Some(_msg_to_resend) = option {
-                self.writer.resend_msg(msg)?
+            let mut remaining_retries = AMOUNT_OF_RETRIES;
+            while remaining_retries > 0 {
+                if option.is_some() {
+                    self.writer.resend_msg(msg.clone())?
+                }
+                option = self.retransmitter.wait_for_ack(&msg)?;
+                
+                remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
+
+            }
+
+            if option.is_none() {
+                // Salí del while, retransmití muchas veces y nunca recibí el ack, desisto
+                return Err(Error::new(ErrorKind::Other, "MAXRETRIES, se retransmitió sin éxito."))
             }
             
             Ok(())

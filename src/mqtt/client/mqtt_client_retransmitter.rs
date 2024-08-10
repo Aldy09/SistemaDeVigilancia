@@ -86,7 +86,7 @@ impl MQTTClientRetransmitter {
     }
     
     // La versión que había
-    fn aux_version_vieja(&self, packet_id: u16, msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
+    fn aux_version_vieja(&self, packet_id: u16, _msg: &PublishMessage) -> Result<Option<PublishMessage>, Error> {
         for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
             if let Some(packet_identifier) = ack_message.get_packet_id() {
                 if packet_id == packet_identifier {
