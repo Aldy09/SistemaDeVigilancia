@@ -1,3 +1,4 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::{connect_message::ConnectMessage, packet_type::PacketType};
 use crate::mqtt::mqtt_utils::{
     fixed_header::FixedHeader,
@@ -23,13 +24,15 @@ use std::{
 pub struct ClientReader {
     stream: StreamType,
     mqtt_server: MQTTServer,
+    logger: StringLogger,
 }
 
 impl ClientReader {
-    pub fn new(stream: StreamType, mqtt_server: MQTTServer) -> Result<ClientReader, Error> {
+    pub fn new(stream: StreamType, mqtt_server: MQTTServer, logger: StringLogger) -> Result<ClientReader, Error> {
         Ok(ClientReader {
             stream,
             mqtt_server,
+            logger,
         })
     }
 
@@ -221,6 +224,7 @@ impl ClientReader {
         ClientReader {
             stream: self.stream.try_clone().unwrap(),
             mqtt_server: self.mqtt_server.clone_ref(),
+            logger: self.logger.clone_ref(),
         }
     }
 }

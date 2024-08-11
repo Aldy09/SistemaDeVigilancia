@@ -55,7 +55,7 @@ impl MQTTServer {
     pub fn run(&self, ip: String, port: u16) -> Result<(), Error> {
 
         let listener = create_server(ip, port)?;
-        let mut incoming_connections = ClientListener::new();
+        let mut incoming_connections = ClientListener::new(self.logger.clone_ref());
         let self_clone = self.clone_ref();
         let logger_c = self.logger.clone_ref();
         // Hilo para manejar las conexiones entrantes
