@@ -60,7 +60,6 @@ impl User {
         if let Some(info) = &self.will_message {
             let flags = PublishFlags::new(dup_flag, info.get_qos(), info.get_will_retain())?;
             let publish_msg = PublishMessage::new(
-                3,
                 flags,
                 &info.get_will_topic(),
                 Some(packet_id),

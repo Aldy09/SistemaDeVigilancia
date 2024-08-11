@@ -31,7 +31,6 @@ pub struct PublishMessage {
 
 impl<'a> PublishMessage {
     pub fn new(
-        message_type: u8,
         flags: PublishFlags,
         topic_name: &'a str,
         packet_identifier: Option<u16>,
@@ -59,7 +58,6 @@ impl<'a> PublishMessage {
         //aux: let payload = Payload { content: content.to_vec() };
 
         let fixed_header = FixedHeader {
-            message_type,
             flags,
             remaining_length: 0, //se actualizara mas adelante
         };
@@ -151,7 +149,6 @@ impl<'a> PublishMessage {
         // Fixed Header
         let first_byte = bytes[0];
         let flags = PublishFlags::from_flags_byte(first_byte)?; // flags se extrae de los bits 0 a 3
-        let message_type = 3;//flags.get_msg_type // aux, quiero borrar este campo.
         let remaining_length = bytes[1];
 
         // Variable Header
@@ -179,8 +176,7 @@ impl<'a> PublishMessage {
 
         Ok(Self {
             fixed_header: FixedHeader {
-                message_type,
-                flags,
+                flags, // Incluye el msg_type.
                 remaining_length,
             },
             variable_header: VariableHeader {
@@ -221,8 +217,7 @@ mod tests {
     ///Testea que si qos es 0, packet_identifier debe ser None.
     fn test_packet_identifier_none_if_qos_0() {
         let message = PublishMessage::new(
-            1,                                   // message_type
-            PublishFlags::new(0, 0, 0).unwrap(), // flags
+            PublishFlags::new(0, 0, 0).unwrap(), // flags, se crea con msg_type=3.
             "test/topic",                        // topic_name
             Some(23),                            // packet_identifier
             &[1, 2, 3, 4, 5],                    // payload
@@ -235,7 +230,6 @@ mod tests {
     /// Testea que se pueda crear un mensaje Publish y pasarlo a bytes y luego reconstruirlo.
     fn test_publish_message_to_and_from_bytes() {
         let original_message = PublishMessage::new(
-            3,                                   // message_type
             PublishFlags::new(0, 1, 0).unwrap(), // flags
             "test/topic",                        // topic_name
             Some(1234),                          // packet_identifier
@@ -247,35 +241,6 @@ mod tests {
         let recovered_message = PublishMessage::from_bytes(bytes).unwrap();
 
         assert_eq!(recovered_message, original_message);
-
-        assert_eq!(
-            original_message.fixed_header.message_type,
-            recovered_message.fixed_header.message_type
-        );
-        assert_eq!(
-            original_message.fixed_header.flags,
-            recovered_message.fixed_header.flags
-        );
-        assert_eq!(
-            original_message.fixed_header.remaining_length,
-            recovered_message.fixed_header.remaining_length
-        );
-        assert_eq!(
-            original_message.variable_header.topic_name,
-            recovered_message.variable_header.topic_name
-        );
-        assert_eq!(
-            original_message.variable_header.packet_identifier,
-            recovered_message.variable_header.packet_identifier
-        );
-        println!(
-            "original_message.payload.content: {:?}",
-            original_message.get_payload()
-        );
-        assert_eq!(
-            original_message.get_payload(),
-            recovered_message.get_payload()
-        );
     }
 
     #[test]

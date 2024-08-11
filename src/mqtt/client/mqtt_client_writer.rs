@@ -34,7 +34,7 @@ impl MQTTClientWriter {
         let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, qos, 0)?;
-        let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
+        let result = PublishMessage::new(flags, topic, Some(packet_id), payload);
         let publish_message = match result {
             Ok(msg) => {
                 //println!("Mqtt publish: envío publish: \n   {:?}", msg);
