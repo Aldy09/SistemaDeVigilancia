@@ -4,7 +4,7 @@ use crate::mqtt::client::{
 };
 use crate::mqtt::messages::message::Message;
 use crate::mqtt::messages::packet_type::PacketType;
-use crate::mqtt::messages::{publish_message::PublishMessage, subscribe_message::SubscribeMessage};
+use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use std::{
     io::{Error, ErrorKind},
@@ -75,6 +75,22 @@ impl MQTTClient {
         Ok(msg)
     }
 
+    /// Función de la librería de MQTTClient para realizar un subscribe.
+    pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<(), Error> {
+        //self.writer.mqtt_subscribe(topics)
+        // Lo nuevo:
+        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
+        let msg = self.writer.mqtt_subscribe(topics)?;
+        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
+        // Esperar ack y retransmitir si no llega
+        if let Err(e) = self.wait_for_ack(msg) {
+            println!("Error al esperar ack del publish: {:?}", e);
+        };
+        println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, return a app.");
+
+        Ok(())
+    }
+
     // Si no se pudo esperar el ack, se deberia reintentar el publish
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack<T: Message>(&mut self, msg: T) -> Result<(), Error> {
@@ -143,23 +159,6 @@ impl MQTTClient {
     // aux: (Así que yo hasta borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
     // (Aux: P/D2: ah che una re pavada, se llama handLE y no handLER lo que devuelve el thread spawn, xD).
     // ------------------------------
-
-    /// Función de la librería de MQTTClient para realizar un subscribe.
-    pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<SubscribeMessage, Error> {
-        //self.writer.mqtt_subscribe(topics)
-        // Lo nuevo:
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
-        let msg = self.writer.mqtt_subscribe(topics)?;
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
-        // Esperar ack y retransmitir si no llega
-        if let Err(e) = self.wait_for_ack(msg) {
-            println!("Error al esperar ack del publish: {:?}", e);
-        };
-        println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, return a app.");
-
-        //Ok(msg)
-        Err(Error::new(ErrorKind::Other, "probando")) // aux: borrar esta lína
-    }
 
     /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
