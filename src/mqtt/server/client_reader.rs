@@ -44,7 +44,7 @@ impl ClientReader {
     pub fn handle_client(&mut self, stream: &mut StreamType) -> Result<(), Error> {
         let (fixed_header_buf, fixed_header) = self.read_and_validate_header(stream)?;
 
-        let authenticator = AuthenticateClient::new();
+        let authenticator = AuthenticateClient::new(self.logger.clone_ref());
         self.authenticate_and_handle_connection(
             &fixed_header,
             &fixed_header_buf,
