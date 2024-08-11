@@ -87,14 +87,14 @@ impl ClientReader {
     // Aux: dsp de lo de is_authentic, una vez que ya fue connect msg todo bien, viene esto:
     fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
-
-        let mut handles = Vec::<JoinHandle<()>>::new();
-
+        
         // Hilo para obtener los bytes que llegan al servidor en el stream
-        handles.push(self.spawn_stream_handler(client_id.to_owned(), tx_1));
-
+        let h1 = self.spawn_stream_handler(client_id.to_owned(), tx_1);
+        
         // Hilo para manejar la recepción y procesamiento de mensajes
-        handles.push(self.spawn_message_processor(rx_1));
+        let h2 = self.spawn_message_processor(rx_1);
+        
+        let handles = vec![h1, h2]; // Clippy lo quiere así.
 
         for h in handles {
             let _ = h.join();
