@@ -93,10 +93,13 @@ impl MQTTServer {
                     UserState::Active => {
                         // El cliente ya se encontraba activo ==> Es duplicado.
                         self.handle_duplicate_user(client)?;
+                        let _ = connected_users_locked.remove(client_id);
+                        println!("Se conecta usuario duplicado: {:?}, desconectando el anterior.", client_id);
                     }
                     UserState::TemporallyDisconnected => {
                         // El cliente se encontraba temp desconectado ==> Se está reconectando.
                         self.handle_reconnecting_user(client, new_stream_of_reconnected_user)?;
+                        println!("Se reconecta el usuario: {:?}, emviándole mensajes.", client_id);
                         // Único caso en que devuelve true.
                         return Ok(true);
                     }
@@ -108,8 +111,11 @@ impl MQTTServer {
 
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
     fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
+        // Desconecto al user que ya que existía
         let msg = DisconnectMessage::new();
         client.write_message(&msg.to_bytes())?;
+        client.shutdown();
+        
         Ok(())
     }
 
@@ -527,7 +533,9 @@ fn check_subscription_and_calculate_diff(
     topic_messages: &VecDeque<PublishMessage>,
 ) -> Result<Option<u32>, Error> {
     let user_subscribed_topics = user.get_topics();
+    println!("[DEBUG TOPICS]: user: {:?}, topics: {:?}.", user.get_username(), user.get_topics());
     if user_subscribed_topics.contains(topic) {
+        println!("[DEBUG TOPICS]: user: {:?}, sí estpá suscripto a topic: {:?}.", user.get_username(), topic);
         let topic_server_last_id = topic_messages.len() as u32;
         let user_last_id = user.get_last_id_by_topic(topic);
 

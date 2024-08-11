@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{Error, Write},
+    io::{Error, Write}, net::Shutdown,
 };
 
 use crate::mqtt::{
@@ -119,5 +119,19 @@ impl User {
             std::io::ErrorKind::InvalidInput,
             "Error: User no conectado",
         ))
+    }
+
+    // Aux: Usado para debugging.
+    /// Devuelve el username.
+    pub fn get_username(&self) -> String {
+        self.username.to_string()
+    }
+
+    /// Cerramos la conexión por el stream recibido.
+    pub fn shutdown(&mut self) {
+        match self.stream.shutdown(Shutdown::Both) {
+            Ok(_) => println!("Conexión terminada con éxito"),
+            Err(e) => println!("Error al terminar la conexión: {:?}", e),
+        }
     }
 }
