@@ -2,8 +2,6 @@ use rustx::mqtt::server::mqtt_server::MQTTServer;
 use std::env::args;
 use std::io::{Error, ErrorKind};
 
-//use rustx::mqtt_server::{create_server, handle_incoming_connections, load_port};
-
 /// Lee el puerto por la consola, y devuelve la dirección IP y el puerto.
 pub fn load_port() -> Result<(String, u16), Error> {
     let argv = args().collect::<Vec<String>>();

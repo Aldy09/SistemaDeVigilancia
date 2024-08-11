@@ -2,7 +2,6 @@ use std::net::{SocketAddr, TcpStream};
 
 use std::io::{self, Error, ErrorKind};
 
-type StreamType = TcpStream;
 use crate::mqtt::messages::{connack_message::ConnackMessage,
                             connect_message::ConnectMessage,
                             connect_return_code::ConnectReturnCode,
@@ -12,10 +11,11 @@ use crate::mqtt::mqtt_utils::utils::{
     write_message_to_stream,
 };
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
+use crate::mqtt::stream_type::StreamType;
 
 pub struct MqttClientConnection {}
 
-pub fn mqtt_connect_to_broker(client_id: String, addr: &SocketAddr, will: Option<WillMessageData>) -> Result<TcpStream, Error> {
+pub fn mqtt_connect_to_broker(client_id: String, addr: &SocketAddr, will: Option<WillMessageData>) -> Result<StreamType, Error> {
     //will_msg_content: String, will_topic: String, will_qos: u8
     //will.get_will_msg_content(), will.get_will_topic(), will.get_qos()
     //let will_topic = String::from("desc"); // PROBANDO

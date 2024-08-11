@@ -1,12 +1,11 @@
-use std::io::Error;
-use std::net::TcpStream;
-use std::path::Path;
+use std::{io::Error, path::Path};
 
-use crate::mqtt::messages::connack_message::ConnackMessage;
-use crate::mqtt::messages::connack_session_present::SessionPresent;
-use crate::mqtt::messages::connect_message::ConnectMessage;
-use crate::mqtt::messages::connect_return_code::ConnectReturnCode;
+use crate::mqtt::messages::{
+    connack_message::ConnackMessage, connack_session_present::SessionPresent,
+    connect_message::ConnectMessage, connect_return_code::ConnectReturnCode,
+};
 use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
+use crate::mqtt::stream_type::StreamType;
 
 use super::file_helper::read_lines;
 use super::mqtt_server::MQTTServer;
@@ -23,18 +22,18 @@ impl AuthenticateClient {
     pub fn is_it_a_valid_connection(
         &self,
         connect_msg: &ConnectMessage,
-        stream: &mut TcpStream,
+        stream: &mut StreamType,
         mqtt_server: &MQTTServer,
     ) -> Result<bool, Error> {
         let (is_authentic, connack_response) =
             self.was_the_session_created_succesfully(connect_msg)?;
 
-        self.send_connection_response(&connack_response, stream)?;
+        self.send_connection_response(&connack_response, stream)?; // aux: y si mejor le devuelve el connack? []
 
         if is_authentic {
             self.handle_successful_authentication(connect_msg, stream, mqtt_server)
+        // aux: llama todo de server adentro, para mí iría mejor en mqtt_server []
         } else {
-            self.handle_failed_authentication();
             Ok(false)
         }
     }
@@ -42,35 +41,29 @@ impl AuthenticateClient {
     fn send_connection_response(
         &self,
         connack_response: &ConnackMessage,
-        stream: &mut TcpStream,
+        stream: &mut StreamType,
     ) -> Result<(), Error> {
-        write_message_to_stream(&connack_response.to_bytes(), stream)
+        write_message_to_stream(&connack_response.to_bytes(), stream) // aux: (ok xq todavía no existe el User).
     }
 
+    /// Devuelve true si el cliente que se conecta posee client_id.
     fn handle_successful_authentication(
         &self,
         connect_msg: &ConnectMessage,
-        stream: &mut TcpStream,
+        stream: &mut StreamType,
         mqtt_server: &MQTTServer,
     ) -> Result<bool, Error> {
         if let Some(username) = connect_msg.get_client_id() {
             let is_reconnection =
                 mqtt_server.manage_possible_reconnecting_or_duplicate_user(username, stream)?;
             if !is_reconnection {
-                println!(
-                    "DEBUG: Agregando nuevo usuario al servidor con username {:?}",
-                    username
-                );
+                println!("Agregando nuevo user al server con username {:?}", username);
                 mqtt_server.add_new_user(stream, username, connect_msg)?;
             }
             Ok(true)
         } else {
             Ok(false)
         }
-    }
-
-    fn handle_failed_authentication(&self) {
-        println!("   ERROR: No se pudo autenticar al cliente.");
     }
 
     /// Verifica si la sesión fue creada exitosamente: usuario valido o invitado
@@ -140,7 +133,6 @@ impl AuthenticateClient {
         }
     }
 }
-
 
 impl Default for AuthenticateClient {
     fn default() -> Self {

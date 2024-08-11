@@ -25,7 +25,6 @@ impl MessageProcessor {
     }
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
-        
         for packet in rx_1 {
             self.process_packet(packet); // Ejecuta en el hilo actual
         }
@@ -67,7 +66,9 @@ impl MessageProcessor {
         match subscribe_msg_res {
             Ok(msg) => {
                 let return_codes_res = self.mqtt_server.add_topics_to_subscriber(client_id, &msg);
-                let operation_result = self.mqtt_server.send_preexisting_msgs_to_new_subscriber(client_id,&msg );
+                let operation_result = self
+                    .mqtt_server
+                    .send_preexisting_msgs_to_new_subscriber(client_id, &msg);
                 if let Err(e) = operation_result {
                     println!("   ERROR: {:?}", e);
                 }
@@ -88,26 +89,25 @@ impl MessageProcessor {
         }
     }
 
-    
-    pub fn send_puback_to(&self, client_id: &str, publish_msg: &PublishMessage) -> Result< (), Error> {
-        if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
-            if let Some(user) = connected_users_locked.get_mut(client_id) {
-                self.mqtt_server.send_puback(publish_msg, &mut user.get_stream()?)?;
-            }
-        }
-        Ok(())
-    }
-    
-    fn send_suback_to(&self, client_id: &str, return_codes_res: Result<Vec<SubscribeReturnCode>, Error>) -> Result< (), Error > {
+    pub fn send_puback_to(
+        &self,
+        client_id: &str,
+        publish_msg: &PublishMessage,
+    ) -> Result<(), Error> {
+        self.mqtt_server.send_puback_to(client_id, publish_msg)?;
 
-        if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
-            if let Some(user) = connected_users_locked.get_mut(client_id) {
-                self.mqtt_server.send_suback(&return_codes_res, &mut user.get_stream()?)?;
-            }
-        }
         Ok(())
     }
-    
+
+    fn send_suback_to(
+        &self,
+        client_id: &str,
+        return_codes_res: Result<Vec<SubscribeReturnCode>, Error>,
+    ) -> Result<(), Error> {
+        self.mqtt_server
+            .send_suback_to(client_id, &return_codes_res)?;
+        Ok(())
+    }
 }
 
 // fn clone_ref(&self) -> Self {
