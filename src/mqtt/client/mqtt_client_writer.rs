@@ -2,7 +2,7 @@ use crate::mqtt::messages::{
     disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
     publish_message::PublishMessage, subscribe_message::SubscribeMessage,
 };
-use crate::mqtt::mqtt_utils::utils::{display_debug_publish_msg, write_message_to_stream};
+use crate::mqtt::mqtt_utils::utils::write_message_to_stream;
 use crate::mqtt::stream_type::StreamType;
 
 use std::{
@@ -38,7 +38,7 @@ impl MQTTClientWriter {
         let publish_message = match result {
             Ok(msg) => {
                 //println!("Mqtt publish: envío publish: \n   {:?}", msg);
-                display_debug_publish_msg(&msg);
+                println!("Publish enviado, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_id());
                 msg
             }
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
