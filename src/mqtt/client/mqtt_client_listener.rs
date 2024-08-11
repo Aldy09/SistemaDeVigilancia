@@ -2,19 +2,17 @@ use std::{net::TcpStream, sync::mpsc::Sender};
 
 use std::io::{Error, ErrorKind};
 
+use crate::mqtt::messages::{
+    packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage,
+    suback_message::SubAckMessage,
+};
 
-use crate::mqtt::messages::packet_type::PacketType;
-use crate::mqtt::messages::puback_message::PubAckMessage;
-use crate::mqtt::messages::suback_message::SubAckMessage;
-
-use crate::mqtt::messages::publish_message::PublishMessage;
+use crate::mqtt::client::ack_message::ACKMessage;
+use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
 use crate::mqtt::mqtt_utils::utils::{
     get_fixed_header_from_stream, get_whole_message_in_bytes_from_stream, is_disconnect_msg,
     send_puback, shutdown,
 };
-use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-
-use super::ack_message::ACKMessage;
 
 type StreamType = TcpStream;
 
@@ -26,8 +24,16 @@ pub struct MQTTClientListener {
 }
 
 impl MQTTClientListener {
-    pub fn new(stream: StreamType, client_tx: Sender<PublishMessage>, ack_tx:Sender<ACKMessage>) -> Self {
-        MQTTClientListener { stream, client_tx , ack_tx }        
+    pub fn new(
+        stream: StreamType,
+        client_tx: Sender<PublishMessage>,
+        ack_tx: Sender<ACKMessage>,
+    ) -> Self {
+        MQTTClientListener {
+            stream,
+            client_tx,
+            ack_tx,
+        }
     }
 
     /// Función que ejecutará un hilo de MQTTClient, dedicado exclusivamente a la lectura.
@@ -86,7 +92,6 @@ impl MQTTClientListener {
         Ok(())
     }
 
-    
     fn handle_publish(&mut self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         println!("Mqtt cliente leyendo: RECIBO MENSAJE TIPO PUBLISH");
         let msg = PublishMessage::from_bytes(msg_bytes)?;
@@ -99,14 +104,12 @@ impl MQTTClientListener {
         Ok(())
     }
 
-
     fn handle_puback(&self, msg_bytes: Vec<u8>) -> Result<(), Error> {
         let msg = PubAckMessage::msg_from_bytes(msg_bytes)?;
         // Avisa que llegó el ack
         match self.ack_tx.send(ACKMessage::PubAck(msg)) {
             Ok(_) => println!("PubAck enviado por tx exitosamente."),
             Err(_) => println!("Error al enviar PubAck por tx."),
-            
         }
         Ok(())
     }
@@ -117,7 +120,6 @@ impl MQTTClientListener {
         match self.ack_tx.send(ACKMessage::SubAck(msg)) {
             Ok(_) => println!("SubAck enviado por tx exitosamente."),
             Err(_) => println!("Error al enviar SubAck por tx."),
-            
         }
         Ok(())
     }

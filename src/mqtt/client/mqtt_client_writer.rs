@@ -1,15 +1,14 @@
-use std::io::{Error, ErrorKind};
-
-use crate::mqtt::mqtt_utils::utils::display_debug_publish_msg;
-use crate::mqtt::stream_type::StreamType;
-use crate::mqtt::{
-    messages::{
-        disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
-        publish_message::PublishMessage, subscribe_message::SubscribeMessage,
-    },
-    mqtt_utils::utils::write_message_to_stream,
+use crate::mqtt::messages::{
+    disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
+    publish_message::PublishMessage, subscribe_message::SubscribeMessage,
 };
-use std::net::Shutdown;
+use crate::mqtt::mqtt_utils::utils::{display_debug_publish_msg, write_message_to_stream};
+use crate::mqtt::stream_type::StreamType;
+
+use std::{
+    io::{Error, ErrorKind},
+    net::Shutdown,
+};
 
 #[derive(Debug)]
 pub struct MQTTClientWriter {
@@ -18,7 +17,7 @@ pub struct MQTTClientWriter {
 }
 
 impl MQTTClientWriter {
-    pub fn new(stream: StreamType) -> MQTTClientWriter {        
+    pub fn new(stream: StreamType) -> MQTTClientWriter {
         MQTTClientWriter {
             stream,
             available_packet_id: 0,
@@ -103,7 +102,7 @@ impl MQTTClientWriter {
     // Función relacionada con el Retransmitter:
     /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
     /// enviarse por el stream a server.
-    pub fn resend_msg(&mut self, msg: PublishMessage)-> Result<(), Error> {
+    pub fn resend_msg(&mut self, msg: PublishMessage) -> Result<(), Error> {
         let bytes_msg = msg.to_bytes();
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
         Ok(())

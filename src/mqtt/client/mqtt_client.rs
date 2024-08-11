@@ -1,13 +1,12 @@
 use crate::mqtt::client::{
-    mqtt_client_listener::MQTTClientListener,
+    mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::MQTTClientRetransmitter,
     mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
-    mqtt_client_retransmitter::MQTTClientRetransmitter,
 };
 use crate::mqtt::messages::{publish_message::PublishMessage, subscribe_message::SubscribeMessage};
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
-use std::io::{Error, ErrorKind};
-use std::net::SocketAddr;
 use std::{
+    io::{Error, ErrorKind},
+    net::SocketAddr,
     sync::mpsc::{self, Receiver},
     thread::{self, JoinHandle},
 };
@@ -15,7 +14,7 @@ use std::{
 #[derive(Debug)]
 pub struct MQTTClient {
     writer: MQTTClientWriter,
-    //listener: MQTTClientListener, 
+    //listener: MQTTClientListener,
     retransmitter: MQTTClientRetransmitter,
 }
 
@@ -68,13 +67,16 @@ impl MQTTClient {
                 if let Err(e) = self.wait_for_ack(msg.clone(), qos) {
                     println!("Error al esperar ack del publish: {:?}", e);
                 };
-                println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.", &msg.get_packet_id());
+                println!(
+                    "[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.",
+                    &msg.get_packet_id()
+                );
                 Ok(msg)
             }
             Err(e) => Err(e),
         }
     }
-    
+
     // Si no se pudo esperar el ack, se deberia reintentar el publish
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
@@ -82,7 +84,7 @@ impl MQTTClient {
             // Espero la primera vez, para el publish que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
             let mut received_ack = self.retransmitter.wait_for_ack(&msg)?;
             if received_ack {
-                return Ok(())
+                return Ok(());
             }
 
             // No recibí ack, entonces tengo que continuar retransmitiendo, hasta un máx de veces.
@@ -94,16 +96,18 @@ impl MQTTClient {
                     self.writer.resend_msg(msg.clone())?
                 }
                 received_ack = self.retransmitter.wait_for_ack(&msg)?;
-                
-                remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
 
+                remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
             }
 
             if !received_ack {
                 // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto
-                return Err(Error::new(ErrorKind::Other, "MAXRETRIES, se retransmitió sin éxito."))
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "MAXRETRIES, se retransmitió sin éxito.",
+                ));
             }
-            
+
             Ok(())
         } else {
             Ok(())
@@ -114,7 +118,7 @@ impl MQTTClient {
     // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.
     // (aux:) lo cual tiene sentido si mandamos de a uno y no mandamos más hasta que recibamos el ack. Ok.
     // Muevo lo que había acá para el retransmmitter, xq igual el retransmitter tmb necesita el Publish.
-    
+
     // Aux: P/D, nota para el grupo: Comenté el listener xq dsp de mover esta parte a un Retransmitter para que quede más prolijo
     // aux: el listener quedaba sin usar, y tiene sentido, el listener es el del loop de fixed header y eso, no necstamos hablarle.
     // aux: (Así que yo hasta borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
