@@ -175,9 +175,7 @@ impl SistemaMonitoreo {
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
     ) {
-
         let _ = self.subscribe_to_topics_vec(&mqtt_client);
-        self.receive_messages_from_subscribed_topics(mqtt_rx);
     }
 
     fn subscribe_to_topics_vec(

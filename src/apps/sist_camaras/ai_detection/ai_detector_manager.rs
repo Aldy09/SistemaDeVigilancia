@@ -1,6 +1,6 @@
-
-
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use notify::event::EventKind;
+use notify::{RecursiveMode, Watcher};
+use rayon::ThreadPoolBuilder;
 use std::error::Error;
 use std::sync::mpsc::Receiver;
 use std::{fs, thread};
@@ -63,26 +63,11 @@ impl AIDetectorManager {
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     fn run_internal(&self) -> Result<(), Box<dyn Error>> {
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
-        Ok(properties)
-    }
-
-    fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<PathBuf, Box<dyn Error>> {
-        let path = PathBuf::from(properties.get_base_dir());
-        self.create_dirs_tree(&path)?;
-        Ok(path)
-    }
-
-    fn initialize_ai_detector(&self, properties: &DetectorProperties) -> AutomaticIncidentDetector {
-        let logger_ai = self.logger.clone_ref();
-        AutomaticIncidentDetector::new(self.cameras.clone(), self.tx.clone(), properties.clone(), logger_ai)
-    }
-
-    fn create_thread_pool(&self) -> Result<ThreadPool, Box<dyn Error>> {
-        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
-        Ok(pool)
-    }
-
-    fn start_watching_directories(&self, path: &Path, tx_fs: Sender<notify::Result<Event>>) -> Result<(), Box<dyn Error>> {
+        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
+        let path = Path::new(properties.get_base_dir());
+        self.create_dirs_tree(path)?;
+    
+        let (tx_fs, rx_fs) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx_fs)?;
         watcher.watch(path, RecursiveMode::Recursive)?;
         println!("Detector: Monitoreando subdirs.");
