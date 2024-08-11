@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct FixedHeader {
     pub message_type: u8,
     pub reserved: u8,

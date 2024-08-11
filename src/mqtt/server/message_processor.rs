@@ -2,6 +2,8 @@ use std::sync::mpsc::Receiver;
 
 //use rayon::ThreadPool;
 
+use rayon::ThreadPool;
+
 use crate::mqtt::{
     messages::{
         packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage,
@@ -12,12 +14,19 @@ use crate::mqtt::{
 
 use std::io::Error;
 
-use super::{mqtt_server::MQTTServer, packet::Packet};
+use super::{
+    mqtt_server::MQTTServer,
+    packet::Packet,
+};
 
 #[derive(Debug)]
 pub struct MessageProcessor {
     mqtt_server: MQTTServer,
 }
+
+// fn contains_dron(input: &str) -> bool {
+//     input.to_lowercase().contains("dron")
+// }
 
 impl MessageProcessor {
     pub fn new(mqtt_server: MQTTServer) -> Self {
@@ -25,9 +34,29 @@ impl MessageProcessor {
     }
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
+
+        match create_thread_pool_with(20) {
+            Ok(thread_pool) => {
+                for packet in rx_1 {
+                    let self_clone = self.clone_ref();
+                    thread_pool.spawn(move || {
+                        self_clone.process_packet(packet);
+                    });
+                }
+            }
+            Err(e) => {
+                println!("   ERROR: {:?}", e);
+                for packet in rx_1 {
+                    self.process_packet(packet);
+                }
+            }
+        }
+
+        /* // Sin threadpool era:
         for packet in rx_1 {
             self.process_packet(packet); // Ejecuta en el hilo actual
         }
+         */
 
         Ok(())
     }
@@ -50,14 +79,15 @@ impl MessageProcessor {
                 display_debug_publish_msg(&publish_msg);
                 let puback_res = self.send_puback_to(client_id, &publish_msg);
                 if let Err(e) = puback_res {
-                    println!("   ERROR: {:?}", e);
-                    return;
+                    println!("   Error en handle_publish: {:?}", e);
                 }
-                self.mqtt_server
-                    .handle_publish_message(&publish_msg)
-                    .unwrap();
+                if let Err(e) = self.mqtt_server.handle_publish_message(&publish_msg){
+                    // No quiero retornar si falló alguna operación hacia Un user, solamente logguearlo.
+                    println!("   Error en handle_publish: {:?}", e);
+                };                
+
             }
-            Err(e) => println!("   ERROR: {:?}", e),
+            Err(e) => println!("   Error en handle_publish: {:?}", e),
         }
     }
 
@@ -72,7 +102,8 @@ impl MessageProcessor {
                 if let Err(e) = operation_result {
                     println!("   ERROR: {:?}", e);
                 }
-                let suback_res = self.send_suback_to(client_id, return_codes_res);
+                let packet_id = msg.get_packet_id();
+                let suback_res = self.send_suback_to(client_id, return_codes_res, packet_id);
                 if let Err(e) = suback_res {
                     println!("   ERROR: {:?}", e);
                 }
@@ -103,28 +134,26 @@ impl MessageProcessor {
         &self,
         client_id: &str,
         return_codes_res: Result<Vec<SubscribeReturnCode>, Error>,
+        packet_id: u16,
     ) -> Result<(), Error> {
         self.mqtt_server
-            .send_suback_to(client_id, &return_codes_res)?;
+            .send_suback_to(client_id, &return_codes_res, packet_id)?;
         Ok(())
+    }
+    // []
+    fn clone_ref(&self) -> Self {
+        MessageProcessor {
+            mqtt_server: self.mqtt_server.clone_ref(),
+        }
     }
 }
 
-// fn clone_ref(&self) -> Self {
-//     MessageProcessor {
-//         mqtt_server: self.mqtt_server.clone_ref(),
-//     }
-// }
-
-// fn create_thread_pool(num_threads: usize) -> Option<ThreadPool> {
-//     match rayon::ThreadPoolBuilder::new()
-//         .num_threads(num_threads)
-//         .build()
-//     {
-//         Ok(pool) => Some(pool),
-//         Err(e) => {
-//             println!("No se pudo crear el threadpool: {:?}", e);
-//             None
-//         }
-//     }
-// }
+fn create_thread_pool_with(num_threads: usize) -> Result<ThreadPool, Error> {
+    match rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+    {
+        Ok(thread_pool) => Ok(thread_pool),
+        Err(e) => Err(Error::new(std::io::ErrorKind::Other, e)),
+    }
+}

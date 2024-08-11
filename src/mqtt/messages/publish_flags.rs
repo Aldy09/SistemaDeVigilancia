@@ -9,6 +9,7 @@ use std::io::{Error, ErrorKind};
 ///  - qos level = {00, 01, 10} _ 2 bits _ el 11 está prohibido.
 ///  - retain = 0 o 1 _ 1 bit.
 pub struct PublishFlags {
+    msg_type: u8, // Siempre vale 3.
     dup: u8,    // 0: no duplicado, 1: duplicado
     qos: u8,    // 0: at most once, 1: at least once, 2: exactly once
     retain: u8, // 0: no retain, 1: retain
@@ -21,7 +22,7 @@ impl PublishFlags {
         if dup > 1 || qos > 2 || retain > 1 {
             return Err(Error::new(ErrorKind::Other, "Flags para publish inválidos"));
         }
-        Ok(PublishFlags { dup, qos, retain })
+        Ok(PublishFlags { msg_type: 3, dup, qos, retain })
     }
 
     //Chequea si qos > 0
@@ -29,8 +30,11 @@ impl PublishFlags {
         self.qos > 0
     }
 
+    /// Convierte los flags en un byte, incluyendo el tipo del mensaje.
     pub fn to_flags_byte(&self) -> u8 {
         let mut byte_de_flags: u8 = 0;
+
+        byte_de_flags |= self.msg_type << 4; // se coloca el tipo en los 4 bits más significativos.
 
         byte_de_flags |= self.dup << 3; // dup se coloca en el bit 3
         byte_de_flags |= self.qos << 1; // qos se coloca en los bits 1 y 2
@@ -42,28 +46,16 @@ impl PublishFlags {
         let retain = byte_de_flags & 0b0000_0001;
         let qos = (byte_de_flags & 0b0000_0110) >> 1; // desplaza los bits a la derecha para que qos sea un u8 entre 0 y 3.
         let dup = (byte_de_flags & 0b0000_1000) >> 3; // desplaza los bits a la derecha para que dup sea un u8 entre 0 y 1.
+        let msg_type = (byte_de_flags & 0b1111_0000) >> 4;
 
-        Ok(PublishFlags { dup, qos, retain })
-    }
-    /*
-    pub fn from_flags_byte(byte_de_flags: &u8) -> Result<PublishFlags, Error> {
-        let retain = byte_de_flags & 0b0000_0001;
-        let mut qos = byte_de_flags & 0b0000_0110;
-        qos >>= 1; // para eliminar el bit de la derecha, y quedarme solo con dos bits.
-        let mut dup = byte_de_flags & 0b0000_1000;
-        dup >>= 3;
-        let mut tipo = byte_de_flags & 0b1111_0000;
-        tipo >>= 4;
-
-        if tipo != 3 {
+        if msg_type != 3 {
             return Err(Error::new(ErrorKind::Other, "Flags para publish leídos con tipo inválido."));
         }
 
-        Ok(PublishFlags{dup, qos, retain})
+        Ok(PublishFlags { msg_type, dup, qos, retain })
     }
-    */
 }
-/*
+
 #[cfg(test)]
 mod test {
     use super::PublishFlags;
@@ -85,8 +77,8 @@ mod test {
     #[test]
     fn test_2_publish_flags_se_pasa_a_bytes_correctamente() {
         let flags = PublishFlags::new(0, 2, 1).unwrap();
-        // byte debería ser | 0111 | 0 | 10 | 1 |,
-        // es decir:        | 0111 0101 |
+        // byte debería ser | 0011 | 0 | 10 | 1 |,
+        // es decir:        | 0011 0101 |
 
         let byte_esperado: u8 = 0b0011_0101;
 
@@ -99,7 +91,7 @@ mod test {
 
         let byte_de_flags = flags.to_flags_byte();
 
-        let flags_reconstruido = PublishFlags::from_flags_byte(&byte_de_flags);
+        let flags_reconstruido = PublishFlags::from_flags_byte(byte_de_flags);
 
         assert!(flags_reconstruido.is_ok());
         assert_eq!(flags_reconstruido.unwrap(), flags);
@@ -111,8 +103,8 @@ mod test {
         let byte_de_flags_malformado_a: u8 = 0b1010_0000;
         let byte_de_flags_malformado_b: u8 = 0b0010_0000;
 
-        let flags_reconstruido_a = PublishFlags::from_flags_byte(&byte_de_flags_malformado_a);
-        let flags_reconstruido_b = PublishFlags::from_flags_byte(&byte_de_flags_malformado_b);
+        let flags_reconstruido_a = PublishFlags::from_flags_byte(byte_de_flags_malformado_a);
+        let flags_reconstruido_b = PublishFlags::from_flags_byte(byte_de_flags_malformado_b);
 
         assert!(flags_reconstruido_a.is_err());
         assert!(flags_reconstruido_b.is_err());
@@ -120,4 +112,4 @@ mod test {
 
 
 }
-*/
+

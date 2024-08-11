@@ -12,7 +12,6 @@ pub struct PubAckMessage {
     // El PubAck no lleva payload.
 }
 
-#[allow(dead_code)] // para que clippy no se enoje
 impl PubAckMessage {
     pub fn new(packet_id: u16, puback_reason_code: u8) -> Self {
         PubAckMessage {

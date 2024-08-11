@@ -1,5 +1,6 @@
 use std::{io::Error, path::Path};
 
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, connack_session_present::SessionPresent,
     connect_message::ConnectMessage, connect_return_code::ConnectReturnCode,
@@ -11,11 +12,15 @@ use super::file_helper::read_lines;
 use super::mqtt_server::MQTTServer;
 
 #[derive(Debug)]
-pub struct AuthenticateClient {}
+pub struct AuthenticateClient {
+    logger: StringLogger,
+}
 
 impl AuthenticateClient {
-    pub fn new() -> Self {
-        AuthenticateClient {}
+    pub fn new(logger: StringLogger) -> Self {
+        AuthenticateClient {
+            logger,
+        }
     }
 
     /// Procesa el mensaje de conexión recibido, autentica al cliente y envía un mensaje de conexión de vuelta.
@@ -58,6 +63,7 @@ impl AuthenticateClient {
                 mqtt_server.manage_possible_reconnecting_or_duplicate_user(username, stream)?;
             if !is_reconnection {
                 println!("Agregando nuevo user al server con username {:?}", username);
+                self.logger.log(format!("Agregando nuevo user al server con username {:?}", username));
                 mqtt_server.add_new_user(stream, username, connect_msg)?;
             }
             Ok(true)
@@ -131,11 +137,5 @@ impl AuthenticateClient {
         } else {
             false
         }
-    }
-}
-
-impl Default for AuthenticateClient {
-    fn default() -> Self {
-        AuthenticateClient::new()
     }
 }

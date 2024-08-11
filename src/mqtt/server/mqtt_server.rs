@@ -1,3 +1,4 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::{
     disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
@@ -33,32 +34,42 @@ pub struct MQTTServer {
     connected_users: ShareableUsers,
     available_packet_id: u16,                                      //
     messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
+    logger: StringLogger,
 }
 
 impl MQTTServer {
-    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+    pub fn new(logger: StringLogger) -> Self {
         let file_path = "log.txt";
         if let Err(e) = clean_file(file_path) {
             println!("Error al limpiar el archivo: {:?}", e);
         }
 
-        let mqtt_server = Self {
+        Self {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
             available_packet_id: 0,
             messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
-        };
+            logger,
+        }
+    }
+
+    pub fn run(&self, ip: String, port: u16) -> Result<(), Error> {
 
         let listener = create_server(ip, port)?;
-        let mut incoming_connections = ClientListener::new();
-        let self_clone = mqtt_server.clone_ref();
+        let mut incoming_connections = ClientListener::new(self.logger.clone_ref());
+        let self_clone = self.clone_ref();
+        let logger_c = self.logger.clone_ref();
         // Hilo para manejar las conexiones entrantes
         let thread_incoming = thread::spawn(move || {
-            let _ = incoming_connections.handle_incoming_connections(listener, self_clone);
+            if let Err(e) = incoming_connections.handle_incoming_connections(listener, self_clone) {
+                logger_c.log(format!("Error en handle_incoming_connections, en run: {:?}.", e));
+            }
         });
 
-        thread_incoming.join().unwrap();
+        if let Err(e) = thread_incoming.join(){
+            self.logger.log(format!("Error al esperar al hilo incoming, en run: {:?}.", e));
+        }
 
-        Ok(mqtt_server)
+        Ok(())
     }
 
     /// Agrega un PublishMessage a la estructura de mensajes de su topic.
@@ -93,10 +104,13 @@ impl MQTTServer {
                     UserState::Active => {
                         // El cliente ya se encontraba activo ==> Es duplicado.
                         self.handle_duplicate_user(client)?;
+                        let _ = connected_users_locked.remove(client_id);
+                        println!("Se conecta usuario duplicado: {:?}, desconectando el anterior.", client_id);
                     }
                     UserState::TemporallyDisconnected => {
                         // El cliente se encontraba temp desconectado ==> Se está reconectando.
                         self.handle_reconnecting_user(client, new_stream_of_reconnected_user)?;
+                        println!("Se reconecta el usuario: {:?}, emviándole mensajes.", client_id);
                         // Único caso en que devuelve true.
                         return Ok(true);
                     }
@@ -108,8 +122,11 @@ impl MQTTServer {
 
     /// Desconecta al user previo que ya existía, para permitir la conexión con el nuevo.
     fn handle_duplicate_user(&self, client: &mut User) -> Result<(), Error> {
+        // Desconecto al user que ya que existía
         let msg = DisconnectMessage::new();
         client.write_message(&msg.to_bytes())?;
+        client.shutdown();
+        
         Ok(())
     }
 
@@ -141,7 +158,7 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
+    /// Analiza si la estructura de PublishMessages del topic recibida por parámetro contiene o no mensajes que el user 'user' no haya
     /// recibido. Si sí los contiene, entonces se los envía, actualizando el last_id del 'user' para ese 'topic'.
     fn send_unreceived_messages(
         &self,
@@ -149,11 +166,9 @@ impl MQTTServer {
         topic: &String,
         topic_messages: &VecDeque<PublishMessage>,
     ) -> Result<(), Error> {
-        let diff = check_subscription_and_calculate_diff(user, topic, topic_messages)?;
-        if diff < 0 {
-            return Ok(()); // Si no está suscripto, no hay mensajes por enviar
-        }
-        send_unreceived_messages_to_user(user, topic, topic_messages, diff as u32)?;
+        if let Some(diff) = check_subscription_and_calculate_diff(user, topic, topic_messages)?{
+            send_unreceived_messages_to_user(user, topic, topic_messages, diff)?;
+        };
 
         Ok(())
     }
@@ -185,6 +200,7 @@ impl MQTTServer {
             connected_users: self.connected_users.clone(),
             available_packet_id: self.available_packet_id,
             messages_by_topic: self.messages_by_topic.clone(),
+            logger: self.logger.clone_ref(),
         }
     }
 
@@ -244,10 +260,11 @@ impl MQTTServer {
         &self,
         client_id: &str,
         return_codes_res: &Result<Vec<SubscribeReturnCode>, Error>,
+        packet_id: u16,
     ) -> Result<(), Error> {
         match return_codes_res {
             Ok(return_codes) => {
-                let ack = SubAckMessage::new(0, return_codes.clone());
+                let ack = SubAckMessage::new(packet_id, return_codes.clone());
                 let ack_msg_bytes = ack.to_bytes();
                 if let Ok(mut connected_users_locked) = self.get_connected_users().lock() {
                     if let Some(user) = connected_users_locked.get_mut(client_id) {
@@ -454,7 +471,7 @@ impl MQTTServer {
     // Aux: esta función está comentada solo temporalmente mientras probamos algo, dsp se volverá a usar [].
     /// Envía un mensaje de tipo PubAck al cliente.
     pub fn send_puback_to(&self, client_id: &str, msg: &PublishMessage) -> Result<(), Error> {
-        let option_packet_id = msg.get_packet_identifier();
+        let option_packet_id = msg.get_packet_id();
         let packet_id = option_packet_id.unwrap_or(0);
 
         let ack = PubAckMessage::new(packet_id, 0);
@@ -517,14 +534,20 @@ fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     Ok(listener)
 }
 
-// Verifica la suscripción y calcula la diferencia de mensajes
+/// Verifica si el `user` está suscripto al `topic`. En caso afirmativo, devuelve en un Option la diferencia
+/// entre el último mensaje que posee el server para ese topic y el último que el user recibió correctamente.
+/// Caso contrario devuelve Ok(None).
+/// Si la diferencia a calcular da negativa, devuelve un error, ya que ha ocurrido un error grave (de concurrencia)
+/// para llegar a dicha situación.
 fn check_subscription_and_calculate_diff(
     user: &User,
     topic: &String,
     topic_messages: &VecDeque<PublishMessage>,
-) -> Result<i32, Error> {
+) -> Result<Option<u32>, Error> {
     let user_subscribed_topics = user.get_topics();
+    println!("[DEBUG TOPICS]: user: {:?}, topics: {:?}.", user.get_username(), user.get_topics());
     if user_subscribed_topics.contains(topic) {
+        println!("[DEBUG TOPICS]: user: {:?}, sí estpá suscripto a topic: {:?}.", user.get_username(), topic);
         let topic_server_last_id = topic_messages.len() as u32;
         let user_last_id = user.get_last_id_by_topic(topic);
 
@@ -535,13 +558,14 @@ fn check_subscription_and_calculate_diff(
             ));
         }
 
-        Ok((topic_server_last_id - user_last_id) as i32)
+        Ok(Some(topic_server_last_id - user_last_id))
     } else {
-        Ok(-1) // Si no está suscrito, no hay mensajes por enviar
+        Ok(None) // Si no está suscrito, no hay mensajes por enviar
     }
 }
 
-// Envia los mensajes no recibidos al usuario
+/// Envia al usuario `user` los mensajes del topic `topic` no recibidos.
+/// 
 fn send_unreceived_messages_to_user(
     user: &mut User,
     topic: &String,
@@ -549,10 +573,10 @@ fn send_unreceived_messages_to_user(
     diff: u32,
 ) -> Result<(), Error> {
     for _ in 0..diff {
-        let next_message_index = user.get_last_id_by_topic(topic) as usize;
-        if let Some(msg) = topic_messages.get(next_message_index) {
+        let next_message_index = user.get_last_id_by_topic(topic);
+        if let Some(msg) = topic_messages.get(next_message_index as usize) {
             user.write_message(&msg.to_bytes())?;
-            user.update_last_id_by_topic(topic, (next_message_index + 1) as u32);
+            user.update_last_id_by_topic(topic, next_message_index + 1);
         } else {
             println!("ERROR NO SE ENCUENTRA EL TOPIC_MSGS.GET(TOPIC) A ENVIAR!!!");
         }

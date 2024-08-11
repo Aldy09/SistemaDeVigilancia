@@ -19,7 +19,6 @@ pub struct DronCurrentInfo {
     flying_info: Option<DronFlyingInfo>,
 }
 
-#[allow(dead_code)]
 impl DronCurrentInfo {
     /// Inicia con los parámetros recibidos; con ningún incidente en resolución y sin flying_info
     /// (es decir, inicia con estos dos últimos atributos en None).

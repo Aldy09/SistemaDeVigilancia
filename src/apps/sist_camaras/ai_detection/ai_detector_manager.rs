@@ -1,5 +1,5 @@
 use notify::event::EventKind;
-use notify::{RecursiveMode, Watcher};
+use notify::{Event, RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
 use std::error::Error;
 use std::sync::mpsc::Receiver;
@@ -63,15 +63,7 @@ impl AIDetectorManager {
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
     fn run_internal(&self) -> Result<(), Box<dyn Error>> {
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
-        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
-        let path = Path::new(properties.get_base_dir());
-        self.create_dirs_tree(path)?;
-    
-        let (tx_fs, rx_fs) = mpsc::channel();
-        let mut watcher = notify::recommended_watcher(tx_fs)?;
-        watcher.watch(path, RecursiveMode::Recursive)?;
-        println!("Detector: Monitoreando subdirs.");
-        self.logger.log("Detector: Monitoreando subdirs".to_string());
+        let rx_fs = self.create_and_watch_directories(&properties)?;
     
         // Se inicializa el detector
         let logger_ai = self.logger.clone_ref();
@@ -101,6 +93,21 @@ impl AIDetectorManager {
         }
         
         Ok(())
+    }
+
+    /// Crea la estructura de directorios a partir de un `base_dir` que figura en las constantes `properties`,
+    /// y comienza a monitorear los mismos.
+    fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<Receiver<Result<Event, notify::Error>>, Box<dyn Error>> {
+        // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
+        let path = Path::new(properties.get_base_dir());
+        self.create_dirs_tree(path)?;
+        // Comienza a monitorear los directorios
+        let (tx_fs, rx_fs) = mpsc::channel();
+        let mut watcher = notify::recommended_watcher(tx_fs)?;
+        watcher.watch(path, RecursiveMode::Recursive)?;
+        println!("Detector: Monitoreando subdirs.");
+        self.logger.log("Detector: Monitoreando subdirs".to_string());
+        Ok(rx_fs)
     }
     
     /// Crea, si no existía, la estructura de directorios necesaria para las imágenes de las cámaras.

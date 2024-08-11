@@ -12,53 +12,7 @@ type StreamType = TcpStream;
 // Este archivo contiene funciones que utilizan para hacer read y write desde el stream
 // tanto el message_broker_server como el mqtt_client.
 
-/*
-// Inicio tema channel
-/// Envía un mensaje de tipo PubAck al hilo outgoing, para que él lo envíe a cliente.
-pub fn send_puback_to_outgoing(
-    msg: &PublishMessage,
-    publish_msgs_tx: Sender<Box<dyn Send>>,
-) -> Result<(), Error> {
-    let option_packet_id = msg.get_packet_identifier();
-    let packet_id = option_packet_id.unwrap_or(0);
 
-    let ack = PubAckMessage::new(packet_id, 0);
-    //let ack_msg_bytes = ack.to_bytes();
-    //write_message_to_stream(&ack_msg_bytes, stream)?;
-    println!("   tipo publish: Enviando el ack: {:?}", ack);
-    if publish_msgs_tx.send(Box::new(ack)).is_err() {
-        //println!("Error al enviar el PublishMessage al hilo que los procesa.");
-        return Err(Error::new(
-            ErrorKind::Other,
-            "Error al enviar el PublishMessage al hilo que los procesa.",
-        ));
-    }
-    Ok(())
-}
-
-/// Envía un mensaje de tipo SubAck al hilo outgoing, para que él lo envíe a cliente.
-pub fn send_suback_to_outgoing(
-    return_codes: Vec<SubscribeReturnCode>,
-    publish_msgs_tx: Sender<Box<dyn Send>>,
-) -> Result<(), Error> {
-    let ack = SubAckMessage::new(0, return_codes);
-
-    //let ack_msg_bytes = ack.to_bytes();
-    //write_message_to_stream(&ack_msg_bytes, stream)?;
-    println!("   tipo subscribe: Enviando el ack: {:?}", ack);
-    if publish_msgs_tx.send(Box::new(ack)).is_err() {
-        //println!("Error al enviar el PublishMessage al hilo que los procesa.");
-        return Err(Error::new(
-            ErrorKind::Other,
-            "Error al enviar el PublishMessage al hilo que los procesa.",
-        ));
-    }
-
-    Ok(())
-}
-
-// Fin tema channel
-*/
 
 // Inicio funciones que manejan el stream, usadas tando por mqtt server como por client.
 /// Escribe el mensaje en bytes `msg_bytes` por el stream hacia el cliente.
@@ -125,7 +79,7 @@ pub fn get_whole_message_in_bytes_from_stream(
 
 /// Envía un mensaje de tipo PubAck por el stream.
 pub fn send_puback(msg: &PublishMessage, stream: &mut TcpStream) -> Result<(), Error> {
-    if let Some(packet_id) = msg.get_packet_identifier() {
+    if let Some(packet_id) = msg.get_packet_id() {
         let ack = PubAckMessage::new(packet_id, 0);
         let ack_msg_bytes = ack.to_bytes();
         write_message_to_stream(&ack_msg_bytes, stream)?;
@@ -171,7 +125,7 @@ pub fn get_fixed_header_from_stream_for_conn(
 
 /// Función para debugging.
 pub fn display_debug_publish_msg(msg: &PublishMessage) {
-    println!("Publish recibido, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_identifier());
+    println!("Publish recibido, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_id());
 }
 /// Función para debugging.
 pub fn display_debug_puback_msg(msg: &PubAckMessage) {

@@ -166,7 +166,7 @@ impl SistemaCamaras {
         })
     }
 
-    fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, topics: Vec<String>) {
+    fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>, topics: Vec<(String, u8)>) {
         let topics_log = topics.to_vec();
         if let Ok(mut mqtt_client_lock) = mqtt_client.lock() {
             let res_subscribe = mqtt_client_lock.mqtt_subscribe(topics);
@@ -215,7 +215,7 @@ impl SistemaCamaras {
         let mut self_clone = self.clone_ref();
         let topic = AppsMqttTopics::IncidentTopic.to_str();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(mqtt_client.clone(), vec![String::from(topic)]);
+            self_clone.subscribe_to_topics(mqtt_client.clone(), vec![(String::from(topic), self_clone.qos)]);
             self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned, cameras_tx);
         })
     }

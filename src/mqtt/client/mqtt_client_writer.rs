@@ -1,15 +1,14 @@
-use std::io::{Error, ErrorKind};
-
-use crate::mqtt::mqtt_utils::utils::display_debug_publish_msg;
-use crate::mqtt::stream_type::StreamType;
-use crate::mqtt::{
-    messages::{
-        disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
-        publish_message::PublishMessage, subscribe_message::SubscribeMessage,
-    },
-    mqtt_utils::utils::write_message_to_stream,
+use crate::mqtt::messages::{
+    disconnect_message::DisconnectMessage, publish_flags::PublishFlags,
+    publish_message::PublishMessage, subscribe_message::SubscribeMessage,
 };
-use std::net::Shutdown;
+use crate::mqtt::mqtt_utils::utils::{display_debug_publish_msg, write_message_to_stream};
+use crate::mqtt::stream_type::StreamType;
+
+use std::{
+    io::{Error, ErrorKind},
+    net::Shutdown,
+};
 
 #[derive(Debug)]
 pub struct MQTTClientWriter {
@@ -35,7 +34,7 @@ impl MQTTClientWriter {
         let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, qos, 0)?;
-        let result = PublishMessage::new(3, flags, topic, Some(packet_id), payload);
+        let result = PublishMessage::new(flags, topic, Some(packet_id), payload);
         let publish_message = match result {
             Ok(msg) => {
                 //println!("Mqtt publish: envío publish: \n   {:?}", msg);
@@ -58,8 +57,8 @@ impl MQTTClientWriter {
     /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
     pub fn mqtt_subscribe(
         &mut self,
-        topics_to_subscribe: Vec<String>,
-    ) -> Result<(), Error> {
+        topics_to_subscribe: Vec<(String, u8)>,
+    ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
         println!("-----------------");
         // Construyo subscribe
@@ -74,7 +73,7 @@ impl MQTTClientWriter {
             subs_bytes
         );
 
-        Ok(())
+        Ok(subscribe_msg)
     }
 
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
@@ -98,5 +97,14 @@ impl MQTTClientWriter {
     fn generate_packet_id(&mut self) -> u16 {
         self.available_packet_id += 1;
         self.available_packet_id
+    }
+
+    // Función relacionada con el Retransmitter:
+    /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
+    /// enviarse por el stream a server.
+    pub fn resend_msg(&mut self, msg: PublishMessage) -> Result<(), Error> {
+        let bytes_msg = msg.to_bytes();
+        write_message_to_stream(&bytes_msg, &mut self.stream)?;
+        Ok(())
     }
 }

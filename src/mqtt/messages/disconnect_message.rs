@@ -1,12 +1,11 @@
 use crate::mqtt::messages::disconnect_fixed_header::FixedHeader;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct DisconnectMessage {
     fixed_header: FixedHeader,
 }
 
 impl DisconnectMessage {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> DisconnectMessage {
         let fixed_header = FixedHeader {
             message_type: 0b1110,
@@ -29,6 +28,25 @@ impl DisconnectMessage {
         };
 
         DisconnectMessage { fixed_header }
+    }
+}
+
+impl Default for DisconnectMessage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::DisconnectMessage;
+
+    #[test]
+    fn test_disconnect_msg_to_and_from_bytes_works() {
+        let original_msg = DisconnectMessage::new();
+        let reconstructed_msg = DisconnectMessage::from_bytes(&original_msg.to_bytes());
+
+        assert_eq!(reconstructed_msg, original_msg)
     }
 }
 

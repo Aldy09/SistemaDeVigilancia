@@ -21,6 +21,7 @@ pub fn acknowledge(ui: &Ui, attribution: Attribution) {
         });
 }
 
+/// Controles para ajustar la rotación y escala de las imágenes.
 pub fn controls(
     ui: &Ui,
     selected_provider: &mut Provider,
@@ -52,7 +53,7 @@ pub fn controls(
         });
 }
 
-/// Zoom del mapa.
+/// Zoom para la vista del mapa
 pub fn zoom(ui: &Ui, map_memory: &mut MapMemory) {
     Window::new("Map")
         .collapsible(false)
@@ -72,7 +73,7 @@ pub fn zoom(ui: &Ui, map_memory: &mut MapMemory) {
         });
 }
 
-/// Boton para ir a la posicion del centro del mapa asignado.
+/// Cuando se ha perdido la posición del usuario, se muestra un botón para volver a la posición inicial.
 pub fn go_to_my_position(ui: &Ui, map_memory: &mut MapMemory) {
     if let Some(position) = map_memory.detached() {
         Window::new("Center")
@@ -81,6 +82,7 @@ pub fn go_to_my_position(ui: &Ui, map_memory: &mut MapMemory) {
             .title_bar(false)
             .anchor(Align2::RIGHT_BOTTOM, [-10., -10.])
             .show(ui.ctx(), |ui| {
+                //Posicion central del mapa
                 ui.label("map center: ");
                 // Muestro la latitud y longitud del centro del mapa
                 ui.label(format!("{:.04} {:.04}", position.lat(), position.lon()));

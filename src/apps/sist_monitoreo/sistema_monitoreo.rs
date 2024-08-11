@@ -17,12 +17,14 @@ use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::Pu
 use super::ui_sistema_monitoreo::UISistemaMonitoreo;
 use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
+use std::io::Error;
 
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     incidents: Arc<Mutex<Vec<Incident>>>,
     qos: u8,
     logger: StringLogger,
+    topics: Vec<(String, u8)>,
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -50,10 +52,17 @@ impl SistemaMonitoreo {
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
                 .unwrap_or(0);
         println!("valor de QoS: {}", qos);
+        let topics = vec![
+            (AppsMqttTopics::CameraTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::DronTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::IncidentTopic.to_str().to_string(), qos),
+            (AppsMqttTopics::DescTopic.to_str().to_string(), qos),
+        ];
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())), // []
             qos,
             logger,
+            topics,
         };
 
         sistema_monitoreo
@@ -142,6 +151,7 @@ impl SistemaMonitoreo {
             incidents: self.incidents.clone(),
             qos: self.qos,
             logger: self.logger.clone_ref(),
+            topics: self.topics.clone(),
         }
     }
 
@@ -165,26 +175,25 @@ impl SistemaMonitoreo {
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
     ) {
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::CameraTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str());
-        self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DescTopic.to_str());
+        let _ = self.subscribe_to_topics_vec(&mqtt_client);
     }
 
-    fn subscribe_to_topic(&self, mqtt_client: &Arc<Mutex<MQTTClient>>, topic: &str) {
+    fn subscribe_to_topics_vec(
+        &self,
+        mqtt_client: &Arc<Mutex<MQTTClient>>
+    ) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
-            let res_sub = mqtt_client.mqtt_subscribe(vec![(String::from(topic))]);
-            match res_sub {
-                Ok(_) => {
-                    self.logger
-                        .log(format!("Sistema-Monitoreo: subscripto a topic {:?}", topic));
-                }
-                Err(e) => {
-                    println!("Error al hacer un subscribe a topic: {:?}", e);
-                    self.logger
-                        .log(format!("Error al hacer un subscribe al topic: {:?}", e));
-                }
-            }
+            mqtt_client.mqtt_subscribe(self.topics.clone())?;
+            self.logger.log(format!(
+                "Sistema-Monitoreo: subscripto a topics {:?}",
+                &self.topics
+            ));
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error al obtener el lock del mqtt_client",
+            ))
         }
     }
 

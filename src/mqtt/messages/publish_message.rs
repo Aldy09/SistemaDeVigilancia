@@ -22,7 +22,7 @@ use crate::mqtt::messages::publish_flags::PublishFlags;
 use crate::mqtt::messages::publish_payload::Payload;
 use crate::mqtt::messages::publish_variable_header::VariableHeader;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PublishMessage {
     fixed_header: FixedHeader,
     variable_header: VariableHeader,
@@ -31,14 +31,16 @@ pub struct PublishMessage {
 
 impl<'a> PublishMessage {
     pub fn new(
-        message_type: u8,
         flags: PublishFlags,
         topic_name: &'a str,
         packet_identifier: Option<u16>,
         content: &'a [u8],
     ) -> Result<Self, Error> {
         if !flags.is_qos_greater_than_0() && packet_identifier.is_some() {
-            return Err(Error::new(ErrorKind::InvalidData, "El packet_identifier debe ser None si qos = 0".to_string()));
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "El packet_identifier debe ser None si qos = 0".to_string(),
+            ));
         }
 
         let variable_header = VariableHeader {
@@ -56,7 +58,6 @@ impl<'a> PublishMessage {
         //aux: let payload = Payload { content: content.to_vec() };
 
         let fixed_header = FixedHeader {
-            message_type,
             flags,
             remaining_length: 0, //se actualizara mas adelante
         };
@@ -91,7 +92,7 @@ impl<'a> PublishMessage {
         (rem_len_in_two_bytes + topic_name_length + packet_identifier_length + payload_length) as u8
     }
 
-    pub fn get_packet_identifier(&self) -> Option<u16> {
+    pub fn get_packet_id(&self) -> Option<u16> {
         self.variable_header.packet_identifier
     }
 
@@ -108,8 +109,7 @@ impl<'a> PublishMessage {
         let mut bytes = Vec::new();
 
         // Fixed Header
-        let mut first_byte: u8 = self.fixed_header.message_type << 4; // message_type se coloca en los bits 4 a 7
-        first_byte |= self.fixed_header.flags.to_flags_byte(); // flags se coloca en los bits 0 a 3
+        let first_byte = self.fixed_header.flags.to_flags_byte(); // flags contiene los flags y tmb incluye el tipo.
         bytes.push(first_byte);
 
         // Variable Header
@@ -148,8 +148,7 @@ impl<'a> PublishMessage {
 
         // Fixed Header
         let first_byte = bytes[0];
-        let message_type = first_byte >> 4; // message_type se extrae de los bits 4 a 7
-        let flags = PublishFlags::from_flags_byte(first_byte & 0x0F)?; // flags se extrae de los bits 0 a 3
+        let flags = PublishFlags::from_flags_byte(first_byte)?; // flags se extrae de los bits 0 a 3
         let remaining_length = bytes[1];
 
         // Variable Header
@@ -177,8 +176,7 @@ impl<'a> PublishMessage {
 
         Ok(Self {
             fixed_header: FixedHeader {
-                message_type,
-                flags,
+                flags, // Incluye el msg_type.
                 remaining_length,
             },
             variable_header: VariableHeader {
@@ -219,8 +217,7 @@ mod tests {
     ///Testea que si qos es 0, packet_identifier debe ser None.
     fn test_packet_identifier_none_if_qos_0() {
         let message = PublishMessage::new(
-            1,                                   // message_type
-            PublishFlags::new(0, 0, 0).unwrap(), // flags
+            PublishFlags::new(0, 0, 0).unwrap(), // flags, se crea con msg_type=3.
             "test/topic",                        // topic_name
             Some(23),                            // packet_identifier
             &[1, 2, 3, 4, 5],                    // payload
@@ -233,7 +230,6 @@ mod tests {
     /// Testea que se pueda crear un mensaje Publish y pasarlo a bytes y luego reconstruirlo.
     fn test_publish_message_to_and_from_bytes() {
         let original_message = PublishMessage::new(
-            1,                                   // message_type
             PublishFlags::new(0, 1, 0).unwrap(), // flags
             "test/topic",                        // topic_name
             Some(1234),                          // packet_identifier
@@ -244,34 +240,7 @@ mod tests {
         let bytes = original_message.to_bytes();
         let recovered_message = PublishMessage::from_bytes(bytes).unwrap();
 
-        assert_eq!(
-            original_message.fixed_header.message_type,
-            recovered_message.fixed_header.message_type
-        );
-        assert_eq!(
-            original_message.fixed_header.flags,
-            recovered_message.fixed_header.flags
-        );
-        assert_eq!(
-            original_message.fixed_header.remaining_length,
-            recovered_message.fixed_header.remaining_length
-        );
-        assert_eq!(
-            original_message.variable_header.topic_name,
-            recovered_message.variable_header.topic_name
-        );
-        assert_eq!(
-            original_message.variable_header.packet_identifier,
-            recovered_message.variable_header.packet_identifier
-        );
-        println!(
-            "original_message.payload.content: {:?}",
-            original_message.get_payload()
-        );
-        assert_eq!(
-            original_message.get_payload(),
-            recovered_message.get_payload()
-        );
+        assert_eq!(recovered_message, original_message);
     }
 
     #[test]

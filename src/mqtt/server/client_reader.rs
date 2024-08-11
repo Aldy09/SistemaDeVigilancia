@@ -1,3 +1,4 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::{connect_message::ConnectMessage, packet_type::PacketType};
 use crate::mqtt::mqtt_utils::{
     fixed_header::FixedHeader,
@@ -23,13 +24,19 @@ use std::{
 pub struct ClientReader {
     stream: StreamType,
     mqtt_server: MQTTServer,
+    logger: StringLogger,
 }
 
 impl ClientReader {
-    pub fn new(stream: StreamType, mqtt_server: MQTTServer) -> Result<ClientReader, Error> {
+    pub fn new(
+        stream: StreamType,
+        mqtt_server: MQTTServer,
+        logger: StringLogger,
+    ) -> Result<ClientReader, Error> {
         Ok(ClientReader {
             stream,
             mqtt_server,
+            logger,
         })
     }
 
@@ -37,7 +44,7 @@ impl ClientReader {
     pub fn handle_client(&mut self, stream: &mut StreamType) -> Result<(), Error> {
         let (fixed_header_buf, fixed_header) = self.read_and_validate_header(stream)?;
 
-        let authenticator = AuthenticateClient::new();
+        let authenticator = AuthenticateClient::new(self.logger.clone_ref());
         self.authenticate_and_handle_connection(
             &fixed_header,
             &fixed_header_buf,
@@ -84,6 +91,10 @@ impl ClientReader {
         println!("Error, el primer mensaje recibido DEBE ser un connect.");
         println!("   recibido: {:?}", fixed_header);
         println!("Cerrando la conexión.");
+        self.logger.log(format!(
+            "Error, primer msj recibido debe ser connect, se recibió: {:?}. Cerrando la conexión.",
+            fixed_header
+        ));
         shutdown(stream);
     }
 
@@ -110,17 +121,21 @@ impl ClientReader {
     // Hilo para obtener los bytes que llegan al servidor en el stream
     fn spawn_stream_handler(&self, client_id: String, tx_1: Sender<Packet>) -> JoinHandle<()> {
         let mut self_clone = self.clone_ref(); // []
+        let logger_c = self.logger.clone_ref();
         std::thread::spawn(move || {
             if let Ok(disconnect_reason) =
                 self_clone.read_packets_from_stream(client_id.as_str(), tx_1)
-            {
+                {
                 match disconnect_reason {
                     DisconnectReason::Voluntaria => {
-                        let _ = self_clone.server_handle_disconnect(client_id.as_str());
+                        if let Err(e) = self_clone.server_handle_disconnect(client_id.as_str()){
+                            logger_c.log(format!("Error al manejar disconnect: {:?}.", e));
+                        }
                     }
                     DisconnectReason::Involuntaria => {
-                        let _ = self_clone.server_handle_client_disconnection(client_id.as_str());
-                        // (aux: tengo sueño y no quiero manejar errores :), mañana vuelvo).
+                        if let Err(e) = self_clone.server_handle_client_disconnection(client_id.as_str()){
+                            logger_c.log(format!("Error al manejar desconexión involuntaria: {:?}.", e));
+                        }
                     }
                 }
             }
@@ -158,7 +173,8 @@ impl ClientReader {
         client_id: &str,
         tx_1: Sender<Packet>,
     ) -> Result<DisconnectReason, Error> {
-        println!("Mqtt cliente leyendo: esperando más mensajes.");
+        println!("Eperando más mensajes.");
+        self.logger.log("Esperando más mensajes.".to_string());
 
         loop {
             match get_fixed_header_from_stream(&mut self.stream) {
@@ -192,7 +208,8 @@ impl ClientReader {
     fn handle_disconnect(&mut self, _client_id: &str) -> Result<(), Error> {
         //self.mqtt_server.publish_users_will_message(client_id)?;
         //self.mqtt_server.remove_user(client_id);
-        println!("Mqtt cliente leyendo: recibo disconnect");
+        println!("Recibo disconnect");
+        self.logger.log("Recibo disconnect.".to_string());
         shutdown(&self.stream);
         Ok(())
     }
@@ -205,13 +222,17 @@ impl ClientReader {
         tx_1: &Sender<Packet>,
     ) -> Result<(), Error> {
         let packet = create_packet(&fixed_h, &mut self.stream, &fixed_h_buf, client_id)?;
-        tx_1.send(packet).unwrap();
+        if let Err(e) = tx_1.send(packet) {
+            self.logger.log(format!("Error al enviar por channel interno, en handle_packet: {:?}.", e));
+        }
         Ok(())
     }
 
     /// Desconexión involuntaria (ie se le fue internet).
     fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
         println!("Se desconectó el cliente: {:?}.", client_id);
+        self.logger
+            .log(format!("Se desconectó el cliente: {:?}.", client_id));
         //self.mqtt_server.set_user_as_temporally_disconnected(client_id)?;
         //self.mqtt_server.publish_users_will_message(client_id)?;
         Ok(())
@@ -221,6 +242,7 @@ impl ClientReader {
         ClientReader {
             stream: self.stream.try_clone().unwrap(),
             mqtt_server: self.mqtt_server.clone_ref(),
+            logger: self.logger.clone_ref(),
         }
     }
 }
