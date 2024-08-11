@@ -1,15 +1,8 @@
-
-use std::io::Error;
-use std::net::TcpListener;
-
-use std::result::Result;
-//use std::sync::mpsc::{Receiver, Sender};
-use std::thread::JoinHandle;
+use std::{io::Error, net::TcpListener, result::Result, thread::JoinHandle};
 
 use crate::mqtt::stream_type::StreamType;
 
-use super::client_reader::ClientReader;
-use super::mqtt_server::MQTTServer;
+use super::{client_reader::ClientReader, mqtt_server::MQTTServer};
 
 #[derive(Debug)]
 pub struct ClientListener {}
@@ -43,7 +36,7 @@ impl ClientListener {
         mqtt_server: MQTTServer,
     ) -> Result<JoinHandle<()>, Error> {
         println!("DEBUG: CREANDO NUEVO CLIENT READER");
-        let mut client_reader = ClientReader::new(stream.try_clone()?, mqtt_server)?; // Aux: sí, sí, ya sé que queremos SACAR los try_clone, es para que siga compilando mientras hay refactor.
+        let mut client_reader = ClientReader::new(stream.try_clone()?, mqtt_server)?; //
 
         // Hilo para cada cliente
         Ok(std::thread::spawn(move || {
@@ -51,7 +44,6 @@ impl ClientListener {
         }))
     }
 }
-
 
 impl Default for ClientListener {
     fn default() -> Self {

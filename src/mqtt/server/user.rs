@@ -1,10 +1,12 @@
-use std::{collections::HashMap, io::{Error, Write}, net::TcpStream};
+use std::{
+    collections::HashMap,
+    io::{Error, Write},
+};
 
-//use crate::mqtt::mqtt_utils::stream_type::StreamType;
-type StreamType = TcpStream;
 use crate::mqtt::{
     messages::{publish_flags::PublishFlags, publish_message::PublishMessage},
     mqtt_utils::will_message_utils::will_message::WillMessageData,
+    stream_type::StreamType,
 };
 
 use super::user_state::UserState;
@@ -113,7 +115,10 @@ impl User {
             let _ = self.stream.write(msg_bytes)?;
             self.stream.flush()?;
             return Ok(());
-        } 
-        Err(Error::new(std::io::ErrorKind::InvalidInput, "Error: User no conectado"))
+        }
+        Err(Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Error: User no conectado",
+        ))
     }
 }

@@ -5,23 +5,21 @@ use crate::mqtt::messages::{
     subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
 };
 
-use crate::mqtt::server::user::User;
-use std::net::{TcpListener, TcpStream};
-use std::thread;
-
-use crate::mqtt::server::user_state::UserState;
-use std::collections::hash_map::ValuesMut;
-use std::collections::{HashMap, VecDeque};
-use std::fs::File;
-
-use std::io::{Error, ErrorKind, Write};
-use std::sync::{Arc, Mutex};
-
-use super::incoming_connections::ClientListener;
+use crate::mqtt::server::{
+    incoming_connections::ClientListener, user::User, user_state::UserState,
+};
+use crate::mqtt::stream_type::StreamType;
+use std::{
+    collections::{hash_map::ValuesMut, HashMap, VecDeque},
+    fs::File,
+    io::{Error, ErrorKind, Write},
+    net::TcpListener,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 const TOPIC_MESSAGES_LEN: usize = 50;
 type ShareableUsers = Arc<Mutex<HashMap<String, User>>>;
-type StreamType = TcpStream;
 type TopicMessages = VecDeque<PublishMessage>; // Se guardaran todos los mensajes, y se enviaran en caso de reconexión o si un cliente no recibio ciertos mensajes.
 
 fn clean_file(file_path: &str) -> Result<(), Error> {
@@ -177,7 +175,7 @@ impl MQTTServer {
         if let Ok(mut users) = self.connected_users.lock() {
             println!("Username agregado a la lista del server: {:?}", username);
             users.insert(username_c, user); //inserta el usuario en el hashmap
-            // Aux: Ver Acá [].
+                                            // Aux: Ver Acá [].
         }
         Ok(())
     }

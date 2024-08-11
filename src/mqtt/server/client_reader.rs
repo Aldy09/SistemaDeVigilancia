@@ -1,24 +1,23 @@
-use crate::mqtt::messages::connect_message::ConnectMessage;
-//use crate::mqtt::mqtt_utils::fixed_header_version_2::FixedHeader as FixedHeaderV2;
-
-use crate::mqtt::messages::packet_type::PacketType;
-use crate::mqtt::mqtt_utils::utils::{
-    get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
-    get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown,
+use crate::mqtt::messages::{connect_message::ConnectMessage, packet_type::PacketType};
+use crate::mqtt::mqtt_utils::{
+    fixed_header::FixedHeader,
+    utils::{
+        get_fixed_header_from_stream, get_fixed_header_from_stream_for_conn,
+        get_whole_message_in_bytes_from_stream, is_disconnect_msg, shutdown,
+    },
 };
 
-use crate::mqtt::mqtt_utils::fixed_header::FixedHeader;
-use crate::mqtt::server::disconnect_reason::DisconnectReason;
-use crate::mqtt::server::packet::Packet;
+use crate::mqtt::server::{
+    client_authenticator::AuthenticateClient, disconnect_reason::DisconnectReason,
+    message_processor::MessageProcessor, mqtt_server::MQTTServer, packet::Packet,
+};
 use crate::mqtt::stream_type::StreamType;
 
-use std::io::Error;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread::JoinHandle;
-
-use super::client_authenticator::AuthenticateClient;
-use super::message_processor::MessageProcessor;
-use super::mqtt_server::MQTTServer;
+use std::{
+    io::Error,
+    sync::mpsc::{Receiver, Sender},
+    thread::JoinHandle,
+};
 
 #[derive(Debug)]
 pub struct ClientReader {
@@ -39,12 +38,19 @@ impl ClientReader {
         let (fixed_header_buf, fixed_header) = self.read_and_validate_header(stream)?;
 
         let authenticator = AuthenticateClient::new();
-        self.authenticate_and_handle_connection(&fixed_header, &fixed_header_buf, &authenticator, stream)
+        self.authenticate_and_handle_connection(
+            &fixed_header,
+            &fixed_header_buf,
+            &authenticator,
+            stream,
+        )
     }
 
-    fn read_and_validate_header(&mut self, stream: &mut StreamType) -> Result<([u8; 2], FixedHeader), Error> {
-        let (fixed_header_buf, fixed_header) =
-            get_fixed_header_from_stream_for_conn(stream)?;
+    fn read_and_validate_header(
+        &mut self,
+        stream: &mut StreamType,
+    ) -> Result<([u8; 2], FixedHeader), Error> {
+        let (fixed_header_buf, fixed_header) = get_fixed_header_from_stream_for_conn(stream)?;
         Ok((fixed_header_buf, fixed_header))
     }
 
@@ -53,25 +59,23 @@ impl ClientReader {
         fixed_header: &FixedHeader,
         fixed_header_buf: &[u8; 2],
         authenticator: &AuthenticateClient,
-        stream: &mut StreamType
+        stream: &mut StreamType,
     ) -> Result<(), Error> {
         match fixed_header.get_message_type() {
             PacketType::Connect => {
-                let connect_msg =
-                    get_connect_message(fixed_header, stream, fixed_header_buf)?;
+                let connect_msg = get_connect_message(fixed_header, stream, fixed_header_buf)?;
                 if authenticator.is_it_a_valid_connection(
                     &connect_msg,
                     stream,
                     &self.mqtt_server,
                 )? {
                     // Aux: ok en realidad acá arriba al terminar el authenticator se crea el User. [].
-                    // aux: o sea que a partir de acá (handle_packets) ya no debería usar el stream.
                     if let Some(client_id) = connect_msg.get_client_id() {
                         self.handle_packets(client_id)?;
                     }
                 }
             }
-            _ => self.handle_invalid_message(fixed_header, stream), // (aux: está ok xq no pasó por add_new_user).
+            _ => self.handle_invalid_message(fixed_header, stream),
         }
         Ok(())
     }
@@ -87,13 +91,13 @@ impl ClientReader {
     // Aux: dsp de lo de is_authentic, una vez que ya fue connect msg todo bien, viene esto:
     fn handle_packets(&mut self, client_id: &String) -> Result<(), Error> {
         let (tx_1, rx_1) = std::sync::mpsc::channel::<Packet>();
-        
+
         // Hilo para obtener los bytes que llegan al servidor en el stream
         let h1 = self.spawn_stream_handler(client_id.to_owned(), tx_1);
-        
+
         // Hilo para manejar la recepción y procesamiento de mensajes
         let h2 = self.spawn_message_processor(rx_1);
-        
+
         let handles = vec![h1, h2]; // Clippy lo quiere así.
 
         for h in handles {
@@ -102,32 +106,27 @@ impl ClientReader {
 
         Ok(())
     }
-    
+
     // Hilo para obtener los bytes que llegan al servidor en el stream
-    fn spawn_stream_handler(
-        &self,
-        client_id: String,
-        tx_1: Sender<Packet>,
-    ) -> JoinHandle<()> {
-        let mut self_clone = self.clone_ref();
+    fn spawn_stream_handler(&self, client_id: String, tx_1: Sender<Packet>) -> JoinHandle<()> {
+        let mut self_clone = self.clone_ref(); // []
         std::thread::spawn(move || {
-            if let Ok(disconnect_reason) = self_clone.read_packets_from_stream(client_id.as_str(), tx_1){
+            if let Ok(disconnect_reason) =
+                self_clone.read_packets_from_stream(client_id.as_str(), tx_1)
+            {
                 match disconnect_reason {
                     DisconnectReason::Voluntaria => {
                         let _ = self_clone.server_handle_disconnect(client_id.as_str());
-
-                    },
+                    }
                     DisconnectReason::Involuntaria => {
-                        let  _ = self_clone.server_handle_client_disconnection(client_id.as_str());
+                        let _ = self_clone.server_handle_client_disconnection(client_id.as_str());
                         // (aux: tengo sueño y no quiero manejar errores :), mañana vuelvo).
-                        
-                    },
+                    }
                 }
             }
-            
         })
     }
-    
+
     /// Desconexión voluntaria.
     fn server_handle_disconnect(&mut self, client_id: &str) -> Result<(), Error> {
         self.mqtt_server.publish_users_will_message(client_id)?;
@@ -137,7 +136,8 @@ impl ClientReader {
 
     /// Desconexión involuntaria (ie se le fue internet).
     fn server_handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
-        self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+        self.mqtt_server
+            .set_user_as_temporally_disconnected(client_id)?;
         self.mqtt_server.publish_users_will_message(client_id)?;
         Ok(())
     }
@@ -153,7 +153,11 @@ impl ClientReader {
     // Aux: iba a mover todas estas funciones de acá abajo (la del loop, los dos handles de abajo, y create packet)
     // aux: al User. Pero para eso debería ¿lockear el users durante toda la vida del thread? lo cual no tiene sentido.
     // Espera por paquetes que llegan desde su stream y los envia al hilo de arriba
-    pub fn read_packets_from_stream(&mut self, client_id: &str, tx_1: Sender<Packet>) -> Result<DisconnectReason, Error> {
+    pub fn read_packets_from_stream(
+        &mut self,
+        client_id: &str,
+        tx_1: Sender<Packet>,
+    ) -> Result<DisconnectReason, Error> {
         println!("Mqtt cliente leyendo: esperando más mensajes.");
 
         loop {
@@ -174,7 +178,7 @@ impl ClientReader {
                     self.handle_client_disconnection(client_id)?; // aux: llama a mqtt []
                     return Ok(DisconnectReason::Involuntaria);
                     // Aux hace:
-                    //aux: self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+                    //aux: self.mqtt_server.set_user_as_temporally_disconnected(client_id)?;
                     //aux: self.mqtt_server.publish_users_will_message(client_id)?;
                     //break;
                 }
@@ -183,7 +187,6 @@ impl ClientReader {
         }
         //Ok(())
     }
-
 
     /// Desconexión voluntaria.
     fn handle_disconnect(&mut self, _client_id: &str) -> Result<(), Error> {
@@ -209,7 +212,7 @@ impl ClientReader {
     /// Desconexión involuntaria (ie se le fue internet).
     fn handle_client_disconnection(&mut self, client_id: &str) -> Result<(), Error> {
         println!("Se desconectó el cliente: {:?}.", client_id);
-        //self.mqtt_server.set_user_as_temporally_disconnected(client_id)?; 
+        //self.mqtt_server.set_user_as_temporally_disconnected(client_id)?;
         //self.mqtt_server.publish_users_will_message(client_id)?;
         Ok(())
     }
@@ -228,7 +231,8 @@ fn create_packet(
     fixed_header_bytes: &[u8; 2],
     client_id: &str,
 ) -> Result<Packet, Error> {
-    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+    let msg_bytes =
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     let message_type = fixed_header.get_message_type();
     Ok(Packet::new(message_type, msg_bytes, client_id.to_string()))
 }
@@ -239,6 +243,7 @@ fn get_connect_message(
     stream: &mut StreamType,
     fixed_header_bytes: &[u8; 2],
 ) -> Result<ConnectMessage, Error> {
-    let msg_bytes = get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
+    let msg_bytes =
+        get_whole_message_in_bytes_from_stream(fixed_header, stream, fixed_header_bytes)?;
     Ok(ConnectMessage::from_bytes(&msg_bytes))
 }
