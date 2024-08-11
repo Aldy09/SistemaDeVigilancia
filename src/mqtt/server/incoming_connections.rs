@@ -1,13 +1,8 @@
+use std::{io::Error, net::TcpListener, result::Result, thread::JoinHandle};
 
-use std::io::Error;
-use std::net::{TcpListener, TcpStream};
+use crate::mqtt::stream_type::StreamType;
 
-use std::result::Result;
-//use std::sync::mpsc::{Receiver, Sender};
-use std::thread::JoinHandle;
-
-use super::client_reader::ClientReader;
-use super::mqtt_server::MQTTServer;
+use super::{client_reader::ClientReader, mqtt_server::MQTTServer};
 
 #[derive(Debug)]
 pub struct ClientListener {}
@@ -22,13 +17,13 @@ impl ClientListener {
         listener: TcpListener,
         mqtt_server: MQTTServer,
     ) -> Result<(), Error> {
-        let mut handlers = Vec::<JoinHandle<()>>::new();
+        let mut handles = Vec::<JoinHandle<()>>::new();
         println!("Servidor iniciado. Esperando conexiones.\n");
         for stream in listener.incoming() {
-            handlers.push(self.handle_stream(stream?, mqtt_server.clone_ref())?);
+            handles.push(self.handle_stream(stream?, mqtt_server.clone_ref())?);
         }
 
-        for h in handlers {
+        for h in handles {
             let _ = h.join();
         }
 
@@ -37,19 +32,18 @@ impl ClientListener {
 
     fn handle_stream(
         &mut self,
-        stream: TcpStream,
+        mut stream: StreamType,
         mqtt_server: MQTTServer,
     ) -> Result<JoinHandle<()>, Error> {
         println!("DEBUG: CREANDO NUEVO CLIENT READER");
-        let mut client_reader = ClientReader::new(stream, mqtt_server)?;
+        let mut client_reader = ClientReader::new(stream.try_clone()?, mqtt_server)?; //
 
         // Hilo para cada cliente
         Ok(std::thread::spawn(move || {
-            let _ = client_reader.handle_client();
+            let _ = client_reader.handle_client(&mut stream);
         }))
     }
 }
-
 
 impl Default for ClientListener {
     fn default() -> Self {

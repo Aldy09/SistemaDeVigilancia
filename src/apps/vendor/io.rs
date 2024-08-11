@@ -51,7 +51,7 @@ mod native {
             F::Output: Send,
         {
             let (quit_tx, mut quit_rx) = tokio::sync::mpsc::unbounded_channel();
-
+            
             let join_handle = std::thread::spawn(move || {
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()

@@ -84,6 +84,7 @@ pub fn go_to_my_position(ui: &Ui, map_memory: &mut MapMemory) {
             .show(ui.ctx(), |ui| {
                 //Posicion central del mapa
                 ui.label("map center: ");
+                // Muestro la latitud y longitud del centro del mapa
                 ui.label(format!("{:.04} {:.04}", position.lat(), position.lon()));
                 if ui
                     .button(RichText::new("go to the starting point").heading())

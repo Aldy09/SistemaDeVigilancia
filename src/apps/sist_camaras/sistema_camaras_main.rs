@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use std::io::Error;
 
 use rustx::logging::string_logger::StringLogger;
@@ -13,19 +11,6 @@ use rustx::{
     mqtt::client::mqtt_client::MQTTClient,
 };
 
-type Channels = (
-    mpsc::Sender<Vec<u8>>,
-    mpsc::Receiver<Vec<u8>>,
-    mpsc::Sender<bool>,
-    mpsc::Receiver<bool>,
-);
-
-fn create_channels() -> Channels {
-    let (cameras_tx, cameras_rx) = mpsc::channel::<Vec<u8>>();
-    let (exit_tx, exit_rx) = mpsc::channel::<bool>();
-    (cameras_tx, cameras_rx, exit_tx, exit_rx)
-}
-
 fn get_formatted_app_id() -> String {
     String::from("Sistema-Camaras")
 }
@@ -36,11 +21,10 @@ fn get_app_will_msg_content() -> WillContent {
 
 fn main() -> Result<(), Error> {
     let broker_addr = get_broker_address();
-    let (cameras_tx, cameras_rx, exit_tx, exit_rx) = create_channels();
     let cameras = create_cameras();
 
     // Se crean y configuran ambos extremos del string logger
-    let (logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
+    let (mut logger, handle_logger) = StringLogger::create_logger(get_formatted_app_id());
 
     let qos = 1; // []
     let client_id = get_formatted_app_id();
@@ -52,10 +36,9 @@ fn main() -> Result<(), Error> {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
-            let mut sistema_camaras = SistemaCamaras::new(cameras_tx, exit_tx, cameras, logger);
+            let mut sistema_camaras = SistemaCamaras::new(cameras, logger.clone_ref());
 
-            let mut handles =
-                sistema_camaras.spawn_threads(cameras_rx, exit_rx, publish_msg_rx, mqtt_client);
+            let mut handles = sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
 
             handles.push(handle);
             join_all_threads(handles);
@@ -63,10 +46,12 @@ fn main() -> Result<(), Error> {
         Err(e) => println!("Error al conectar al broker MQTT: {:?}", e),
     }
 
+    logger.stop_logging();
+
     // Se espera al hijo para el logger
     if handle_logger.join().is_err() {
         println!("Error al esperar al hijo para string logger writer.")
     }
-
+    
     Ok(())
 }

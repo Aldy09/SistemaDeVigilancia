@@ -1,7 +1,7 @@
 use crate::apps::{
     apps_mqtt_topics::AppsMqttTopics,
     common_clients::{exit_when_asked, there_are_no_more_publish_msgs},
-    incident_data::incident::{self, Incident},
+    incident_data::incident::Incident,
     sist_camaras::{
         ai_detection::ai_detector_manager::AIDetectorManager, camera::Camera,
         sistema_camaras_abm::ABMCameras, sistema_camaras_logic::CamerasLogic,
@@ -22,10 +22,10 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use super::types::channels_type::create_channels;
+
 #[derive(Debug)]
 pub struct SistemaCamaras {
-    cameras_tx: Sender<Vec<u8>>,
-    exit_tx: Sender<bool>,
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
     qos: u8,
     logger: StringLogger,
@@ -47,8 +47,6 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 impl SistemaCamaras {
     pub fn new(
-        cameras_tx: Sender<Vec<u8>>,
-        exit_tx: Sender<bool>,
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
         logger: StringLogger,
     ) -> Self {
@@ -57,8 +55,6 @@ impl SistemaCamaras {
             leer_qos_desde_archivo("src/apps/sist_camaras/qos_sistema_camaras.properties").unwrap();
 
         let sistema_camaras: SistemaCamaras = Self {
-            cameras_tx,
-            exit_tx,
             cameras,
             qos,
             logger,
@@ -69,39 +65,35 @@ impl SistemaCamaras {
 
     pub fn spawn_threads(
         &mut self,
-        cameras_rx: Receiver<Vec<u8>>,
-        exit_rx: Receiver<bool>,
         publish_msg_rx: Receiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
         let mut children: Vec<JoinHandle<()>> = vec![];
 
         let mqtt_sh = Arc::new(Mutex::new(mqtt_client));
+        let (cameras_tx, cameras_rx, exit_tx, exit_rx, exit_detector_tx, exit_detector_rx) = create_channels();
 
         // Recibe las cámaras que envía el abm y las publica por MQTT
         children.push(self.spawn_publish_to_topic_thread(mqtt_sh.clone(), cameras_rx));
 
         // ABM
-        children.push(self.spawn_abm_cameras_thread(
-            &self.cameras,
-            self.cameras_tx.clone(),
-            self.exit_tx.clone(),
-        ));
+        children.push(self.spawn_abm_cameras_thread(&self.cameras, cameras_tx.clone(), exit_tx));
 
-        // Exit
-        children.push(spawn_exit_when_asked_thread(mqtt_sh.clone(), exit_rx));
+        // Exit, cuando lo solicita el abm
+        children.push(spawn_exit_when_asked_thread(mqtt_sh.clone(), exit_rx, exit_detector_tx));
 
         // Incident detector (ai)
-        let (incident_tx, incident_rx) = mpsc::channel::<incident::Incident>();
-        children.push(self.spawn_ai_detector_thread(incident_tx)); // conexión con proveedor intelig artificial
-        children.push(self.spawn_recv_and_publish_inc_thread(incident_rx, mqtt_sh.clone())); // recibe inc y publica
+        let (inc_tx, inc_rx) = mpsc::channel::<Incident>();
+        children.push(self.spawn_ai_detector_thread(inc_tx, exit_detector_rx)); // conexión con proveedor intelig artificial
+        children.push(self.spawn_recv_and_publish_inc_thread(inc_rx, mqtt_sh.clone())); // recibe inc y publica
 
         // Suscribe y recibe mensajes por MQTT
-        children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx));
+        children.push(self.spawn_subscribe_to_topics_thread(mqtt_sh.clone(), publish_msg_rx, cameras_tx));
 
         children
     }
 
+    /// Hilo que publica las cámaras.
     fn spawn_publish_to_topic_thread(
         &self,
         mqtt_client_sh: Arc<Mutex<MQTTClient>>,
@@ -136,15 +128,11 @@ impl SistemaCamaras {
     }
 
     /// Pone en ejecución el módulo de detección automática de incidentes.
-    fn spawn_ai_detector_thread(&self, tx: Sender<Incident>) -> JoinHandle<()> {
+    fn spawn_ai_detector_thread(&self, tx: Sender<Incident>, exit_detector_rx: Receiver<()>) -> JoinHandle<()> {
         let cameras_ref = Arc::clone(&self.cameras);
         let logger_ai = self.logger.clone_ref();
         thread::spawn(move || {
-            let ai_inc_detector = AIDetectorManager::new(cameras_ref, tx, logger_ai.clone_ref());
-            if ai_inc_detector.run().is_err() {
-                println!("Error en detector, desde hilo para detector.");
-                logger_ai.log("Error en detector, desde hilo para detector.".to_string());
-            }
+            let _ai_inc_detector = AIDetectorManager::run(cameras_ref, tx, exit_detector_rx, logger_ai.clone_ref());
         })
     }
 
@@ -216,20 +204,19 @@ impl SistemaCamaras {
         }
     }
 
+    /// Hilo que se encarga de suscribirse a los topics y recibir los mensajes.
     fn spawn_subscribe_to_topics_thread(
         &mut self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         msg_rx: Receiver<PublishMessage>,
+        cameras_tx: Sender<Vec<u8>>,
     ) -> JoinHandle<()> {
         let mut cameras_cloned = self.cameras.clone();
         let mut self_clone = self.clone_ref();
         let topic = AppsMqttTopics::IncidentTopic.to_str();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(
-                mqtt_client.clone(),
-                vec![(String::from(topic), self_clone.qos)],
-            );
-            self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned);
+            self_clone.subscribe_to_topics(mqtt_client.clone(), vec![(String::from(topic), self_clone.qos)]);
+            self_clone.receive_messages_from_subscribed_topics(msg_rx, &mut cameras_cloned, cameras_tx);
         })
     }
 
@@ -238,10 +225,11 @@ impl SistemaCamaras {
         &mut self,
         rx: Receiver<PublishMessage>,
         cameras: &mut ShCamerasType,
+        cameras_tx: Sender<Vec<u8>>,
     ) {
         let mut logic = CamerasLogic::new(
             cameras.clone(),
-            self.cameras_tx.clone(),
+            cameras_tx.clone(),
             self.logger.clone_ref(),
         );
 
@@ -257,8 +245,6 @@ impl SistemaCamaras {
 
     fn clone_ref(&self) -> Self {
         Self {
-            cameras_tx: self.cameras_tx.clone(),
-            exit_tx: self.exit_tx.clone(),
             cameras: self.cameras.clone(),
             qos: self.qos,
             logger: self.logger.clone_ref(),
@@ -269,8 +255,15 @@ impl SistemaCamaras {
 fn spawn_exit_when_asked_thread(
     mqtt_client_sh: Arc<Mutex<MQTTClient>>,
     exit_rx: Receiver<bool>,
+    exit_detector_tx: Sender<()>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         exit_when_asked(mqtt_client_sh, exit_rx);
+        println!("Hilo exit recibe pedido de exit. Por propagarlo al detector...");
+        if let Err(e) = exit_detector_tx.send(()) {
+            //logger.log(format!("Error al enviar por exit_detector_tx: {:?}.", e)); // podría recibir un logger quizás
+            println!("Error al enviar por exit_detector_tx: {:?}.", e);
+        }
+        println!("Hilo exit: Listo.");
     })
 }

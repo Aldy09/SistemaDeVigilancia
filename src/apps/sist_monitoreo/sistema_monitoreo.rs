@@ -4,7 +4,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
@@ -22,7 +22,6 @@ use std::io::Error;
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     incidents: Arc<Mutex<Vec<Incident>>>,
-    egui_tx: CrossbeamSender<PublishMessage>,
     qos: u8,
     logger: StringLogger,
     topics: Vec<(String, u8)>,
@@ -46,7 +45,9 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 
 impl SistemaMonitoreo {
-    pub fn new(egui_tx: CrossbeamSender<PublishMessage>, logger: StringLogger) -> Self {
+    pub fn new(
+        logger: StringLogger,
+    ) -> Self {
         let qos =
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
                 .unwrap_or(0);
@@ -59,7 +60,6 @@ impl SistemaMonitoreo {
         ];
         let sistema_monitoreo: SistemaMonitoreo = Self {
             incidents: Arc::new(Mutex::new(Vec::new())), // []
-            egui_tx,
             qos,
             logger,
             topics,
@@ -71,7 +71,6 @@ impl SistemaMonitoreo {
     pub fn spawn_threads(
         &self,
         publish_message_rx: MpscReceiver<PublishMessage>,
-        egui_rx: CrossbeamReceiver<PublishMessage>,
         mqtt_client: MQTTClient,
     ) -> Vec<JoinHandle<()>> {
         let (incident_tx, incident_rx) = mpsc::channel::<Incident>();
@@ -79,20 +78,20 @@ impl SistemaMonitoreo {
 
         let mut children: Vec<JoinHandle<()>> = vec![];
         let mqtt_client_sh = Arc::new(Mutex::new(mqtt_client));
-        let mqtt_client_incident_sh_clone = Arc::clone(&mqtt_client_sh.clone());
+        let (egui_tx, egui_rx) = unbounded::<PublishMessage>();
 
+        // Exit, cuando ui lo solicite
+        children.push(self.spawn_exit_thread(mqtt_client_sh.clone(), exit_rx));
+
+        // Recibe inc de la ui y hace publish
+        children.push(self.spawn_publish_incs_thread(mqtt_client_sh.clone(), incident_rx));
+
+        // Recibe msgs por MQTT y los envía para mostrarse en la ui
         children.push(
-            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx),
+            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx, egui_tx),
         );
-
-        // Thread para hacer publish de un incidente que llega atraves de la UI
-        children.push(self.spawn_publish_incidents_in_topic_thread(
-            mqtt_client_incident_sh_clone.clone(),
-            incident_rx,
-        ));
-
-        children.push(self.spawn_exit_thread(mqtt_client_incident_sh_clone.clone(), exit_rx));
-
+        
+        // UI
         self.spawn_ui_thread(incident_tx, egui_rx, exit_tx);
 
         children
@@ -107,22 +106,31 @@ impl SistemaMonitoreo {
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
         exit_tx: MpscSender<bool>,
     ) {
-        let _ = eframe::run_native(
-            "Sistema Monitoreo",
-            Default::default(),
-            Box::new(|cc| {
-                Box::new(UISistemaMonitoreo::new(
-                    cc.egui_ctx.clone(),
-                    incident_tx,
-                    publish_message_rx,
-                    exit_tx,
-                ))
-            }),
-        );
+    // -> JoinHandle<()> {
+
+        // let self_clone = self.clone_ref();
+        // thread::spawn(move || {
+            if let Err(e) = eframe::run_native(
+                "Sistema Monitoreo",
+                Default::default(),
+                Box::new(|cc| {
+                    Box::new(UISistemaMonitoreo::new(
+                        cc.egui_ctx.clone(),
+                        incident_tx,
+                        publish_message_rx,
+                        exit_tx,
+                    ))
+                }),
+            ){
+                self.logger.log(format!("Error en hilo para UI: {:?}.", e));
+            }
+        // })
+        println!("Saliendo de ui.");
+        //drop(exit_tx);
     }
 
     /// Recibe incidente desde la UI, y lo publica por MQTT.
-    fn spawn_publish_incidents_in_topic_thread(
+    fn spawn_publish_incs_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         rx: MpscReceiver<Incident>,
@@ -141,7 +149,6 @@ impl SistemaMonitoreo {
     fn clone_ref(&self) -> Self {
         Self {
             incidents: self.incidents.clone(),
-            egui_tx: self.egui_tx.clone(),
             qos: self.qos,
             logger: self.logger.clone_ref(),
             topics: self.topics.clone(),
@@ -149,22 +156,24 @@ impl SistemaMonitoreo {
     }
 
     /// Se suscribe a los topics y queda recibiendo PublishMessages de esos topics.
+    /// Delega el procesamiento de cada mensaje recibido por MQTT a otra parte del Sistema Cámaras, enviándolo por un channel.
     fn spawn_subscribe_to_topics_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
+        egui_tx: CrossbeamSender<PublishMessage>,
     ) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(mqtt_client, mqtt_rx);
+            self_clone.subscribe_to_topics(mqtt_client);
+            self_clone.receive_messages_from_subscribed_topics(mqtt_rx, egui_tx);
         })
     }
 
-    /// Se suscribe a los topics y queda recibiendo PublishMessages de esos topics.
+    /// Se suscribe a los topics.
     fn subscribe_to_topics(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
-        mqtt_rx: MpscReceiver<PublishMessage>,
     ) {
 
         let _ = self.subscribe_to_topics_vec(&mqtt_client);
@@ -190,27 +199,28 @@ impl SistemaMonitoreo {
         }
     }
 
-    // Recibe mensajes de los topics a los que se ha suscrito
-    fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>) {
+    /// Envía a otra parte del sistema de monitoreo, para ser procesado, cada mensaje recibido por MQTT.
+    fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>, egui_tx: CrossbeamSender<PublishMessage>,) {
         for publish_msg in mqtt_rx {
             self.logger.log(format!(
                 "Sistema-Monitoreo: recibió mensaje: {:?}",
                 publish_msg
             ));
-            self.send_publish_message_to_ui(publish_msg)
+            self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
         }
 
         there_are_no_more_publish_msgs(&self.logger);
     }
 
-    fn send_publish_message_to_ui(&self, msg: PublishMessage) {
-        let res_send = self.egui_tx.send(msg);
+    fn send_publish_message_to_ui(&self, msg: PublishMessage, egui_tx: CrossbeamSender<PublishMessage>,) {
+        let res_send = egui_tx.send(msg);
         match res_send {
             Ok(_) => println!("Enviado mensaje a la UI"),
             Err(e) => println!("Error al enviar mensaje a la UI: {:?}", e),
         }
     }
 
+    /// Hilo para salir desde la UI
     fn spawn_exit_thread(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,

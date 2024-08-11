@@ -2,13 +2,11 @@
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::error::Error;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use notify::{self, Event, EventKind, RecursiveMode, Watcher};
-use std::sync::mpsc::{Receiver, Sender};
-
-
+use std::sync::mpsc::Receiver;
+use std::{fs, thread};
+use std::io::ErrorKind;
+use std::path::Path;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
 use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
@@ -25,34 +23,45 @@ const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.t
 /// de alguna cámara.
 pub struct AIDetectorManager {
     cameras: ShCamerasType,
-    tx: mpsc::Sender<Incident>,
+    inc_tx: mpsc::Sender<Incident>,
+    exit_requested: Arc<Mutex<bool>>,
     logger: StringLogger,
 }
 
 impl AIDetectorManager {
-    pub fn new(cameras: ShCamerasType, tx: mpsc::Sender<Incident>, logger: StringLogger) -> Self {
-        Self {
+    /// Crea y ejecuta lo necesario para la detección de incidentes de manera automática haciendo uso de inteligencia artificial,
+    pub fn run(cameras: ShCamerasType, inc_tx: mpsc::Sender<Incident>, exit_rx: mpsc::Receiver<()>, logger: StringLogger) -> Self {
+        
+        let er = Arc::new(Mutex::new(false));
+        let detector_manager = Self {
             cameras,
-            tx,
+            inc_tx,
+            exit_requested: er.clone(),
             logger,
+        };
+
+        // Lanza hilo que pondrá en true la `er` si se solicita salir desde abm
+        let handle = thread::spawn(move || {
+            modify_if_exit_requested(er, exit_rx);
+        });
+
+        // Se ejecuta el detector
+        if let Err(e) = detector_manager.run_internal() {
+            detector_manager.logger.log(format!("Error en ejecución de detector: {:?}.", e));
         }
+        
+        // Espera al hilo lanzado
+        if let Err(e) = handle.join(){
+            detector_manager.logger.log(format!("Error al joinear hilo de exit de detector: {:?}.", e));
+        }
+
+        detector_manager
     }
 
     /// Crea y monitorea los subdirectorios correspondientes a las cámaras, cuando una imagen se crea en alguno de ellos,
     /// se lanza el procedimiento para analizar mediante proveedor de servicio de inteligencia artificial si la misma
     /// contiene o no un incidente, y se lo envía internamente a Sistema Cámaras para que sea publicado por MQTT.
-    pub fn run(&self) -> Result<(), Box<dyn Error>> {
-        let properties = self.initialize_detector_properties()?;
-        let path = self.create_and_watch_directories(&properties)?;
-        let (tx_fs, rx_fs) = mpsc::channel();
-        self.start_watching_directories(&path, tx_fs)?;
-        let ai_detector = self.initialize_ai_detector(&properties);
-        let pool = self.create_thread_pool()?;
-        self.process_filesystem_events(rx_fs, &ai_detector, &pool)?;
-        Ok(())
-    }
-
-    fn initialize_detector_properties(&self) -> Result<DetectorProperties, Box<dyn Error>> {
+    fn run_internal(&self) -> Result<(), Box<dyn Error>> {
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
         Ok(properties)
     }
@@ -78,48 +87,35 @@ impl AIDetectorManager {
         watcher.watch(path, RecursiveMode::Recursive)?;
         println!("Detector: Monitoreando subdirs.");
         self.logger.log("Detector: Monitoreando subdirs".to_string());
-        Ok(())
-    }
+    
+        // Se inicializa el detector
+        let logger_ai = self.logger.clone_ref();
+        let ai_detector = AutomaticIncidentDetector::new(self.cameras.clone(), self.inc_tx.clone(), properties, logger_ai);
+    
+        // Crear un pool de threads con el número de threads deseado
+        let pool = ThreadPoolBuilder::new().num_threads(6).build()?;
 
-    fn process_filesystem_events(&self, rx_fs: Receiver<notify::Result<Event>>, ai_detector: &AutomaticIncidentDetector, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
         for event_res in rx_fs {
+            // Sale, si lo solicitaron desde abm
+            if self.exit_requested() {
+                break;
+            }
+
+            // Procesa el evento, interesa el Create, que es cuando se crea una imagen en algún subdirectorio
             let event = event_res?;
             if let EventKind::Create(_) = event.kind {
                 self.logger.log("Detector: event ok: create".to_string());
                 if let Some(path) = event.paths.first() {
-                    if path.is_file() && self.is_jpeg_or_jpg(path) {
-                        self.process_image_file(path, ai_detector, pool)?;
+                    if let Err(e) = self.launch_detection_for_image(&ai_detector, &pool, path){
+                        println!("Detector: Error al procesar la imagen: {:?}, {:?}", path, e);
+                        self.logger.log(format!("Detector: Error al procesar la imagen: {:?}, {:?}", path, e));
                     }
                 }
+                
             }
         }
+        
         Ok(())
-    }
-
-    fn process_image_file(&self, image_path: &Path, ai_detector: &AutomaticIncidentDetector, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
-        let mut aidetector = ai_detector.clone_refs();
-        let image_path = image_path.to_path_buf();
-        pool.spawn(move || {
-            match read_image(&image_path) {
-                Ok(image) => {
-                    if let Some(cam_id) = extract_camera_id(&image_path) {
-                        if aidetector.process_image(image, cam_id).is_err() {
-                            println!("Detector: Error en process_image.");
-                        }
-                    }
-                },
-                Err(e) => println!("Detector: Error al leer la imagen: {:?}, {:?}", image_path, e),
-            };
-        });
-        Ok(())
-    }
-
-    fn is_jpeg_or_jpg(&self, path: &Path) -> bool {
-        if let Some(extension) = path.extension() {
-            extension == "jpg" || extension == "jpeg"
-        } else {
-            false
-        }
     }
     
     /// Crea, si no existía, la estructura de directorios necesaria para las imágenes de las cámaras.
@@ -131,10 +127,12 @@ impl AIDetectorManager {
     
     /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
     fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {    
-        // Si no existe, lo crea
-        if !base_dir.exists() {
-            fs::create_dir(base_dir)?;
+        // Si ya existe, lo borra y a todo su contenido, y
+        if base_dir.exists() {
+            fs::remove_dir_all(base_dir)?;
         }
+        // lo crea
+        fs::create_dir(base_dir)?;
     
         Ok(())
     }
@@ -169,11 +167,73 @@ impl AIDetectorManager {
         Ok(())
     }
 
+    /// Envía el pedido a la threadpool para detectar incidente en la imagen.
+    fn launch_detection_for_image(&self, ai_detector: &AutomaticIncidentDetector, pool: &rayon::ThreadPool, path: &Path) -> Result<(), Box<dyn Error>>{
+            if path.is_file() {
+                let image_path = path.to_owned();
+                // Validar la extensión del archivo
+                is_valid_extension(&image_path)?;
+                
+                // Lanza un hilo por cada imagen a procesar []
+                let mut aidetector = ai_detector.clone_refs();
+                let logger_c = self.logger.clone_ref();
+                pool.spawn(move || {
+                    if let Err(e) = read_and_process_image(&mut aidetector, &image_path){
+                        println!("Detector: Error en read_and_process_image: {:?}.", e);
+                        logger_c.log(format!("Detector: Error en read_and_process_image: {:?}.", e));
+                    }
+                });
 
+            }
+        Ok(())        
+    }
+    
     
 
+    /// Devuelve si se solicitó salir.
+    fn exit_requested(&self) -> bool {
+        if let Ok(var) = self.exit_requested.lock(){
+            return *var 
+        }
+        false
+    }
+    
 }
 
+/// Si recibe por el `rx` que se solicitó salir, lo deja asentado en la variable compartida `exit_requested`,
+/// para que en la próxima vuelta del for el detector manager se entere y finalice la ejecución.
+fn modify_if_exit_requested(exit_requested: Arc<Mutex<bool>>, rx: Receiver<()>) {
+    if rx.recv().is_ok() {
+        if let Ok(mut var) = exit_requested.lock(){
+            *var = true;
+        }
+    }
+}
+
+/// Lee la imagen del archivo path proporcionado y llama a procesarla.
+fn read_and_process_image(aidetector: &mut AutomaticIncidentDetector, image_path: &Path) -> Result<(), Box<dyn Error>> {
+    let img = read_image(image_path)?;
+    if let Some(cam_id) = extract_camera_id(image_path) {
+        aidetector.process_image(img, cam_id)?;
+    };
+    Ok(())
+}
+
+/// Checkea si la extensión de la imagen es válida.
+fn is_valid_extension(image_path: &Path) -> Result<(), Box<dyn Error>> {
+    if let Some(extension) = image_path.extension() {
+        // Si es jpg o jpeg, procesar
+        if extension == "jpg" || extension == "jpeg" {
+            return Ok(());
+        }
+    }
+    Err(Box::new(std::io::Error::new(
+        ErrorKind::Other,
+        "Extensión inválida.",
+    )))
+}
+
+/// Lee la imagen del `image_path`.
 fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = std::fs::File::open(image_path)?;
     let mut buffer = Vec::new();

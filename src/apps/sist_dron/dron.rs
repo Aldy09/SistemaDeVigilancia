@@ -83,6 +83,7 @@ impl Dron {
         Ok(children)
     }
 
+    /// Hilo que se encarga de actualizar la batería del dron.
     fn spawn_for_update_battery(&self, ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {

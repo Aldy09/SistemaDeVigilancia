@@ -52,6 +52,12 @@ impl MessageProcessor {
             }
         }
 
+        /* // Sin threadpool era:
+        for packet in rx_1 {
+            self.process_packet(packet); // Ejecuta en el hilo actual
+        }
+         */
+
         Ok(())
     }
 
@@ -118,29 +124,22 @@ impl MessageProcessor {
         client_id: &str,
         publish_msg: &PublishMessage,
     ) -> Result<(), Error> {
-        if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
-            if let Some(user) = connected_users_locked.get_mut(client_id) {
-                self.mqtt_server
-                    .send_puback(publish_msg, &mut user.get_stream()?)?;
-            }
-        }
+        self.mqtt_server.send_puback_to(client_id, publish_msg)?;
+
         Ok(())
     }
 
     fn send_suback_to(
         &self,
         client_id: &str,
-        return_codes_res: Result<Vec<SubscribeReturnCode>, Error>, packet_id: u16,
+        return_codes_res: Result<Vec<SubscribeReturnCode>, Error>,
+        packet_id: u16,
     ) -> Result<(), Error> {
-        if let Ok(mut connected_users_locked) = self.mqtt_server.get_connected_users().lock() {
-            if let Some(user) = connected_users_locked.get_mut(client_id) {
-                self.mqtt_server
-                    .send_suback(&return_codes_res, &mut user.get_stream()?, packet_id)?;
-            }
-        }
+        self.mqtt_server
+            .send_suback_to(client_id, &return_codes_res, packet_id)?;
         Ok(())
     }
-
+    // []
     fn clone_ref(&self) -> Self {
         MessageProcessor {
             mqtt_server: self.mqtt_server.clone_ref(),
