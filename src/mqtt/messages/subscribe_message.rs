@@ -139,6 +139,27 @@ impl SubscribeMessage {
     }
 }
 
+use crate::mqtt::messages::message::Message;
+use super::packet_type::PacketType;
+//Trait Message
+impl Message for SubscribeMessage {
+    fn get_packet_id(&self) -> Option<u16> {
+        Some(self.get_packet_id())
+    }
+    
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
+    
+    fn get_type(&self) -> PacketType {
+        PacketType::Subscribe
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::mqtt::messages::subscribe_message::SubscribeMessage;

@@ -197,6 +197,31 @@ impl<'a> PublishMessage {
         decrypt_3des(&self.payload.content)
         //aux: self.payload.content.to_vec()
     }
+
+    pub fn get_qos(&self) -> u8 {
+        self.fixed_header.flags.get_qos()
+    }
+}
+
+use crate::mqtt::messages::message::Message;
+use super::packet_type::PacketType;
+//Trait Message
+impl Message for PublishMessage {
+    fn get_packet_id(&self) -> Option<u16> {
+        self.get_packet_id()
+    }
+    
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
+    
+    fn get_type(&self) -> PacketType {
+        PacketType::Publish 
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 fn encrypt_3des(data: &[u8]) -> Vec<u8> {

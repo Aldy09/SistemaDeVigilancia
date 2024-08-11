@@ -54,6 +54,11 @@ impl PublishFlags {
 
         Ok(PublishFlags { msg_type, dup, qos, retain })
     }
+    
+    /// Devuelve el qos.
+    pub fn get_qos(&self) -> u8 {
+        self.qos
+    }
 }
 
 #[cfg(test)]

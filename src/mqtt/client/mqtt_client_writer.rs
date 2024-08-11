@@ -102,8 +102,7 @@ impl MQTTClientWriter {
     // Función relacionada con el Retransmitter:
     /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
     /// enviarse por el stream a server.
-    pub fn resend_msg(&mut self, msg: PublishMessage) -> Result<(), Error> {
-        let bytes_msg = msg.to_bytes();
+    pub fn resend_msg(&mut self, bytes_msg: Vec<u8>) -> Result<(), Error> {
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
         Ok(())
     }

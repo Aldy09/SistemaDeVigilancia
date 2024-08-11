@@ -1,7 +1,5 @@
 use std::{io::{Error, ErrorKind}, sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender}, time::Duration};
 
-use crate::mqtt::messages::publish_message::PublishMessage;
-
 use super::ack_message::ACKMessage;
 
 /// Parte interna de `MQTTClient` encargada de manejar los ack y las retransmisiones.
@@ -24,11 +22,10 @@ impl MQTTClientRetransmitter {
     /// En ese caso devuelve ok.
     /// Si eso no ocurre, debe retransmitir el mensaje original (el msg cuyo ack está esperando)
     /// hasta que llegue su ack o bien se llegue a una cantidad máxima de intentos definida como constante.
-    pub fn wait_for_ack(&self, msg: &PublishMessage) -> Result<bool, Error> {
+    pub fn wait_for_ack(&self, packet_id: Option<u16>) -> Result<bool, Error> {
         // Extrae el packet_id
-        let packet_id = msg.get_packet_id();
         if let Some(packet_id) = packet_id {
-            self.start_waiting_and_check_for_ack(packet_id, msg) // Aux: #perdón no se me ocurren nombres que no sean todos iguales xd [].
+            self.start_waiting_and_check_for_ack(packet_id) // Aux: #perdón no se me ocurren nombres que no sean todos iguales xd [].
         } else {
                 Err(Error::new(
                 ErrorKind::Other,
@@ -40,11 +37,11 @@ impl MQTTClientRetransmitter {
     
     // Aux: en general, quiero, primero al leer haberme fijado el tiempo, y acá si pasó el tiempo y no recibí el ack
     // quiero volver a enviar el "msg" (obs: necesito el stream, y no quise hacerle clone otra vez entonces
-    // devuelvo Ok(algo) para que signifique "sí, hay que enviarlo de nuevo" para que desde afuera llamen al writer
-    // o devuelvo Ok(None) como diciendo "listo, me llegó bien el ack y no hay que hacer nada más".
+    // devuelvo Ok(false) para que signifique "sí, hay que enviarlo de nuevo" para que desde afuera llamen al writer
+    // o devuelvo Ok(true) como diciendo "listo, me llegó bien el ack y no hay que hacer nada más".
     // (Podría cambiarse a devolver Result<bool, Error> capaz).
     // Aux: Cambiando: devuelve true si recibió el ack y false si no.
-    fn start_waiting_and_check_for_ack(&self, packet_id: u16, _msg: &PublishMessage) -> Result<bool, Error> {
+    fn start_waiting_and_check_for_ack(&self, packet_id: u16) -> Result<bool, Error> {
         // Comentar una y descomentar la otra, para probar
         // Versión lo que había, sin esperar un tiempo
         //self.aux_version_vieja(packet_id)
