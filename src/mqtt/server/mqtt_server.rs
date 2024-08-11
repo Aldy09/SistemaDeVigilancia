@@ -1,3 +1,4 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::connect_message::ConnectMessage;
 use crate::mqtt::messages::{
     disconnect_message::DisconnectMessage, puback_message::PubAckMessage,
@@ -33,32 +34,42 @@ pub struct MQTTServer {
     connected_users: ShareableUsers,
     available_packet_id: u16,                                      //
     messages_by_topic: Arc<Mutex<HashMap<String, TopicMessages>>>, // String = topic
+    logger: StringLogger,
 }
 
 impl MQTTServer {
-    pub fn new(ip: String, port: u16) -> Result<Self, Error> {
+    pub fn new(logger: StringLogger) -> Self {
         let file_path = "log.txt";
         if let Err(e) = clean_file(file_path) {
             println!("Error al limpiar el archivo: {:?}", e);
         }
 
-        let mqtt_server = Self {
+        Self {
             connected_users: Arc::new(Mutex::new(HashMap::new())),
             available_packet_id: 0,
             messages_by_topic: Arc::new(Mutex::new(HashMap::new())),
-        };
+            logger,
+        }
+    }
+
+    pub fn run(&self, ip: String, port: u16) -> Result<(), Error> {
 
         let listener = create_server(ip, port)?;
         let mut incoming_connections = ClientListener::new();
-        let self_clone = mqtt_server.clone_ref();
+        let self_clone = self.clone_ref();
+        let logger_c = self.logger.clone_ref();
         // Hilo para manejar las conexiones entrantes
         let thread_incoming = thread::spawn(move || {
-            let _ = incoming_connections.handle_incoming_connections(listener, self_clone);
+            if let Err(e) = incoming_connections.handle_incoming_connections(listener, self_clone) {
+                logger_c.log(format!("Error en handle_incoming_connections, en run: {:?}.", e));
+            }
         });
 
-        thread_incoming.join().unwrap();
+        if let Err(e) = thread_incoming.join(){
+            self.logger.log(format!("Error al esperar al hilo incoming, en run: {:?}.", e));
+        }
 
-        Ok(mqtt_server)
+        Ok(())
     }
 
     /// Agrega un PublishMessage a la estructura de mensajes de su topic.
@@ -189,6 +200,7 @@ impl MQTTServer {
             connected_users: self.connected_users.clone(),
             available_packet_id: self.available_packet_id,
             messages_by_topic: self.messages_by_topic.clone(),
+            logger: self.logger.clone_ref(),
         }
     }
 
