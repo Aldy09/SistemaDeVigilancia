@@ -6,7 +6,6 @@ pub struct DisconnectMessage {
 }
 
 impl DisconnectMessage {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> DisconnectMessage {
         let fixed_header = FixedHeader {
             message_type: 0b1110,
@@ -29,6 +28,12 @@ impl DisconnectMessage {
         };
 
         DisconnectMessage { fixed_header }
+    }
+}
+
+impl Default for DisconnectMessage {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,5 +1,4 @@
 #[derive(Debug)]
-#[allow(dead_code)]
 #[derive(PartialEq)]
 pub struct ConnectFlags {
     pub username_flag: bool, // bit 7
@@ -11,7 +10,6 @@ pub struct ConnectFlags {
     pub reserved: bool,      // bit 0
 }
 
-#[allow(dead_code)]
 impl ConnectFlags {
     pub fn new(
         clean_session: bool,
@@ -33,34 +31,6 @@ impl ConnectFlags {
         }
     }
 
-    fn to_flags_byte(&self) -> u8 {
-        let mut flags_byte: u8 = 0;
-
-        if self.clean_session {
-            flags_byte |= 0b0000_0010;
-        }
-
-        if self.will_flag {
-            flags_byte |= 0b0000_0100;
-            flags_byte |= (self.will_qos << 3) & 0b0001_1000;
-            if self.will_retain {
-                flags_byte |= 0b0010_0000;
-            }
-        }
-
-        if self.username_flag {
-            flags_byte |= 0b1000_0000;
-        }
-
-        if self.password_flag {
-            flags_byte |= 0b0100_0000;
-        }
-
-        flags_byte
-    }
-}
-
-impl ConnectFlags {
     pub fn to_byte(&self) -> u8 {
         let mut byte = 0;
         if self.username_flag {

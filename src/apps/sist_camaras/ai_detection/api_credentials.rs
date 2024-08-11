@@ -1,7 +1,6 @@
 use config::{Config, File};
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct ApiCredentials {
     prediction_key: String,
     endpoint: String,

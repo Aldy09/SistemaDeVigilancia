@@ -1,7 +1,6 @@
 use std::io::{Error, ErrorKind};
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum ConnectReturnCode {
     ConnectionAccepted = 0x00,
     ProtocolError = 0x01,

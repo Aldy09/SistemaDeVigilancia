@@ -43,7 +43,6 @@ pub struct Dron {
     qos: u8,
 }
 
-#[allow(dead_code)]
 impl Dron {
     /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8, lat: f64, lon: f64, logger: StringLogger) -> Result<Self, Error> {
