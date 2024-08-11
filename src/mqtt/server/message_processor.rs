@@ -79,14 +79,15 @@ impl MessageProcessor {
                 display_debug_publish_msg(&publish_msg);
                 let puback_res = self.send_puback_to(client_id, &publish_msg);
                 if let Err(e) = puback_res {
-                    println!("   ERROR: {:?}", e);
-                    return;
+                    println!("   Error en handle_publish: {:?}", e);
                 }
-                self.mqtt_server
-                    .handle_publish_message(&publish_msg)
-                    .unwrap();
+                if let Err(e) = self.mqtt_server.handle_publish_message(&publish_msg){
+                    // No quiero retornar si falló alguna operación hacia Un user, solamente logguearlo.
+                    println!("   Error en handle_publish: {:?}", e);
+                };                
+
             }
-            Err(e) => println!("   ERROR: {:?}", e),
+            Err(e) => println!("   Error en handle_publish: {:?}", e),
         }
     }
 

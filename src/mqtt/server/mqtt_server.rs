@@ -141,7 +141,7 @@ impl MQTTServer {
         Ok(())
     }
 
-    /// Analiza si el hashmap de PublishMessages del topic recibido por parámetro contiene o no mensajes que el user 'user' no haya
+    /// Analiza si la estructura de PublishMessages del topic recibida por parámetro contiene o no mensajes que el user 'user' no haya
     /// recibido. Si sí los contiene, entonces se los envía, actualizando el last_id del 'user' para ese 'topic'.
     fn send_unreceived_messages(
         &self,
@@ -149,11 +149,9 @@ impl MQTTServer {
         topic: &String,
         topic_messages: &VecDeque<PublishMessage>,
     ) -> Result<(), Error> {
-        let diff = check_subscription_and_calculate_diff(user, topic, topic_messages)?;
-        if diff < 0 {
-            return Ok(()); // Si no está suscripto, no hay mensajes por enviar
-        }
-        send_unreceived_messages_to_user(user, topic, topic_messages, diff as u32)?;
+        if let Some(diff) = check_subscription_and_calculate_diff(user, topic, topic_messages)?{
+            send_unreceived_messages_to_user(user, topic, topic_messages, diff)?;
+        };
 
         Ok(())
     }
@@ -518,12 +516,16 @@ fn create_server(ip: String, port: u16) -> Result<TcpListener, Error> {
     Ok(listener)
 }
 
-// Verifica la suscripción y calcula la diferencia de mensajes
+/// Verifica si el `user` está suscripto al `topic`. En caso afirmativo, devuelve en un Option la diferencia
+/// entre el último mensaje que posee el server para ese topic y el último que el user recibió correctamente.
+/// Caso contrario devuelve Ok(None).
+/// Si la diferencia a calcular da negativa, devuelve un error, ya que ha ocurrido un error grave (de concurrencia)
+/// para llegar a dicha situación.
 fn check_subscription_and_calculate_diff(
     user: &User,
     topic: &String,
     topic_messages: &VecDeque<PublishMessage>,
-) -> Result<i32, Error> {
+) -> Result<Option<u32>, Error> {
     let user_subscribed_topics = user.get_topics();
     if user_subscribed_topics.contains(topic) {
         let topic_server_last_id = topic_messages.len() as u32;
@@ -536,13 +538,14 @@ fn check_subscription_and_calculate_diff(
             ));
         }
 
-        Ok((topic_server_last_id - user_last_id) as i32)
+        Ok(Some(topic_server_last_id - user_last_id))
     } else {
-        Ok(-1) // Si no está suscrito, no hay mensajes por enviar
+        Ok(None) // Si no está suscrito, no hay mensajes por enviar
     }
 }
 
-// Envia los mensajes no recibidos al usuario
+/// Envia al usuario `user` los mensajes del topic `topic` no recibidos.
+/// 
 fn send_unreceived_messages_to_user(
     user: &mut User,
     topic: &String,
@@ -550,10 +553,10 @@ fn send_unreceived_messages_to_user(
     diff: u32,
 ) -> Result<(), Error> {
     for _ in 0..diff {
-        let next_message_index = user.get_last_id_by_topic(topic) as usize;
-        if let Some(msg) = topic_messages.get(next_message_index) {
+        let next_message_index = user.get_last_id_by_topic(topic);
+        if let Some(msg) = topic_messages.get(next_message_index as usize) {
             user.write_message(&msg.to_bytes())?;
-            user.update_last_id_by_topic(topic, (next_message_index + 1) as u32);
+            user.update_last_id_by_topic(topic, next_message_index + 1);
         } else {
             println!("ERROR NO SE ENCUENTRA EL TOPIC_MSGS.GET(TOPIC) A ENVIAR!!!");
         }
