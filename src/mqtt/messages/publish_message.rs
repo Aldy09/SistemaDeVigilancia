@@ -22,7 +22,7 @@ use crate::mqtt::messages::publish_flags::PublishFlags;
 use crate::mqtt::messages::publish_payload::Payload;
 use crate::mqtt::messages::publish_variable_header::VariableHeader;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PublishMessage {
     fixed_header: FixedHeader,
     variable_header: VariableHeader,
@@ -111,8 +111,7 @@ impl<'a> PublishMessage {
         let mut bytes = Vec::new();
 
         // Fixed Header
-        let mut first_byte: u8 = self.fixed_header.message_type << 4; // message_type se coloca en los bits 4 a 7
-        first_byte |= self.fixed_header.flags.to_flags_byte(); // flags se coloca en los bits 0 a 3
+        let first_byte = self.fixed_header.flags.to_flags_byte(); // flags contiene los flags y tmb incluye el tipo.
         bytes.push(first_byte);
 
         // Variable Header
@@ -151,8 +150,8 @@ impl<'a> PublishMessage {
 
         // Fixed Header
         let first_byte = bytes[0];
-        let message_type = first_byte >> 4; // message_type se extrae de los bits 4 a 7
-        let flags = PublishFlags::from_flags_byte(first_byte & 0x0F)?; // flags se extrae de los bits 0 a 3
+        let flags = PublishFlags::from_flags_byte(first_byte)?; // flags se extrae de los bits 0 a 3
+        let message_type = 3;//flags.get_msg_type // aux, quiero borrar este campo.
         let remaining_length = bytes[1];
 
         // Variable Header
@@ -236,7 +235,7 @@ mod tests {
     /// Testea que se pueda crear un mensaje Publish y pasarlo a bytes y luego reconstruirlo.
     fn test_publish_message_to_and_from_bytes() {
         let original_message = PublishMessage::new(
-            1,                                   // message_type
+            3,                                   // message_type
             PublishFlags::new(0, 1, 0).unwrap(), // flags
             "test/topic",                        // topic_name
             Some(1234),                          // packet_identifier
@@ -246,6 +245,8 @@ mod tests {
 
         let bytes = original_message.to_bytes();
         let recovered_message = PublishMessage::from_bytes(bytes).unwrap();
+
+        assert_eq!(recovered_message, original_message);
 
         assert_eq!(
             original_message.fixed_header.message_type,

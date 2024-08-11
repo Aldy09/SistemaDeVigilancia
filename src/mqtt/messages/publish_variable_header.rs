@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 
 pub struct VariableHeader {
     //byte1:long name bits mas signif,
