@@ -78,24 +78,28 @@ impl MQTTClient {
     // Si no se pudo esperar el ack, se deberia reintentar el publish
     /// Espera a recibir el ack para el packet_id del mensaje `msg`.
     fn wait_for_ack<T: Message>(&mut self, msg: T) -> Result<(), Error> {
-        match msg.get_type() {           
+        match msg.get_type() {
+            // Si es publish, ver el qos
             PacketType::Publish => {
-                msg.get_qos();
-                /*// Si es publish, ver el qos
-                if qos == 1 {
-                    return self.wait_and_retransmit(msg):
-                } else {
-                    return Ok(());
-                }*/
-            },
-            PacketType::Subscribe => todo!(),
+                if let Some(pub_msg) = msg.as_any().downcast_ref::<PublishMessage>() {
+                    let qos = pub_msg.get_qos();
+                    if qos == 1 {
+                        return self.wait_and_retransmit(pub_msg);
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+            PacketType::Subscribe => {
+                return self.wait_and_retransmit(&msg);
+            }
             _ => {}
         }
-        
+
         Ok(())
     }
 
-    fn wait_and_retransmit<T: Message>(&self, msg: T) -> Result<(), Error> {
+    fn wait_and_retransmit<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
         let packet_id = msg.get_packet_id();
         // Espero la primera vez, para el publish que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
         let mut received_ack = self.retransmitter.wait_for_ack(packet_id)?;
@@ -151,10 +155,7 @@ impl MQTTClient {
         if let Err(e) = self.wait_for_ack(msg) {
             println!("Error al esperar ack del publish: {:?}", e);
         };
-        /*println!(
-            "[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.",
-            &msg.get_packet_id()
-        );*/
+        println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, return a app.");
 
         //Ok(msg)
         Err(Error::new(ErrorKind::Other, "probando")) // aux: borrar esta lína
