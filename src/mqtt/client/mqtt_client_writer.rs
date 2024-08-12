@@ -3,21 +3,23 @@ use crate::mqtt::messages::{
     publish_message::PublishMessage, subscribe_message::SubscribeMessage,
 };
 
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 
 #[derive(Debug)]
-pub struct MQTTClientWriter {
+pub struct MessageCreator {
     available_packet_id: u16,
 }
 
-impl MQTTClientWriter {
-    pub fn new() -> MQTTClientWriter {
-        MQTTClientWriter {
+impl MessageCreator {
+    pub fn new() -> MessageCreator {
+        MessageCreator {
             available_packet_id: 0,
         }
     }
 
-    pub fn mqtt_publish(
+
+    /// Crea y devuelve el PublishMessage.
+    pub fn create_publish_msg(
         &mut self,
         topic: &str,
         payload: &[u8],
@@ -27,23 +29,14 @@ impl MQTTClientWriter {
         let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, qos, 0)?;
-        let result = PublishMessage::new(flags, topic, Some(packet_id), payload);
-        let publish_message = match result {
-            Ok(msg) => {
-                //println!("Mqtt publish: envío publish: \n   {:?}", msg);
-                println!("Publish enviado, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_id());
-                msg
-            }
-            Err(e) => return Err(Error::new(ErrorKind::Other, e)),
-        };
+        let publish_msg = PublishMessage::new(flags, topic, Some(packet_id), payload)?;
 
-        Ok(publish_message)
+        Ok(publish_msg)
     }
 
-    // Nuestras apps clientes llamarán a esta función (los drones, etc)
-    /// Función parte de la interfaz para uso de clientes del protocolo MQTT.
-    /// Recibe el packet id, y un vector de topics a los cuales cliente desea suscribirse.
-    pub fn mqtt_subscribe(
+    /// Recibe un vector de topics a los cuales cliente desea suscribirse.
+    /// Crea y devuelve el SubscribeMessage.
+    pub fn create_subscribe_msg(
         &mut self,
         topics_to_subscribe: Vec<(String, u8)>,
     ) -> Result<SubscribeMessage, Error> {
@@ -56,8 +49,8 @@ impl MQTTClientWriter {
         Ok(subscribe_msg)
     }
 
-    /// Envía mensaje disconnect, y cierra la conexión con el servidor.
-    pub fn mqtt_disconnect(&mut self) -> Result<DisconnectMessage, Error> {
+    /// Crea y devuelve un DisconnectMessage.
+    pub fn create_disconnect_msg(&mut self) -> Result<DisconnectMessage, Error> {
         let msg = DisconnectMessage::new();
         Ok(msg)
     }

@@ -1,14 +1,12 @@
 use crate::mqtt::client::{
-    mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::MQTTClientRetransmitter,
-    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
+    mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::Retransmitter,
+    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MessageCreator,
 };
-use crate::mqtt::messages::message::Message;
-use crate::mqtt::messages::packet_type::PacketType;
 use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
 use std::net::TcpStream;
 use std::{
-    io::{Error, ErrorKind},
+    io::Error,
     net::SocketAddr,
     sync::mpsc::{self, Receiver},
     thread::{self, JoinHandle},
@@ -18,9 +16,8 @@ pub type ClientStreamType = TcpStream; // Aux: que solo lo use el cliente por ah
 
 #[derive(Debug)]
 pub struct MQTTClient {
-    writer: MQTTClientWriter,
-    //listener: MQTTClientListener,
-    retransmitter: MQTTClientRetransmitter,
+    msg_creator: MessageCreator,
+    retransmitter: Retransmitter,
 }
 
 impl MQTTClient {
@@ -35,14 +32,13 @@ impl MQTTClient {
         // Efectúa la conexión al server
         let stream = mqtt_connect_to_broker(client_id, addr, will)?;
         // Inicializa sus partes internas
-        let writer = MQTTClientWriter::new();
+        let writer = MessageCreator::new();
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
-        let (retransmitter, ack_tx) = MQTTClientRetransmitter::new(stream.try_clone()?);
+        let (retransmitter, ack_tx) = Retransmitter::new(stream.try_clone()?);
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
 
         let mqtt_client = MQTTClient {
-            writer,
-            //listener,
+            msg_creator: writer,
             retransmitter,
         };
 
@@ -53,8 +49,6 @@ impl MQTTClient {
         Ok((mqtt_client, publish_msg_rx, listener_handle))
     }
 
-    // Las siguientes funciones son wrappers, delegan la llamada al método del mismo nombre del writer.
-
     /// Función de la librería de MQTTClient para realizar un publish.
     pub fn mqtt_publish(
         &mut self,
@@ -64,7 +58,7 @@ impl MQTTClient {
     ) -> Result<PublishMessage, Error> {
         println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
         // Esto solamente crea y devuelve el mensaje
-        let msg = self.writer.mqtt_publish(topic, payload, qos)?;
+        let msg = self.msg_creator.create_publish_msg(topic, payload, qos)?;
         println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
         self.retransmitter.send_and_retransmit(&msg)?;
@@ -77,7 +71,7 @@ impl MQTTClient {
     pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<(), Error> {
         println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
         // Esto solamente crea y devuelve el mensaje
-        let msg = self.writer.mqtt_subscribe(topics)?;
+        let msg = self.msg_creator.create_subscribe_msg(topics)?;
         println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
         self.retransmitter.send_and_retransmit(&msg)?;
@@ -100,7 +94,7 @@ impl MQTTClient {
 
     /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
-        let msg = self.writer.mqtt_disconnect()?;
+        let msg = self.msg_creator.create_disconnect_msg()?;
         self.retransmitter.send_and_shutdown_stream(msg)?;
         Ok(())
     }

@@ -7,13 +7,13 @@ use super::{ack_message::ACKMessage, mqtt_client::ClientStreamType};
 /// Parte interna de `MQTTClient` encargada de manejar los ack y las retransmisiones.
 /// Conserva el extramo receptor de un channel (`ack_rx`).
 #[derive(Debug)]
-pub struct MQTTClientRetransmitter {
+pub struct Retransmitter {
     ack_rx: Receiver<ACKMessage>,
     stream: ClientStreamType,
 }
 
-impl MQTTClientRetransmitter {
-    /// Crea y devuelve un Retransmitter, encargado de las retransmisiones, y el extremo de envío de un channel.
+impl Retransmitter {
+    /// Crea y devuelve un Retransmitter, encargado del envío y las retransmisiones, y el extremo de envío de un channel.
     pub fn new(stream: ClientStreamType) -> (Self, Sender<ACKMessage>) {
         let (ack_tx, ack_rx) = channel::<ACKMessage>();
         (Self { ack_rx , stream }, ack_tx)
@@ -23,16 +23,15 @@ impl MQTTClientRetransmitter {
     /// cantidad de veces.
     pub fn send_and_retransmit<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
         self.send_msg(msg.to_bytes())?;
-        if let Err(e) = self.wait_for_ack_wrapper(msg) {
+        if let Err(e) = self.wait_for_ack_and_retransmit(msg) {
             println!("Error al esperar ack del publish: {:?}", e);
         };
         Ok(())
     }
 
-    // Aux: esta función estaba afuera en el MQTTClient.
-    // Si no se pudo esperar el ack, se deberia reintentar el publish
-    /// Espera a recibir el ack para el packet_id del mensaje `msg`.
-    fn wait_for_ack_wrapper<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
+    /// Espera por el ack y si no lo recibe retransmite, teniendo en cuenta el tipo de paquete,
+    /// para el publish considera su nivel de qos.
+    fn wait_for_ack_and_retransmit<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
         match msg.get_type() {
             // Si es publish, ver el qos
             PacketType::Publish => {
@@ -54,7 +53,7 @@ impl MQTTClientRetransmitter {
         Ok(())
     }
 
-    // Aux: esta función estaba afuera en MQTTClient.
+    /// Espera a recibir el ack para el packet_id del mensaje `msg`, si no lo recibe, retransmite.
     fn wait_and_retransmit<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
         let packet_id = msg.get_packet_id();
         // Espero la primera vez, para el publish que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
@@ -89,21 +88,14 @@ impl MQTTClientRetransmitter {
         Ok(())
     }
 
-
-
-    
-    
-
-    
-    // Aux: Cambiando: devuelve true si recibió el ack y false si no.
-    /// Espera a que MQTTListener le informe por este rx que llegó el ack.
-    /// En ese caso devuelve ok.
+    /// Espera a que MQTTListener le informe por este rx que llegó el ack. En ese caso devuelve ok.
     /// Si eso no ocurre, debe retransmitir el mensaje original (el msg cuyo ack está esperando)
     /// hasta que llegue su ack o bien se llegue a una cantidad máxima de intentos definida como constante.
+    /// Devuelve si recibió el ack.
     fn has_ack_arrived(&self, packet_id: Option<u16>) -> Result<bool, Error> {
         // Extrae el packet_id
         if let Some(packet_id) = packet_id {
-            self.start_waiting_and_check_for_ack(packet_id) // Aux: #perdón no se me ocurren nombres que no sean todos iguales xd [].
+            self.start_waiting_and_check_for_ack(packet_id)
         } else {
                 Err(Error::new(
                 ErrorKind::Other,
@@ -111,13 +103,9 @@ impl MQTTClientRetransmitter {
             ))
         }
     }
-    
-    // Aux: en general, quiero, primero al leer haberme fijado el tiempo, y acá si pasó el tiempo y no recibí el ack
-    // quiero volver a enviar el "msg" (obs: necesito el stream, y no quise hacerle clone otra vez entonces
-    // devuelvo Ok(false) para que signifique "sí, hay que enviarlo de nuevo" para que desde afuera llamen al writer
-    // o devuelvo Ok(true) como diciendo "listo, me llegó bien el ack y no hay que hacer nada más".
-    // (Podría cambiarse a devolver Result<bool, Error> capaz).
-    // Aux: Cambiando: devuelve true si recibió el ack y false si no.
+
+    /// Espera por el ack como máximo un cierto tiempo,
+    /// si no se cerró la conexión con listener, devuelve Ok de si llega el ack.
     fn start_waiting_and_check_for_ack(&self, packet_id: u16) -> Result<bool, Error> {
         // Comentar una y descomentar la otra, para probar
         // Versión lo que había, sin esperar un tiempo
@@ -173,7 +161,6 @@ impl MQTTClientRetransmitter {
         Ok(false)
     }
 
-    // Función relacionada con el Retransmitter:
     /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
     /// enviarse por el stream a server.
     fn send_msg(&mut self, bytes_msg: Vec<u8>) -> Result<(), Error> {
@@ -183,11 +170,10 @@ impl MQTTClientRetransmitter {
     
     /// Envía el mensaje disconnect recibido por parámetro y cierra la conexión.
     pub fn send_and_shutdown_stream(&mut self, msg: DisconnectMessage) -> Result<(), Error> {
-        self.send_msg(msg.to_bytes());
+        self.send_msg(msg.to_bytes())?;
         // Cerramos la conexión con el servidor
-        self.stream.shutdown(Shutdown::Both)?; // Aux: mover esto a alguien que tenga el stream
+        self.stream.shutdown(Shutdown::Both)?;
         Ok(())
     }
     
-
 }
