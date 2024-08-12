@@ -2,3 +2,5 @@ base_dir=./src/apps/sist_camaras/ai_detection/image_detection
 api_credentials_file_path=./src/apps/sist_camaras/ai_detection/key_and_endpoint.json
 inc_tag=incidente
 inc_threshold=0.7
+img_valid_extension1=jpg
+img_valid_extension2=jpeg

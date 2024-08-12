@@ -23,7 +23,9 @@ fn main() {
 
     // Se ejecuta en otro hilo el run.
     let handle = thread::spawn(move || {
-        let _ai_inc_detector = AIDetectorManager::run(cameras, tx, exit_rx, logger);
+        if let Err(e) = AIDetectorManager::run(cameras, tx, exit_rx, logger.clone_ref()) {
+            logger.log(format!("Error al ejecutar el detector en Sistema Cámaras: {:?}.", e));
+        }
     });
 
     // Enviará los inc por tx, por lo que escuchamos lo recibido al rx.

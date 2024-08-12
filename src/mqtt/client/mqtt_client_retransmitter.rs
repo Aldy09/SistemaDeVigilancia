@@ -117,8 +117,7 @@ impl Retransmitter {
                 // Se recibió el ack
                 if let Some(packet_identifier) = ack_message.get_packet_id() {
                     if packet_id == packet_identifier {
-                        println!("packet_id por parámetro {:?}", packet_id);
-                        println!("   LLEGÓ EL ACK {:?}", ack_message); 
+                        println!("   llegó el ack {:?}", ack_message); 
                         return Ok(true);
                     }
                 }
@@ -153,7 +152,7 @@ impl Retransmitter {
         // Cerramos la conexión con el servidor
         self.stream.shutdown(Shutdown::Both)?;
         self.logger.log("Mqtt: Conexión cerrada.".to_string());
-        
+
         Ok(())
     }
 
