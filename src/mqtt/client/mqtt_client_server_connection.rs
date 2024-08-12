@@ -25,11 +25,6 @@ impl MqttClientConnector {
         addr: &SocketAddr,
         will: Option<WillMessageData>,
     ) -> Result<ClientStreamType, Error> {
-        //will_msg_content: String, will_topic: String, will_qos: u8
-        //will.get_will_msg_content(), will.get_will_topic(), will.get_qos()
-        //let will_topic = String::from("desc"); // PROBANDO
-        //let will_qos = 1; // PROBANDO, ESTO VA POR PARÁMETRO
-        // Inicializaciones
         // Intenta conectar al servidor MQTT
         let stream = TcpStream::connect(addr)
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
@@ -46,7 +41,7 @@ impl MqttClientConnector {
                 will.get_will_retain(),
             )
         } else {
-            (None, None, 0, 0) // aux: decidir / revisar, asumimos 0 si no están? []
+            (None, None, 1, 1)
         };
 
         // Crea el mensaje tipo Connect y lo pasa a bytes
@@ -95,7 +90,7 @@ impl MqttClientConnector {
         const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
         let mut remaining_retries = AMOUNT_OF_RETRIES;
 
-        while !received_ack || remaining_retries > 0 {
+        while !received_ack && remaining_retries > 0 {
             // Lo vuelvo a enviar y a verificar si recibo ack
             self.send_msg(msg.to_bytes())?;
             received_ack = self.has_connack_arrived()?;
@@ -117,7 +112,6 @@ impl MqttClientConnector {
     /// Lee una vez, con timeout, para esperar recibir el ack en a lo sumo una cierta cantidad de tiempo.
     /// Retorna Ok de si le llegó el connack.
     fn has_connack_arrived(&mut self) -> Result<bool, Error> {
-        //-> Result<([u8; 2], FixedHeader), Error> {
         const FIXED_HEADER_LEN: usize = FixedHeader::fixed_header_len();
         let mut fixed_header_buf: [u8; 2] = [0; FIXED_HEADER_LEN];
 

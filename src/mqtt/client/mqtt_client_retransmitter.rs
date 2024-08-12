@@ -66,7 +66,7 @@ impl Retransmitter {
         const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
         let mut remaining_retries = AMOUNT_OF_RETRIES;
 
-        while !received_ack || remaining_retries > 0 {
+        while !received_ack && remaining_retries > 0 {
             // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
             if !received_ack {
                 self.send_msg(msg.to_bytes())?
