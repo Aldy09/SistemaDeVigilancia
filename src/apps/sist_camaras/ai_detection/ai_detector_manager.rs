@@ -1,6 +1,5 @@
 use notify::event::EventKind;
-use notify::RecursiveMode;
-use notify::Watcher;
+use notify::{RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
 use std::error::Error;
 use std::ffi::OsStr;
