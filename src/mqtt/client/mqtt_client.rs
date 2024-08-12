@@ -1,7 +1,7 @@
 use crate::logging::string_logger::StringLogger;
 use crate::mqtt::client::{
     mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::Retransmitter,
-    mqtt_client_server_connection::MqttClientConnector,
+    mqtt_client_connector::MqttClientConnector,
     mqtt_client_msg_creator::MessageCreator,
 };
 use crate::mqtt::messages::publish_message::PublishMessage;

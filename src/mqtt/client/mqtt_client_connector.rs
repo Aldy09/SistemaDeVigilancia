@@ -58,9 +58,9 @@ impl MqttClientConnector {
             will_qos,
         );
 
-        connector.logger.log("MQTT: Enviando connect msg.".to_string());
+        connector.logger.log("Mqtt: Enviando connect msg.".to_string());
         connector.send_and_retransmit(&mut msg)?;
-        connector.logger.log("MQTT: connack recibido.".to_string());
+        connector.logger.log("Mqtt: connack recibido.".to_string());
 
         Ok(stream)
     }
@@ -96,7 +96,7 @@ impl MqttClientConnector {
             // Lo vuelvo a enviar y a verificar si recibo ack
             self.send_msg(msg.to_bytes())?;
             received_ack = self.has_connack_arrived()?;
-            self.logger.log("MQTT: Retransmitiendo...".to_string());
+            self.logger.log("Mqtt: Retransmitiendo...".to_string());
 
             remaining_retries -= 1;
         }

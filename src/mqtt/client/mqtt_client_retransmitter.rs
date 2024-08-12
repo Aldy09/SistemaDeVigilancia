@@ -23,11 +23,13 @@ impl Retransmitter {
     /// Envía el mensaje `msg` recibido una vez, espera por el ack, y si es necesario lo retransmite una cierta
     /// cantidad de veces.
     pub fn send_and_retransmit<T: Message>(&mut self, msg: &T) -> Result<(), Error> {
+        self.logger.log("Mqtt: Enviando msg.".to_string());
         self.send_msg(msg.to_bytes())?;
         if let Err(e) = self.wait_for_ack_and_retransmit(msg) {
-            println!("Error al esperar ack del publish: {:?}", e);
-
+            println!("Error al esperar ack: {:?}", e);
+            self.logger.log(format!("Error al esperar ack: {:?}", e));
         };
+        self.logger.log("Mqtt: recibido ack.".to_string());
         Ok(())
     }
 
@@ -69,12 +71,11 @@ impl Retransmitter {
         let mut remaining_retries = AMOUNT_OF_RETRIES;
 
         while !received_ack && remaining_retries > 0 {
-            // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
-            if !received_ack {
-                self.send_msg(msg.to_bytes())?
-            }
-
+            // Lo vuelvo a enviar, y a verificar si llega el ack.
+            
+            self.send_msg(msg.to_bytes())?;
             received_ack = self.has_ack_arrived(packet_id)?;
+            self.logger.log("Mqtt: Retransmitiendo...".to_string());
 
             remaining_retries -= 1;
         }
@@ -109,16 +110,6 @@ impl Retransmitter {
     /// Espera por el ack como máximo un cierto tiempo,
     /// si no se cerró la conexión con listener, devuelve Ok de si llega el ack.
     fn start_waiting_and_check_for_ack(&self, packet_id: u16) -> Result<bool, Error> {
-        // Comentar una y descomentar la otra, para probar
-        // Versión lo que había, sin esperar un tiempo
-        //self.aux_version_vieja(packet_id)
-        
-        // Versión nueva, esperando como máx un tiempo para que si no se recibió se retransmita:
-        self.aux_version_nueva(packet_id)
-    }
-    
-    // La versión nueva
-    fn aux_version_nueva(&self, packet_id: u16) -> Result<bool, Error> {
         // Leo esperando un cierto tiempo, si en el período [0, ese tiempo) no me llega el ack, lo quiero retransmitir.
         const ACK_WAITING_INTERVAL: u64 = 1000;
         match self.ack_rx.recv_timeout(Duration::from_millis(ACK_WAITING_INTERVAL)){
@@ -148,19 +139,6 @@ impl Retransmitter {
         }
         Ok(false)
     }
-    
-    // La versión que había
-    fn _aux_version_vieja(&self, packet_id: u16) -> Result<bool, Error> {
-        for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
-            if let Some(packet_identifier) = ack_message.get_packet_id() {
-                if packet_id == packet_identifier {
-                    //println!("   llegó el ack {:?}", ack_message); 
-                    return Ok(true);
-                }
-            } 
-        }
-        Ok(false)
-    }
 
     /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
     /// enviarse por el stream a server.
@@ -174,6 +152,8 @@ impl Retransmitter {
         self.send_msg(msg.to_bytes())?;
         // Cerramos la conexión con el servidor
         self.stream.shutdown(Shutdown::Both)?;
+        self.logger.log("Mqtt: Conexión cerrada.".to_string());
+        
         Ok(())
     }
 
