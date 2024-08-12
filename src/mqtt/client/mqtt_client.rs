@@ -1,3 +1,4 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::client::{
     mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::Retransmitter,
     mqtt_client_server_connection::MqttClientConnector,
@@ -19,6 +20,7 @@ pub type ClientStreamType = TcpStream; // Aux: que solo lo use el cliente por ah
 pub struct MQTTClient {
     msg_creator: MessageCreator,
     retransmitter: Retransmitter,
+    logger: StringLogger,
 }
 
 impl MQTTClient {
@@ -29,22 +31,27 @@ impl MQTTClient {
         client_id: String,
         addr: &SocketAddr,
         will: Option<WillMessageData>,
+        logger: StringLogger,
     ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
         // Efectúa la conexión al server
-        let stream = MqttClientConnector::mqtt_connect_to_broker(client_id, addr, will)?;
+        let stream = MqttClientConnector::mqtt_connect_to_broker(client_id, addr, will, logger.clone_ref())?;
         // Inicializa sus partes internas
         let writer = MessageCreator::new();
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
-        let (retransmitter, ack_tx) = Retransmitter::new(stream.try_clone()?);
+        let (retransmitter, ack_tx) = Retransmitter::new(stream.try_clone()?, logger.clone_ref());
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
-
+        
+        let logger_c = logger.clone_ref();
         let mqtt_client = MQTTClient {
             msg_creator: writer,
             retransmitter,
+            logger,
         };
 
         let listener_handle = thread::spawn(move || {
-            let _ = listener.read_from_server();
+            if let Err(e) = listener.read_from_server(){
+                logger_c.log(format!("Error al leer, en read_from_server: {:?}", e));
+            }
         });
 
         Ok((mqtt_client, publish_msg_rx, listener_handle))
@@ -57,26 +64,26 @@ impl MQTTClient {
         payload: &[u8],
         qos: u8,
     ) -> Result<PublishMessage, Error> {
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
         // Esto solamente crea y devuelve el mensaje
         let msg = self.msg_creator.create_publish_msg(topic, payload, qos)?;
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
         self.retransmitter.send_and_retransmit(&msg)?;
-        println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, return a app.");
+
+        //println!("-----------------\n Mqtt: publish enviado: \n   {:?}", msg);
+        self.logger.log(format!("-----------------\n Mqtt: publish enviado: \n   {:?}", msg));
 
         Ok(msg)
     }
 
     /// Función de la librería de MQTTClient para realizar un subscribe.
     pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<(), Error> {
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
         // Esto solamente crea y devuelve el mensaje
         let msg = self.msg_creator.create_subscribe_msg(topics)?;
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
         // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
         self.retransmitter.send_and_retransmit(&msg)?;
-        println!("[DEBUG TEMA ACK]: [CLIENT]: fin de la función, return a app.");
+        
+        println!("-----------------\n Mqtt: subscribe enviado: \n   {:?}", msg);
+        self.logger.log(format!("-----------------\n Mqtt: subscribe enviado: \n   {:?}", msg));
 
         Ok(())
     }

@@ -1,6 +1,6 @@
 use std::{io::{Error, ErrorKind}, net::Shutdown, sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender}, time::Duration};
 
-use crate::mqtt::{messages::{disconnect_message::DisconnectMessage, message::Message, packet_type::PacketType, publish_message::PublishMessage}, mqtt_utils::utils::write_message_to_stream};
+use crate::{logging::string_logger::StringLogger, mqtt::{messages::{disconnect_message::DisconnectMessage, message::Message, packet_type::PacketType, publish_message::PublishMessage}, mqtt_utils::utils::write_message_to_stream}};
 
 use super::{ack_message::ACKMessage, mqtt_client::ClientStreamType};
 
@@ -10,13 +10,14 @@ use super::{ack_message::ACKMessage, mqtt_client::ClientStreamType};
 pub struct Retransmitter {
     ack_rx: Receiver<ACKMessage>,
     stream: ClientStreamType,
+    logger: StringLogger,
 }
 
 impl Retransmitter {
     /// Crea y devuelve un Retransmitter, encargado del envío y las retransmisiones, y el extremo de envío de un channel.
-    pub fn new(stream: ClientStreamType) -> (Self, Sender<ACKMessage>) {
+    pub fn new(stream: ClientStreamType, logger: StringLogger) -> (Self, Sender<ACKMessage>) {
         let (ack_tx, ack_rx) = channel::<ACKMessage>();
-        (Self { ack_rx , stream }, ack_tx)
+        (Self { ack_rx , stream , logger }, ack_tx)
     }
     
     /// Envía el mensaje `msg` recibido una vez, espera por el ack, y si es necesario lo retransmite una cierta
@@ -25,6 +26,7 @@ impl Retransmitter {
         self.send_msg(msg.to_bytes())?;
         if let Err(e) = self.wait_for_ack_and_retransmit(msg) {
             println!("Error al esperar ack del publish: {:?}", e);
+
         };
         Ok(())
     }
@@ -152,8 +154,7 @@ impl Retransmitter {
         for ack_message in self.ack_rx.iter() { // Aux: si es de a uno, un if andaría
             if let Some(packet_identifier) = ack_message.get_packet_id() {
                 if packet_id == packet_identifier {
-                    println!("packet_id por parámetro {:?}", packet_id);
-                    println!("   LLEGÓ EL ACK {:?}", ack_message); 
+                    //println!("   llegó el ack {:?}", ack_message); 
                     return Ok(true);
                 }
             } 

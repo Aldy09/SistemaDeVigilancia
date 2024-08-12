@@ -24,7 +24,6 @@ impl MessageCreator {
         payload: &[u8],
         qos: u8,
     ) -> Result<PublishMessage, Error> {
-        println!("-----------------");
         let packet_id = self.generate_packet_id();
         // Creo un msj publish
         let flags = PublishFlags::new(0, qos, 0)?;
@@ -40,10 +39,8 @@ impl MessageCreator {
         topics_to_subscribe: Vec<(String, u8)>,
     ) -> Result<SubscribeMessage, Error> {
         let packet_id = self.generate_packet_id();
-        println!("-----------------");
         // Construyo subscribe
-        let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
-        println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
+        let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);        
 
         Ok(subscribe_msg)
     }

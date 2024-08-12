@@ -19,7 +19,7 @@ fn main() -> Result<(), Error> {
 
     let client_id = get_formatted_app_id();
     let sistema_monitoreo = SistemaMonitoreo::new(logger.clone_ref());
-    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, None) {
+    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, None, logger.clone_ref()) {
         Ok((mqtt_client, publish_message_rx, handle)) => {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());

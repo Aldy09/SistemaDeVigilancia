@@ -3,6 +3,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::io::{self, Error, ErrorKind, Read};
 use std::time::Duration;
 
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::messages::{
     connack_message::ConnackMessage, connect_message::ConnectMessage,
     connect_return_code::ConnectReturnCode, packet_type::PacketType,
@@ -17,6 +18,7 @@ use super::mqtt_client::ClientStreamType;
 
 pub struct MqttClientConnector {
     stream: ClientStreamType,
+    logger: StringLogger,
 }
 
 impl MqttClientConnector {
@@ -24,12 +26,14 @@ impl MqttClientConnector {
         client_id: String,
         addr: &SocketAddr,
         will: Option<WillMessageData>,
+        logger: StringLogger,
     ) -> Result<ClientStreamType, Error> {
         // Intenta conectar al servidor MQTT
         let stream = TcpStream::connect(addr)
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "error del servidor"))?;
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Error para establecer conexión con servidor."))?;
         let mut connector = Self {
             stream: stream.try_clone()?, // obs: como no devuelvo Self, esta copia del stream se dropea al salir de esta función y no molesta.
+            logger,
         };
 
         // Aux: sintaxis es let (a, b) = if condicion { (a_si_true, b_si_true) } else { (a_si_false, b_si_false) };
@@ -54,30 +58,28 @@ impl MqttClientConnector {
             will_qos,
         );
 
+        connector.logger.log("MQTT: Enviando connect msg.".to_string());
         connector.send_and_retransmit(&mut msg)?;
+        connector.logger.log("MQTT: connack recibido.".to_string());
 
         Ok(stream)
     }
-
+    
+    /// Envía el mensaje `msg` recibido una vez, espera por el ack, y si es necesario lo retransmite una cierta
+    /// cantidad de veces.
+    fn send_and_retransmit(&mut self, msg: &mut ConnectMessage) -> Result<(), Error> {
+        self.send_msg(msg.to_bytes())?;
+        self.wait_for_connack_and_retransmit(msg)?;        
+        Ok(())
+    }
+    
     /// Función para ser usada por `MQTTClient`, cuando el `Retransmitter` haya determinado que el `msg` debe
     /// enviarse por el stream a server.
     fn send_msg(&mut self, bytes_msg: Vec<u8>) -> Result<(), Error> {
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
         Ok(())
     }
-
-    /// Envía el mensaje `msg` recibido una vez, espera por el ack, y si es necesario lo retransmite una cierta
-    /// cantidad de veces.
-    fn send_and_retransmit(&mut self, msg: &mut ConnectMessage) -> Result<(), Error> {
-        self.send_msg(msg.to_bytes())?;
-        println!("Envía connect: \n   {:?}", msg);
-        println!("Mqtt cliente leyendo: esperando connack.");
-        if let Err(e) = self.wait_for_connack_and_retransmit(msg) {
-            println!("Error al esperar ack del connect: {:?}", e);
-        };
-        Ok(())
-    }
-
+    
     /// Espera a recibir el ack para el mensaje `msg`, si no lo recibe, retransmite.
     fn wait_for_connack_and_retransmit(&mut self, msg: &mut ConnectMessage) -> Result<(), Error> {
         // Espero la primera vez, para el connect que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
@@ -94,6 +96,7 @@ impl MqttClientConnector {
             // Lo vuelvo a enviar y a verificar si recibo ack
             self.send_msg(msg.to_bytes())?;
             received_ack = self.has_connack_arrived()?;
+            self.logger.log("MQTT: Retransmitiendo...".to_string());
 
             remaining_retries -= 1;
         }
@@ -102,7 +105,7 @@ impl MqttClientConnector {
             // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto.
             return Err(Error::new(
                 ErrorKind::Other,
-                "MAXRETRIES, se retransmitió sin éxito.",
+                "MAXRETRIES, se retransmitió el connect sin éxito.",
             ));
         }
 
