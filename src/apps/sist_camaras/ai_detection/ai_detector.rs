@@ -1,9 +1,7 @@
 use rand::{thread_rng, Rng};
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, CONTENT_TYPE};
-use std::error::Error;
-use std::io::ErrorKind;
-use std::sync::{mpsc, Arc, Mutex};
+use std::{error::Error, io::ErrorKind, sync::{mpsc, Arc, Mutex}};
 
 use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
 use crate::apps::incident_data::incident::Incident;

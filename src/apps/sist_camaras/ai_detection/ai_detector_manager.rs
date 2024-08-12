@@ -1,14 +1,7 @@
 use notify::event::EventKind;
-use notify::RecursiveMode;
-use notify::Watcher;
+use notify::{RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
-use std::error::Error;
-use std::ffi::OsStr;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc, Mutex};
-use std::{fs, thread};
+use std::{error::Error, ffi::OsStr, fs, io::ErrorKind, path::Path, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread};
 
 use crate::apps::incident_data::incident::Incident;
 use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
