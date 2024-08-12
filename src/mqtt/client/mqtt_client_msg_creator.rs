@@ -17,7 +17,6 @@ impl MessageCreator {
         }
     }
 
-
     /// Crea y devuelve el PublishMessage.
     pub fn create_publish_msg(
         &mut self,
@@ -61,5 +60,11 @@ impl MessageCreator {
     fn generate_packet_id(&mut self) -> u16 {
         self.available_packet_id += 1;
         self.available_packet_id
+    }
+}
+
+impl Default for MessageCreator {
+    fn default() -> Self {
+        Self::new()
     }
 }

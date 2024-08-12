@@ -65,20 +65,20 @@ impl Retransmitter {
         // No recibí ack, entonces tengo que continuar retransmitiendo, hasta un máx de veces.
         const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
         let mut remaining_retries = AMOUNT_OF_RETRIES;
-        while remaining_retries > 0 {
+
+        while !received_ack || remaining_retries > 0 {
             // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
             if !received_ack {
                 self.send_msg(msg.to_bytes())?
-            } else {
-                break;
             }
+
             received_ack = self.has_ack_arrived(packet_id)?;
 
-            remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
+            remaining_retries -= 1;
         }
 
         if !received_ack {
-            // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto
+            // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto.
             return Err(Error::new(
                 ErrorKind::Other,
                 "MAXRETRIES, se retransmitió sin éxito.",
@@ -175,5 +175,5 @@ impl Retransmitter {
         self.stream.shutdown(Shutdown::Both)?;
         Ok(())
     }
-    
+
 }
