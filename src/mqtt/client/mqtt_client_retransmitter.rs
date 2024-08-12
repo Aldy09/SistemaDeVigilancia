@@ -118,7 +118,7 @@ impl Retransmitter {
     // La versión nueva
     fn aux_version_nueva(&self, packet_id: u16) -> Result<bool, Error> {
         // Leo esperando un cierto tiempo, si en el período [0, ese tiempo) no me llega el ack, lo quiero retransmitir.
-        const ACK_WAITING_INTERVAL: u64 = 1000; // Aux: Fijarse un número que tenga sentido.
+        const ACK_WAITING_INTERVAL: u64 = 1000;
         match self.ack_rx.recv_timeout(Duration::from_millis(ACK_WAITING_INTERVAL)){
             Ok(ack_message) => {
                 // Se recibió el ack

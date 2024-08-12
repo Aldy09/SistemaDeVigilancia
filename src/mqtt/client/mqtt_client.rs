@@ -1,6 +1,7 @@
 use crate::mqtt::client::{
     mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::Retransmitter,
-    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_msg_creator::MessageCreator,
+    mqtt_client_server_connection::MqttClientConnection,
+    mqtt_client_msg_creator::MessageCreator,
 };
 use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
@@ -30,7 +31,7 @@ impl MQTTClient {
         will: Option<WillMessageData>,
     ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
         // Efectúa la conexión al server
-        let stream = mqtt_connect_to_broker(client_id, addr, will)?;
+        let stream = MqttClientConnection::mqtt_connect_to_broker(client_id, addr, will)?;
         // Inicializa sus partes internas
         let writer = MessageCreator::new();
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
