@@ -81,7 +81,6 @@ impl AuthenticateClient {
         if self.is_guest_mode_active(connect_msg.get_user(), connect_msg.get_passwd())
             || self.authenticate(connect_msg.get_user(), connect_msg.get_passwd())
         {
-            // Aux: volver cuando haya tema desconexiones, acá le estoy pasando siempre un SessionPresent::NotPresentInLastSession. [].
             let connack_response = ConnackMessage::new(
                 SessionPresent::NotPresentInLastSession,
                 ConnectReturnCode::ConnectionAccepted,

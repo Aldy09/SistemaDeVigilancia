@@ -165,8 +165,6 @@ impl ClientReader {
         })
     }
 
-    // Aux: iba a mover todas estas funciones de acá abajo (la del loop, los dos handles de abajo, y create packet)
-    // aux: al User. Pero para eso debería ¿lockear el users durante toda la vida del thread? lo cual no tiene sentido.
     // Espera por paquetes que llegan desde su stream y los envia al hilo de arriba
     pub fn read_packets_from_stream(
         &mut self,

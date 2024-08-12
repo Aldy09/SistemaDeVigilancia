@@ -407,7 +407,7 @@ impl MQTTServer {
             // Si está suscripto al topic en cuestión
             if user.get_topics().contains(topic) {
                 let last_id = user.get_last_id_by_topic(topic);
-                let diff = last_id - min_last_id; // [] debug: esta resta también da panic.
+                let diff = last_id - min_last_id;
                 user.update_last_id_by_topic(topic, diff);
             }
         }
