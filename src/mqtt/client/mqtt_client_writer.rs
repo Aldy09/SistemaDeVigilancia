@@ -44,10 +44,10 @@ impl MQTTClientWriter {
             Err(e) => return Err(Error::new(ErrorKind::Other, e)),
         };
 
-        // Lo envío
+        /*// Lo envío
         let bytes_msg = publish_message.to_bytes();
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
-        println!("Mqtt publish: envío bytes publish: \n   {:?}", bytes_msg);
+        println!("Mqtt publish: envío bytes publish: \n   {:?}", bytes_msg);*/
 
         Ok(publish_message)
     }
@@ -65,19 +65,19 @@ impl MQTTClientWriter {
         let subscribe_msg = SubscribeMessage::new(packet_id, topics_to_subscribe);
         println!("Mqtt subscribe: enviando mensaje: \n   {:?}", subscribe_msg);
 
-        // Lo envío
+        /*// Lo envío
         let subs_bytes = subscribe_msg.to_bytes();
         write_message_to_stream(&subs_bytes, &mut self.stream)?;
         println!(
             "Mqtt subscribe: enviado mensaje en bytes: \n   {:?}",
             subs_bytes
-        );
+        );*/
 
         Ok(subscribe_msg)
     }
 
     /// Envía mensaje disconnect, y cierra la conexión con el servidor.
-    pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
+    pub fn mqtt_disconnect(&mut self) -> Result<DisconnectMessage, Error> {
         let msg = DisconnectMessage::new();
 
         // Lo envío
@@ -86,9 +86,9 @@ impl MQTTClientWriter {
         //println!("Mqtt disconnect: bytes {:?}", msg);
 
         // Cerramos la conexión con el servidor
-        self.stream.shutdown(Shutdown::Both)?;
+        self.stream.shutdown(Shutdown::Both)?; // Aux: mover esto a alguien que tenga el stream
 
-        Ok(())
+        Ok(msg)
     }
 
     /// Devuelve el packet_id a usar para el siguiente mensaje enviado.
