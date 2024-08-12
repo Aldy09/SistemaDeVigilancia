@@ -75,6 +75,7 @@ impl AutomaticIncidentDetector {
     /// se trata de un incidente.
     fn process_response(&self, res_text: &str) -> Result<f64, Box<dyn Error>> {
         let res_json: serde_json::Value = serde_json::from_str(res_text)?;
+
         let incident_probability_option  = res_json["predictions"]
             .as_array()
             .and_then(|predictions| {
@@ -91,6 +92,8 @@ impl AutomaticIncidentDetector {
         if let Some(incident_probability) = incident_probability_option {
             Ok(incident_probability)
         } else {
+            println!("Response raw recibida: {:?}.", res_json);
+            self.logger.log(format!("Response raw recibida: {:?}.", res_json));
             Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al obtener la incident_probability.")))
         }
     }

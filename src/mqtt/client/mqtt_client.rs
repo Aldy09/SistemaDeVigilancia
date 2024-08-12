@@ -1,21 +1,26 @@
+use crate::logging::string_logger::StringLogger;
 use crate::mqtt::client::{
-    mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::MQTTClientRetransmitter,
-    mqtt_client_server_connection::mqtt_connect_to_broker, mqtt_client_writer::MQTTClientWriter,
+    mqtt_client_listener::MQTTClientListener, mqtt_client_retransmitter::Retransmitter,
+    mqtt_client_connector::MqttClientConnector,
+    mqtt_client_msg_creator::MessageCreator,
 };
-use crate::mqtt::messages::{publish_message::PublishMessage, subscribe_message::SubscribeMessage};
+use crate::mqtt::messages::publish_message::PublishMessage;
 use crate::mqtt::mqtt_utils::will_message_utils::will_message::WillMessageData;
+use std::net::TcpStream;
 use std::{
-    io::{Error, ErrorKind},
+    io::Error,
     net::SocketAddr,
     sync::mpsc::{self, Receiver},
     thread::{self, JoinHandle},
 };
 
+pub type ClientStreamType = TcpStream; // Aux: que solo lo use el cliente por ahora, para hacer refactor más fácil.
+
 #[derive(Debug)]
 pub struct MQTTClient {
-    writer: MQTTClientWriter,
-    //listener: MQTTClientListener,
-    retransmitter: MQTTClientRetransmitter,
+    msg_creator: MessageCreator,
+    retransmitter: Retransmitter,
+    logger: StringLogger,
 }
 
 impl MQTTClient {
@@ -26,31 +31,31 @@ impl MQTTClient {
         client_id: String,
         addr: &SocketAddr,
         will: Option<WillMessageData>,
+        logger: StringLogger,
     ) -> Result<(Self, Receiver<PublishMessage>, JoinHandle<()>), Error> {
         // Efectúa la conexión al server
-        let stream = mqtt_connect_to_broker(client_id, addr, will)?;
+        let stream = MqttClientConnector::mqtt_connect_to_broker(client_id, addr, will, logger.clone_ref())?;
         // Inicializa sus partes internas
-        let writer = MQTTClientWriter::new(stream.try_clone()?);
+        let writer = MessageCreator::new();
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
-        let (retransmitter, ack_tx) = MQTTClientRetransmitter::new();
+        let (retransmitter, ack_tx) = Retransmitter::new(stream.try_clone()?, logger.clone_ref());
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
-
-        //let mut listener_clone = listener.clone();
-
+        
+        let logger_c = logger.clone_ref();
         let mqtt_client = MQTTClient {
-            writer,
-            //listener,
+            msg_creator: writer,
             retransmitter,
+            logger,
         };
 
         let listener_handle = thread::spawn(move || {
-            let _ = listener.read_from_server();
+            if let Err(e) = listener.read_from_server(){
+                logger_c.log(format!("Error al leer, en read_from_server: {:?}", e));
+            }
         });
 
         Ok((mqtt_client, publish_msg_rx, listener_handle))
     }
-
-    // Las siguientes funciones son wrappers, delegan la llamada al método del mismo nombre del writer.
 
     /// Función de la librería de MQTTClient para realizar un publish.
     pub fn mqtt_publish(
@@ -59,79 +64,34 @@ impl MQTTClient {
         payload: &[u8],
         qos: u8,
     ) -> Result<PublishMessage, Error> {
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por hacer publish:");
-        let pub_res = self.writer.mqtt_publish(topic, payload, qos);
-        println!("[DEBUG TEMA ACK]: [CLIENT]: Por esperar el ack:");
-        match pub_res {
-            Ok(msg) => {
-                if let Err(e) = self.wait_for_ack(msg.clone(), qos) {
-                    println!("Error al esperar ack del publish: {:?}", e);
-                };
-                println!(
-                    "[DEBUG TEMA ACK]: [CLIENT]: fin de la función, packet_id: {:?}, return a app.",
-                    &msg.get_packet_id()
-                );
-                Ok(msg)
-            }
-            Err(e) => Err(e),
-        }
+        // Esto solamente crea y devuelve el mensaje
+        let msg = self.msg_creator.create_publish_msg(topic, payload, qos)?;
+        // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
+        self.retransmitter.send_and_retransmit(&msg)?;
+
+        //println!("-----------------\n Mqtt: publish enviado: \n   {:?}", msg);
+        self.logger.log(format!("-----------------\n Mqtt: publish enviado: \n   {:?}", msg));
+
+        Ok(msg)
     }
-
-    // Si no se pudo esperar el ack, se deberia reintentar el publish
-    /// Espera a recibir el ack para el packet_id del mensaje `msg`.
-    fn wait_for_ack(&mut self, msg: PublishMessage, qos: u8) -> Result<(), Error> {
-        if qos == 1 {
-            // Espero la primera vez, para el publish que hicimos arriba. Si se recibió ack, no hay que hacer nada más.
-            let mut received_ack = self.retransmitter.wait_for_ack(&msg)?;
-            if received_ack {
-                return Ok(());
-            }
-
-            // No recibí ack, entonces tengo que continuar retransmitiendo, hasta un máx de veces.
-            const AMOUNT_OF_RETRIES: u8 = 5; // cant de veces que va a reintentar, hasta que desista y dé error.
-            let mut remaining_retries = AMOUNT_OF_RETRIES;
-            while remaining_retries > 0 {
-                // Si el Retransmitter determina que se debe volver a enviar el mensaje, lo envío.
-                if !received_ack {
-                    self.writer.resend_msg(msg.clone())?
-                }
-                received_ack = self.retransmitter.wait_for_ack(&msg)?;
-
-                remaining_retries -= 1; // Aux: sí, esto podría ser un for. Se puede cambiar.
-            }
-
-            if !received_ack {
-                // Ya salí del while, retransmití muchas veces y nunca recibí el ack, desisto
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "MAXRETRIES, se retransmitió sin éxito.",
-                ));
-            }
-
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
-    // ---------------
-    // aux pensando: este esquema así de que sea una función llamada desde acá, es como llamarlo on demand
-    // (aux:) cada vez que se hace un publish (o un subcribe), okey. Se inicia el tiempo cada vez que llega un publish.
-    // (aux:) lo cual tiene sentido si mandamos de a uno y no mandamos más hasta que recibamos el ack. Ok.
-    // Muevo lo que había acá para el retransmmitter, xq igual el retransmitter tmb necesita el Publish.
-
-    // Aux: P/D, nota para el grupo: Comenté el listener xq dsp de mover esta parte a un Retransmitter para que quede más prolijo
-    // aux: el listener quedaba sin usar, y tiene sentido, el listener es el del loop de fixed header y eso, no necstamos hablarle.
-    // aux: (Así que yo hasta borraría el atributo listener y listo, total es una parte interna pero está bien, la lanzamos y desde afuera le hacen join al handle todo bien)
-    // (Aux: P/D2: ah che una re pavada, se llama handLE y no handLER lo que devuelve el thread spawn, xD).
-    // ------------------------------
 
     /// Función de la librería de MQTTClient para realizar un subscribe.
-    pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<SubscribeMessage, Error> {
-        self.writer.mqtt_subscribe(topics)
+    pub fn mqtt_subscribe(&mut self, topics: Vec<(String, u8)>) -> Result<(), Error> {
+        // Esto solamente crea y devuelve el mensaje
+        let msg = self.msg_creator.create_subscribe_msg(topics)?;
+        // Se lo paso al retransmitter y que él se encargue de mandarlo, y retransmitirlo si es necesario
+        self.retransmitter.send_and_retransmit(&msg)?;
+        
+        println!("-----------------\n Mqtt: subscribe enviado: \n   {:?}", msg);
+        self.logger.log(format!("-----------------\n Mqtt: subscribe enviado: \n   {:?}", msg));
+
+        Ok(())
     }
 
     /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
-        self.writer.mqtt_disconnect()
+        let msg = self.msg_creator.create_disconnect_msg()?;
+        self.retransmitter.send_and_shutdown_stream(msg)?;
+        Ok(())
     }
 }

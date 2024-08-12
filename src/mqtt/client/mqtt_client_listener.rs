@@ -1,4 +1,4 @@
-use std::{net::TcpStream, sync::mpsc::Sender};
+use std::sync::mpsc::Sender;
 
 use std::io::{Error, ErrorKind};
 
@@ -14,18 +14,18 @@ use crate::mqtt::mqtt_utils::utils::{
     send_puback, shutdown,
 };
 
-type StreamType = TcpStream;
+use super::mqtt_client::ClientStreamType;
 
 #[derive(Debug)]
 pub struct MQTTClientListener {
-    stream: StreamType,
+    stream: ClientStreamType,
     client_tx: Sender<PublishMessage>,
     ack_tx: Sender<ACKMessage>,
 }
 
 impl MQTTClientListener {
     pub fn new(
-        stream: StreamType,
+        stream: ClientStreamType,
         client_tx: Sender<PublishMessage>,
         ack_tx: Sender<ACKMessage>,
     ) -> Self {

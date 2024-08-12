@@ -120,14 +120,3 @@ pub fn get_fixed_header_from_stream_for_conn(
 
     Ok((fixed_header_buf, fixed_header))
 }
-
-// Para debugging.
-
-/// Función para debugging.
-pub fn display_debug_publish_msg(msg: &PublishMessage) {
-    println!("Publish recibido, topic: {:?}, packet_id: {:?}", msg.get_topic(), msg.get_packet_id());
-}
-/// Función para debugging.
-pub fn display_debug_puback_msg(msg: &PubAckMessage) {
-    println!("Pub ack recibido, packet_id: {:?}", msg.get_packet_id());
-}

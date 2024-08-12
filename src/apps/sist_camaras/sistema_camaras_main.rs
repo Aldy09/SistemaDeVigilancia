@@ -31,13 +31,13 @@ fn main() -> Result<(), Error> {
     let will_msg_content = get_app_will_msg_content();
     let will_msg_data =
         WillMessageData::new(will_msg_content.to_str(), get_app_will_topic(), qos, 1);
-    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data)) {
+
+    match MQTTClient::mqtt_connect_to_broker(client_id, &broker_addr, Some(will_msg_data), logger.clone_ref()) {
         Ok((mqtt_client, publish_msg_rx, handle)) => {
             println!("Conectado al broker MQTT.");
             logger.log("Conectado al broker MQTT".to_string());
 
             let mut sistema_camaras = SistemaCamaras::new(cameras, logger.clone_ref());
-
             let mut handles = sistema_camaras.spawn_threads(publish_msg_rx, mqtt_client);
 
             handles.push(handle);

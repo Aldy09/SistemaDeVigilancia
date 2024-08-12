@@ -29,6 +29,7 @@ impl DisconnectMessage {
 
         DisconnectMessage { fixed_header }
     }
+
 }
 
 impl Default for DisconnectMessage {

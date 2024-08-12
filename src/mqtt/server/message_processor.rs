@@ -4,12 +4,9 @@ use std::sync::mpsc::Receiver;
 
 use rayon::ThreadPool;
 
-use crate::mqtt::{
-    messages::{
+use crate::mqtt::messages::{
         packet_type::PacketType, puback_message::PubAckMessage, publish_message::PublishMessage,
         subscribe_message::SubscribeMessage, subscribe_return_code::SubscribeReturnCode,
-    },
-    mqtt_utils::utils::{display_debug_puback_msg, display_debug_publish_msg},
 };
 
 use std::io::Error;
@@ -76,7 +73,7 @@ impl MessageProcessor {
         let publish_msg_res = PublishMessage::from_bytes(msg_bytes);
         match publish_msg_res {
             Ok(publish_msg) => {
-                display_debug_publish_msg(&publish_msg);
+                println!("Publish recibido, topic: {:?}, packet_id: {:?}", publish_msg.get_topic(), publish_msg.get_packet_id());
                 let puback_res = self.send_puback_to(client_id, &publish_msg);
                 if let Err(e) = puback_res {
                     println!("   Error en handle_publish: {:?}", e);
@@ -115,7 +112,7 @@ impl MessageProcessor {
     fn handle_puback(&self, msg_bytes: Vec<u8>) {
         let puback_msg_res = PubAckMessage::msg_from_bytes(msg_bytes);
         match puback_msg_res {
-            Ok(puback_msg) => display_debug_puback_msg(&puback_msg),
+            Ok(puback_msg) => println!("Pub ack recibido, packet_id: {:?}", puback_msg.get_packet_id()),
             Err(e) => println!("   ERROR: {:?}", e),
         }
     }

@@ -30,7 +30,7 @@ impl ConnectMessage {
             connect_flags: ConnectFlags {
                 username_flag: username.is_some(),
                 password_flag: password.is_some(),
-                will_retain: false,
+                will_retain: true,
                 will_qos,
                 will_flag: will_topic.is_some() && will_message.is_some(),
                 clean_session: true,
