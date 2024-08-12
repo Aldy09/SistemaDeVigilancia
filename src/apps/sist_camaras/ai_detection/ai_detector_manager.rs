@@ -1,5 +1,7 @@
 use notify::event::EventKind;
-use notify::{Event, INotifyWatcher, RecursiveMode, Watcher};
+use notify::Event;
+use notify::RecursiveMode;
+use notify::{Watcher, RecommendedWatcher};
 use rayon::ThreadPoolBuilder;
 use std::error::Error;
 use std::sync::mpsc::{Receiver, Sender};
@@ -98,7 +100,7 @@ impl AIDetectorManager {
     /// Crea la estructura de directorios a partir de un `base_dir` que figura en las constantes `properties`,
     /// y comienza a monitorear los mismos.
     // fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<(Sender<Result<Event, notify::Error>>, Receiver<Result<Event, notify::Error>>), Box<dyn Error>> {
-    fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<(INotifyWatcher, Receiver<Result<Event, notify::Error>>), Box<dyn Error>> {
+    fn create_and_watch_directories(&self, properties: &DetectorProperties) -> Result<(RecommendedWatcher, Receiver<Result<Event, notify::Error>>), Box<dyn Error>> {
         // Crea, si no existían, el dir base y los subdirectorios, y los monitorea
         let path = Path::new(properties.get_base_dir());
         self.create_dirs_tree(path)?;
