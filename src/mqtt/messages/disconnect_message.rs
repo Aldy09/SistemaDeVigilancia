@@ -29,11 +29,34 @@ impl DisconnectMessage {
 
         DisconnectMessage { fixed_header }
     }
+
 }
 
 impl Default for DisconnectMessage {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+
+use crate::mqtt::messages::message::Message;
+use super::packet_type::PacketType;
+//Trait Message
+impl Message for DisconnectMessage {
+    fn get_packet_id(&self) -> Option<u16> {
+        self.get_packet_id()
+    }
+    
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
+    
+    fn get_type(&self) -> PacketType {
+        PacketType::Disconnect 
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

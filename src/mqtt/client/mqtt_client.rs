@@ -35,7 +35,7 @@ impl MQTTClient {
         // Efectúa la conexión al server
         let stream = mqtt_connect_to_broker(client_id, addr, will)?;
         // Inicializa sus partes internas
-        let writer = MQTTClientWriter::new(stream.try_clone()?);
+        let writer = MQTTClientWriter::new();
         let (publish_msg_tx, publish_msg_rx) = mpsc::channel::<PublishMessage>();
         let (retransmitter, ack_tx) = MQTTClientRetransmitter::new(stream.try_clone()?);
         let mut listener = MQTTClientListener::new(stream.try_clone()?, publish_msg_tx, ack_tx);
@@ -100,7 +100,8 @@ impl MQTTClient {
 
     /// Función de la librería de MQTTClient para terminar de manera voluntaria la conexión con el server.
     pub fn mqtt_disconnect(&mut self) -> Result<(), Error> {
-        self.writer.mqtt_disconnect()?;
+        let msg = self.writer.mqtt_disconnect()?;
+        self.retransmitter.send_and_shutdown_stream(msg)?;
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
-use std::{io::{Error, ErrorKind}, sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender}, time::Duration};
+use std::{io::{Error, ErrorKind}, net::Shutdown, sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender}, time::Duration};
 
-use crate::mqtt::{messages::{message::Message, packet_type::PacketType, publish_message::PublishMessage}, mqtt_utils::utils::write_message_to_stream};
+use crate::mqtt::{messages::{disconnect_message::DisconnectMessage, message::Message, packet_type::PacketType, publish_message::PublishMessage}, mqtt_utils::utils::write_message_to_stream};
 
 use super::{ack_message::ACKMessage, mqtt_client::ClientStreamType};
 
@@ -178,6 +178,14 @@ impl MQTTClientRetransmitter {
     /// enviarse por el stream a server.
     fn send_msg(&mut self, bytes_msg: Vec<u8>) -> Result<(), Error> {
         write_message_to_stream(&bytes_msg, &mut self.stream)?;
+        Ok(())
+    }
+    
+    /// Envía el mensaje disconnect recibido por parámetro y cierra la conexión.
+    pub fn send_and_shutdown_stream(&mut self, msg: DisconnectMessage) -> Result<(), Error> {
+        self.send_msg(msg.to_bytes());
+        // Cerramos la conexión con el servidor
+        self.stream.shutdown(Shutdown::Both)?; // Aux: mover esto a alguien que tenga el stream
         Ok(())
     }
     
