@@ -1,4 +1,6 @@
 use std::{
+    collections::HashMap,
+    hash::Hash,
     io::{self, ErrorKind},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -8,7 +10,10 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as Cros
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
-    apps::{apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs},
+    apps::{
+        apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs,
+        sist_dron::dron_current_info::DronCurrentInfo,
+    },
     logging::string_logger::StringLogger,
 };
 
@@ -25,6 +30,7 @@ pub struct SistemaMonitoreo {
     qos: u8,
     logger: StringLogger,
     topics: Vec<(String, u8)>,
+    timestamp_by_topic: HashMap<(String, u8), u128>, // ((Topic, id), timestamp)
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -45,9 +51,7 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 
 impl SistemaMonitoreo {
-    pub fn new(
-        logger: StringLogger,
-    ) -> Self {
+    pub fn new(logger: StringLogger) -> Self {
         let qos =
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
                 .unwrap_or(0);
@@ -63,6 +67,7 @@ impl SistemaMonitoreo {
             qos,
             logger,
             topics,
+            timestamp_by_topic: HashMap::new(),
         };
 
         sistema_monitoreo
@@ -87,10 +92,12 @@ impl SistemaMonitoreo {
         children.push(self.spawn_publish_incs_thread(mqtt_client_sh.clone(), incident_rx));
 
         // Recibe msgs por MQTT y los envía para mostrarse en la ui
-        children.push(
-            self.spawn_subscribe_to_topics_thread(mqtt_client_sh.clone(), publish_message_rx, egui_tx),
-        );
-        
+        children.push(self.spawn_subscribe_to_topics_thread(
+            mqtt_client_sh.clone(),
+            publish_message_rx,
+            egui_tx,
+        ));
+
         // UI
         self.spawn_ui_thread(incident_tx, egui_rx, exit_tx);
 
@@ -106,24 +113,24 @@ impl SistemaMonitoreo {
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
         exit_tx: MpscSender<bool>,
     ) {
-    // -> JoinHandle<()> {
+        // -> JoinHandle<()> {
 
         // let self_clone = self.clone_ref();
         // thread::spawn(move || {
-            if let Err(e) = eframe::run_native(
-                "Sistema Monitoreo",
-                Default::default(),
-                Box::new(|cc| {
-                    Box::new(UISistemaMonitoreo::new(
-                        cc.egui_ctx.clone(),
-                        incident_tx,
-                        publish_message_rx,
-                        exit_tx,
-                    ))
-                }),
-            ){
-                self.logger.log(format!("Error en hilo para UI: {:?}.", e));
-            }
+        if let Err(e) = eframe::run_native(
+            "Sistema Monitoreo",
+            Default::default(),
+            Box::new(|cc| {
+                Box::new(UISistemaMonitoreo::new(
+                    cc.egui_ctx.clone(),
+                    incident_tx,
+                    publish_message_rx,
+                    exit_tx,
+                ))
+            }),
+        ) {
+            self.logger.log(format!("Error en hilo para UI: {:?}.", e));
+        }
         // })
         println!("Saliendo de ui.");
         //drop(exit_tx);
@@ -152,6 +159,7 @@ impl SistemaMonitoreo {
             qos: self.qos,
             logger: self.logger.clone_ref(),
             topics: self.topics.clone(),
+            timestamp_by_topic: self.timestamp_by_topic.clone(),
         }
     }
 
@@ -163,25 +171,24 @@ impl SistemaMonitoreo {
         mqtt_rx: MpscReceiver<PublishMessage>,
         egui_tx: CrossbeamSender<PublishMessage>,
     ) -> JoinHandle<()> {
-        let self_clone = self.clone_ref();
+        let mut self_clone = self.clone_ref();
         thread::spawn(move || {
             self_clone.subscribe_to_topics(mqtt_client);
-            self_clone.receive_messages_from_subscribed_topics(mqtt_rx, egui_tx);
+            if let Err(e) = self_clone.receive_messages_from_subscribed_topics(mqtt_rx, egui_tx) {
+                self_clone.logger.log(format!(
+                    "Error en hilo para recibir mensajes de MQTT: {:?}.",
+                    e
+                ));
+            }
         })
     }
 
     /// Se suscribe a los topics.
-    fn subscribe_to_topics(
-        &self,
-        mqtt_client: Arc<Mutex<MQTTClient>>,
-    ) {
+    fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>) {
         let _ = self.subscribe_to_topics_vec(&mqtt_client);
     }
 
-    fn subscribe_to_topics_vec(
-        &self,
-        mqtt_client: &Arc<Mutex<MQTTClient>>
-    ) -> Result<(), Error> {
+    fn subscribe_to_topics_vec(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             mqtt_client.mqtt_subscribe(self.topics.clone())?;
             self.logger.log(format!(
@@ -198,19 +205,55 @@ impl SistemaMonitoreo {
     }
 
     /// Envía a otra parte del sistema de monitoreo, para ser procesado, cada mensaje recibido por MQTT.
-    fn receive_messages_from_subscribed_topics(&self, mqtt_rx: MpscReceiver<PublishMessage>, egui_tx: CrossbeamSender<PublishMessage>,) {
+    fn receive_messages_from_subscribed_topics(
+        &mut self,
+        mqtt_rx: MpscReceiver<PublishMessage>,
+        egui_tx: CrossbeamSender<PublishMessage>,
+    ) -> Result<(), Error>{
         for publish_msg in mqtt_rx {
             self.logger.log(format!(
                 "Sistema-Monitoreo: recibió mensaje: {:?}",
                 publish_msg
             ));
-            self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
+            //chequeo el timestamp del publish_msg , si es nuevo, lo mando a la ui
+            if self.is_newer(&publish_msg)? {
+                self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
+            }
         }
-
+        
         there_are_no_more_publish_msgs(&self.logger);
+        Ok(())
     }
 
-    fn send_publish_message_to_ui(&self, msg: PublishMessage, egui_tx: CrossbeamSender<PublishMessage>,) {
+    fn is_newer(&mut self, publish_msg: &PublishMessage) -> Result<bool, Error> {
+        let msg_topic = publish_msg.get_topic();
+
+        match AppsMqttTopics::topic_from_str(&msg_topic)? {
+            AppsMqttTopics::DronTopic => {
+                let current_info = DronCurrentInfo::from_bytes(publish_msg.get_payload())?;
+                let id: u8 = current_info.get_id();
+                let rcv_timestamp = publish_msg.get_timestamp();
+                let key = (msg_topic, id);
+                let last_timestamp = self.timestamp_by_topic.entry(key).or_insert(rcv_timestamp);
+                // si el timestamp recibido es mas nuevo que el que tengo guardado, lo actualizo y devuelvo true
+                println!("Timestamp recibido: {}, Timestamp guardado: {} , con ID {} ", rcv_timestamp, *last_timestamp, id);
+                
+                if rcv_timestamp >= *last_timestamp {
+                    println!("Se actualiza el timestamp");
+                    *last_timestamp = rcv_timestamp;
+                    return Ok(true);
+                }
+                return Ok(false);
+            }
+            _ => return Ok(true),
+        };
+    }
+
+    fn send_publish_message_to_ui(
+        &self,
+        msg: PublishMessage,
+        egui_tx: CrossbeamSender<PublishMessage>,
+    ) {
         let res_send = egui_tx.send(msg);
         match res_send {
             Ok(_) => println!("Enviado mensaje a la UI"),
@@ -252,4 +295,8 @@ impl SistemaMonitoreo {
             };
         }
     }
+
+    
 }
+
+

@@ -126,3 +126,4 @@ mod tests {
         assert_eq!(incident_bytes.state, incident.state);
     }
 }
+
