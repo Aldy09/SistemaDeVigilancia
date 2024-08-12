@@ -25,7 +25,7 @@ const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.t
 /// de alguna cámara.
 pub struct AIDetectorManager {
     cameras: ShCamerasType,
-    inc_tx: mpsc::Sender<Incident>,
+    inc_tx: Sender<Incident>,
     exit_requested: Arc<Mutex<bool>>,
     logger: StringLogger,
 }
