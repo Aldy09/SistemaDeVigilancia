@@ -108,8 +108,8 @@ impl DetectorProperties {
     
     /// Devuelve el tag a buscar en la response del proveedor de inteligencia artifial.
     /// que indica si la imagen contiene o no un incidente.
-    pub fn get_inc_tag(&self) -> &String {
-        &self.inc_tag
+    pub fn get_inc_tag(&self) -> String {
+        self.inc_tag.to_string()
     }
 
     /// Devuelve el umbral a utilizar para analizar si la probabilidad de ser incidente

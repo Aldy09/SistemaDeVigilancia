@@ -73,9 +73,7 @@ pub fn exit_when_asked(mqtt_client: Arc<Mutex<MQTTClient>>, exit_rx: Receiver<bo
                     Ok(_) => println!("Saliendo exitosamente."),
                     Err(e) => println!("Error al salir: {:?}", e),
                 }
-            }
-    
-            // Aux: ver si hay que hacer algo más para salir [].
+            }    
         }
     }
 }

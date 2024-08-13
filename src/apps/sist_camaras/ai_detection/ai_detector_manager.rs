@@ -1,14 +1,30 @@
-use notify::event::EventKind;
-use notify::{RecursiveMode, Watcher};
+use notify::{event::EventKind, RecursiveMode, Watcher};
 use rayon::ThreadPoolBuilder;
-use std::{error::Error, ffi::OsStr, fs, io::ErrorKind, path::Path, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread};
+use std::{
+    error::Error,
+    ffi::OsStr,
+    fs,
+    io::{Error as ioError, ErrorKind},
+    path::Path,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread,
+};
 
-use crate::apps::incident_data::incident::Incident;
-use crate::apps::sist_camaras::ai_detection::ai_detector::AutomaticIncidentDetector;
-use crate::apps::sist_camaras::types::shareable_cameras_type::ShCamerasType;
-use crate::logging::string_logger::StringLogger;
-
-use super::properties::DetectorProperties;
+use crate::{
+    apps::{
+        incident_data::incident::Incident,
+        sist_camaras::{
+            ai_detection::{
+                ai_detector::AutomaticIncidentDetector, properties::DetectorProperties,
+            },
+            types::shareable_cameras_type::ShCamerasType,
+        },
+    },
+    logging::string_logger::StringLogger,
+};
 
 const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.txt";
 
@@ -31,7 +47,7 @@ impl AIDetectorManager {
         inc_tx: mpsc::Sender<Incident>,
         exit_rx: mpsc::Receiver<()>,
         logger: StringLogger,
-    ) -> Result<Self, std::io::Error> {
+    ) -> Result<Self, ioError> {
         let properties = DetectorProperties::new(PROPERTIES_FILE)?;
 
         let er = Arc::new(Mutex::new(false));
@@ -119,14 +135,14 @@ impl AIDetectorManager {
     }
 
     /// Crea, si no existía, la estructura de directorios necesaria para las imágenes de las cámaras.
-    fn create_dirs_tree(&self, base_dir: &Path) -> Result<(), std::io::Error> {
+    fn create_dirs_tree(&self, base_dir: &Path) -> Result<(), ioError> {
         self.create_basedir(base_dir)?;
         self.create_subdirs(base_dir)?;
         Ok(())
     }
 
     /// Crea el `base_dir` que contendrá a los subdirectorios de las cámaras, si no existía.
-    fn create_basedir(&self, base_dir: &Path) -> Result<(), std::io::Error> {
+    fn create_basedir(&self, base_dir: &Path) -> Result<(), ioError> {
         // Si ya existe, lo borra y a todo su contenido, y
         if base_dir.exists() {
             fs::remove_dir_all(base_dir)?;
@@ -139,7 +155,7 @@ impl AIDetectorManager {
 
     /// Crea subdirectorios de `base_dir`, uno por cada cámara, de nombre "camera_i"
     /// donde `i` es el id de dicha cámara.
-    fn create_subdirs(&self, base_dir: &Path) -> Result<(), std::io::Error> {
+    fn create_subdirs(&self, base_dir: &Path) -> Result<(), ioError> {
         if let Ok(cameras) = self.cameras.lock() {
             for cam in cameras.values() {
                 if cam.is_not_deleted() {
@@ -154,7 +170,7 @@ impl AIDetectorManager {
     }
 
     /// Crea un subdirectorio de `base_dir` de nombre "camera_i" donde `i` es el u8 recibido.
-    fn create_subdir(&self, base_dir: &Path, i: u8) -> Result<(), std::io::Error> {
+    fn create_subdir(&self, base_dir: &Path, i: u8) -> Result<(), ioError> {
         // Concatena el nombre del subdir a crear, al dir base
         let subdir = format!("camera_{}", i);
         let new_dir_path = base_dir.join(subdir);
@@ -198,14 +214,13 @@ impl AIDetectorManager {
     /// Checkea si la extensión de la imagen es válida.
     fn is_valid_extension(&self, image_path: &Path) -> Result<(), Box<dyn Error>> {
         if let Some(img_extension) = image_path.extension().and_then(OsStr::to_str) {
-            // Si es jpg o jpeg, procesar
+            // Si es una extensión válida (ej jpg o jpeg), procesar
             let valid_extensions = self.properties.get_img_valid_extensions();
             if valid_extensions.contains(&img_extension) {
-            //if extension == "jpg" || extension == "jpeg" {
                 return Ok(());
             }
         }
-        Err(Box::new(std::io::Error::new(
+        Err(Box::new(ioError::new(
             ErrorKind::Other,
             "Extensión inválida.",
         )))
@@ -245,9 +260,17 @@ fn read_and_process_image(
 /// Lee la imagen del `image_path`.
 fn read_image(image_path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = std::fs::File::open(image_path)?;
-    let mut buffer = Vec::new();
-    std::io::Read::read_to_end(&mut file, &mut buffer)?;
-    Ok(buffer)
+    let mut image_buffer = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut image_buffer)?;
+
+    println!("DEBUG: Image size en read_image: {}", image_buffer.len()); // debug
+    if image_buffer.is_empty() {
+        return Err(Box::new(ioError::new(
+            ErrorKind::Other,
+            "La imagen tiene tamaño 0.",
+        )));
+    }
+    Ok(image_buffer)
 }
 
 /// Recibe el path de la imagen que se está procesando, obtiene el id
