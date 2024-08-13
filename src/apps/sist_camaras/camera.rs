@@ -4,9 +4,9 @@ use crate::apps::{incident_data::incident_info::IncidentInfo, sist_camaras::came
 /// Struct que representa el estado de una de las cámaras del sistema central de cámaras.
 /// Tiene:
 /// - id;
-/// - coordenadas x e y;
+/// - latitud y longitud
 /// - estado;
-/// - rango dentro del cual interesará manejar incidentes, es simllar a un radio pero que se suma a cada una de sus coordenadas;
+/// - rango dentro del cual interesará manejar incidentes, simllar a un radio;
 /// - border_cameras: vector con los ids de sus cámaras lindantes;
 /// - deleted: campo que indica si la Camera ha pasado por un borrado lógico en el sistema central de cámaras;
 /// - incs_being_managed: vector con los ids de los incidentes a los que la Camera está prestando atención, esto es, ids de los incidentes que ocasionan que esta Camera esté en estado activo.
@@ -23,6 +23,7 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// Crea un struct `Camera`.
     pub fn new(id: u8, latitude: f64, longitude: f64, range: u8) -> Self {
         Self {
             id,
@@ -36,6 +37,7 @@ impl Camera {
         }
     }
 
+    /// Pasa un struct Camera a bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![];
         bytes.push(self.id);
@@ -51,6 +53,7 @@ impl Camera {
         bytes
     }
 
+    /// Lee bytes para devolver un struct Camera.
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let id = bytes[0];
         let latitude = f64::from_be_bytes([
@@ -79,6 +82,7 @@ impl Camera {
         }
     }
 
+    /// Muestra por pantalla los datos de la cámara.
     pub fn display(&self) {
         println!("ID: {}", self.id);
         println!("Latitude: {}", self.latitude);
@@ -91,7 +95,6 @@ impl Camera {
     /// Devuelve si el incidente de coordenadas `(inc_coord_x, inc_coord_y)`
     /// está en el rango de la cámara `Self`.
     pub fn will_register(&self, (latitude, longitude): (f64, f64)) -> bool {
-        //hacer que la funcion retorne true si el incidente esta en el rango de la camara
         self.is_within_range_from_self(latitude, longitude, self.range as f64)
     }
 
@@ -103,7 +106,6 @@ impl Camera {
 
     /// Devuelve un vector con los ids de sus cámaras lindantes.
     pub fn get_bordering_cams(&mut self) -> &mut Vec<u8> {
-        //self.border_cameras.to_vec()
         &mut self.border_cameras
     }
 
@@ -123,13 +125,12 @@ impl Camera {
 
     /// Elimina el inc_id de su lista de incidentes a los que les presta atención,
     /// y si ya no le quedan incidentes, se cambia el estado a modo ahorro de energía.
-    /// Maneja su marcado.
     /// Devuelve si cambió su estado interno (a Ahorro de energía).
     pub fn remove_from_incs_being_managed(&mut self, inc_info: IncidentInfo) -> bool {
         let mut state_has_changed = false;
         if let Some(pos_de_inc_info) = self.incs_being_managed.iter().position(|&x| x == inc_info) {
             self.incs_being_managed.remove(pos_de_inc_info);
-            // Maneja su lista y se cambiarse el estado si corresponde
+            // Maneja su lista y se cambia el estado si corresponde
             if self.incs_being_managed.is_empty() {
                 self.set_state_to(CameraState::SavingMode);
                 state_has_changed = true;
@@ -148,8 +149,7 @@ impl Camera {
         !self.deleted
     }
 
-    /// Hace un borrado lógico de la cámara, y como ello implica una modificación,
-    /// se marca como no enviada.
+    /// Hace un borrado lógico de la cámara.
     pub fn delete_camera(&mut self) {
         self.deleted = true;
     }
@@ -175,10 +175,12 @@ impl Camera {
         self.longitude
     }
 
+    /// Devuelve el id de la cámara.
     pub fn get_id(&self) -> u8 {
         self.id
     }
 
+    /// Devuelve el estado en que se encuentra la cámara.
     pub fn get_state(&self) -> CameraState {
         self.state
     }
@@ -202,11 +204,7 @@ impl Camera {
     }
 
     pub fn remove_from_list_if_bordering(&mut self, camera_to_delete: &mut Camera) {
-        // Aux: en realidad no necesito recalcular esto para borrarla; "si es lindante" en este contexto es "si está en la lista".
-        //let const_border_range: f64 = 5.0; // Constante que debe ir en arch de configuración.
-        //let in_range = self.is_within_range_from_self(camera_to_delete.get_latitude(), camera_to_delete.get_longitude(), const_border_range);
-
-        //if in_range {
+        // No necesito recalcular para borrarla; "si es lindante" en este contexto es "si está en la lista".        
         // Busco la pos del id de la camera_to_delete en mi lista de lindantes, y la elimino
         if let Some(pos) = self
             .border_cameras
@@ -215,7 +213,6 @@ impl Camera {
         {
             self.border_cameras.remove(pos);
         }
-        //}
     }
 
     /// Calcula si se encuentra las coordenadas pasadas se encuentran dentro del rango pasado

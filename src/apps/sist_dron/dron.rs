@@ -26,12 +26,12 @@ use super::{
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 /// Struct que representa a cada uno de los drones del sistema de vigilancia.
-/// Al publicar en el topic `dron`, solamente el struct `DronCurrentInfo` es lo que interesa enviar,
-/// ya que lo demás son constantes para el funcionamiento del Dron.
+/// Posee componentes para manejar su lógica de procesamiento de incidentes, y gestionar su batería y
+/// vuelo a mantenimiento.
 #[derive(Debug)]
 pub struct Dron {
     // El id y su posición y estado actuales se encuentran en el siguiente struct
-    // que internamente tiene un Arc Mutex de DronCurrentInfo.
+    // que internamente tiene un Arc Mutex de DronCurrentInfo (esto es lo único que interesa publicar a topic `dron`).
     data: Data,
 
     // Constantes cargadas desde un arch de configuración
@@ -44,7 +44,7 @@ pub struct Dron {
 }
 
 impl Dron {
-    /// Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
+    /// Crea un Dron. Dron se inicia con batería al 100%, desde la posición del range_center, con estado activo.
     pub fn new(id: u8, lat: f64, lon: f64, logger: StringLogger) -> Result<Self, Error> {
         let dron = Self::new_internal(id, lat, lon, logger)?;
         dron.logger.log(format!("Dron: Iniciado dron {:?}", id));

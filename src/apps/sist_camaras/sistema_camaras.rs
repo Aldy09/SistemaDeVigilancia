@@ -24,6 +24,8 @@ use std::{
 
 use super::types::channels_type::create_channels;
 
+/// Sistema encargado de responder a incidentes cambiando las cámaras de estado,
+/// proveer un abm por consola, y ejecutar un detector automático de incidentes.
 #[derive(Debug)]
 pub struct SistemaCamaras {
     cameras: Arc<Mutex<HashMap<u8, Camera>>>,
@@ -46,6 +48,7 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
     Ok(valor_qos)
 }
 impl SistemaCamaras {
+    /// Crea un Sistema Cámaras.
     pub fn new(
         cameras: Arc<Mutex<HashMap<u8, Camera>>>,
         logger: StringLogger,
@@ -63,6 +66,7 @@ impl SistemaCamaras {
         sistema_camaras
     }
 
+    /// Inicializa las partes internas del Sistema Cámaras.
     pub fn spawn_threads(
         &mut self,
         publish_msg_rx: Receiver<PublishMessage>,
@@ -159,6 +163,7 @@ impl SistemaCamaras {
                             logger_thread.log(format!("Publico inc: {:?}", publish_message));
                         }
                         Err(e) => {
+                            // No queremos cortar el loop en caso de error, solo logguearlo.
                             println!("Error al hacer el publish {:?}", e);
                             logger_thread.log(format!("Error al hacer el publish {:?}", e));
                         }
@@ -184,6 +189,7 @@ impl SistemaCamaras {
         }
     }
 
+    /// Utiliza la librería MQTT para hacer publish,
     fn publish_to_topic(
         &self,
         mqtt_client: Arc<Mutex<MQTTClient>>,
@@ -238,7 +244,9 @@ impl SistemaCamaras {
         for msg in rx {
             if let Ok(incident) = Incident::from_bytes(msg.get_payload()) {
                 self.logger.log(format!("Inc recibido: {:?}", incident));
-                logic.manage_incident(incident);
+                if let Err(e) = logic.manage_incident(incident) {
+                    self.logger.log(format!("Error al procesar incidente: {:?}.", e));
+                }
             }
         }
 

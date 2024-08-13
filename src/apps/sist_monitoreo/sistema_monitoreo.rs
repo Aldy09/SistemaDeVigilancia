@@ -21,6 +21,8 @@ use crate::{
 use std::fs;
 use std::io::Error;
 
+/// Sistema encargado de permitir la publicación de incidentes, determinar su estado; recibir información
+/// sobre Cámaras, Drones, e Incidentes creados por el Sistema Cámaras, y mostrarla en una interfaz gráfica.
 #[derive(Debug)]
 pub struct SistemaMonitoreo {
     incidents: Arc<Mutex<Vec<Incident>>>,
@@ -47,6 +49,7 @@ fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
 }
 
 impl SistemaMonitoreo {
+    /// Crea un Sistema Monitoreo.
     pub fn new(logger: StringLogger) -> Self {
         let qos =
             leer_qos_desde_archivo("src/apps/sist_monitoreo/qos_sistema_monitoreo.properties")
@@ -68,6 +71,7 @@ impl SistemaMonitoreo {
         sistema_monitoreo
     }
 
+    /// Lanza las partes internas del sistema monitoreo y las inicializa.
     pub fn spawn_threads(
         &self,
         publish_message_rx: MpscReceiver<PublishMessage>,

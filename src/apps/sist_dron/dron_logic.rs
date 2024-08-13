@@ -20,6 +20,7 @@ use super::{
     sist_dron_properties::SistDronProperties,
 };
 
+/// Componente encargado de manejar la lógica de procesamiento de incidentes de cada Dron.
 #[derive(Debug)]
 pub struct DronLogic {
     current_data: Data,
@@ -32,6 +33,7 @@ pub struct DronLogic {
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
 
 impl DronLogic {
+    /// Crea un DronLogic.
     pub fn new(
         current_data: Data,
         dron_properties: SistDronProperties,

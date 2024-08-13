@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    io::{Error, ErrorKind},
     sync::{mpsc::Sender, MutexGuard},
 };
 
@@ -30,19 +31,19 @@ impl CamerasLogic {
     }
 
     /// Procesa un Incidente recibido.
-    pub fn manage_incident(&mut self, incident: Incident) {
+    pub fn manage_incident(&mut self, incident: Incident) -> Result<(), Error>{
         // Proceso los incidentes
         if !self.incs_being_managed.contains_key(&incident.get_info()) {
-            self.process_first_time_incident(incident);
+            self.process_first_time_incident(incident)
         } else {
-            self.process_known_incident(incident);
+            self.process_known_incident(incident)
         }
     }
 
     // Aux: (condición "hasta que" del enunciado).
     /// Procesa un incidente cuando un incidente con ese mismo id ya fue recibido anteriormente.
     /// Si su estado es resuelto, vuelve el estado de la/s cámara/s que lo atendían, a ahorro de energía.
-    fn process_known_incident(&mut self, inc: Incident) {
+    fn process_known_incident(&mut self, inc: Incident) -> Result<(), Error> {
         if inc.is_resolved() {
             self.logger.log(format!(
                 "Recibo el inc {} de nuevo, ahora con estado resuelto.",
@@ -61,15 +62,17 @@ impl CamerasLogic {
                                 self.stop_paying_attention_to(&inc, cam_to_update);
                             }
                         }
-                        Err(_) => println!(
-                            "Error al tomar lock de cámaras para volver estado a ahorro energía."
-                        ),
+                        Err(_) => return Err(Error::new(
+                            ErrorKind::Other,
+                            "Error al tomar lock en process_first_time_incident.",
+                        ))
                     };
                 }
             }
             // También elimino la entrada del hashmap que busca por incidente, ya no le doy seguimiento
             self.incs_being_managed.remove(&inc.get_info());
         }
+        Ok(())
     }
 
     /// Elimina el incidente `inc` de la lista de incs a los que la cámara `cam_to_update` estaba prestando atención.
@@ -94,8 +97,9 @@ impl CamerasLogic {
     /// Procesa un incidente cuando el mismo fue recibido por primera vez.
     /// Para cada cámara ve si inc.pos está dentro de alcance de dicha cámara o sus lindantes,
     /// en caso afirmativo, se encarga de lo necesario para que la cámara y sus lindanes cambien su estado a activo.
-    fn process_first_time_incident(&mut self, inc: Incident) {
-        if !inc.is_resolved() { // inc no resuelto
+    fn process_first_time_incident(&mut self, inc: Incident) -> Result<(), Error> {
+        if !inc.is_resolved() {
+            // inc no resuelto
             match self.cameras.lock() {
                 Ok(mut cams) => {
                     println!("Proceso el incidente {:?} por primera vez", inc.get_info());
@@ -116,9 +120,15 @@ impl CamerasLogic {
                     self.incs_being_managed
                         .insert(inc.get_info(), cameras_that_follow_inc);
                 }
-                Err(_) => todo!(),
+                Err(_) => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Error al tomar lock en process_first_time_incident.",
+                    ))
+                }
             }
         }
+        Ok(())
     }
 
     /// Devuelve un vector de u8 con los ids de todas las cámaras que darán seguimiento al incidente `inc`.
