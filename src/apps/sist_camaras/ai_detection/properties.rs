@@ -108,8 +108,8 @@ impl DetectorProperties {
     
     /// Devuelve el tag a buscar en la response del proveedor de inteligencia artifial.
     /// que indica si la imagen contiene o no un incidente.
-    pub fn get_inc_tag(&self) -> &String {
-        &self.inc_tag
+    pub fn get_inc_tag(&self) -> String {
+        self.inc_tag.to_string()
     }
 
     /// Devuelve el umbral a utilizar para analizar si la probabilidad de ser incidente
@@ -131,11 +131,5 @@ impl DetectorProperties {
     /// Devuelve vector con las extensiones de imagen válidas a procesar.
     pub fn get_img_valid_extensions(&self) -> Vec<&str> {
         vec![self.img_valid_extension1.as_str(), self.img_valid_extension2.as_str()]
-    }
-
-    /// Función utilizada únicamente para testing.
-    pub fn new_for_testing() -> Self {
-        let s = String::from("");
-        Self { base_dir: s.to_string(), api_credentials_file_path: s.to_string(), inc_tag: s.to_string(), inc_threshold: 0.7, img_valid_extension1: s.to_string(), img_valid_extension2: s.to_string() }
     }
 }

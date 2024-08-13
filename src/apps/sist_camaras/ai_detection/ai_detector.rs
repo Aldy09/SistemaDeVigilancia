@@ -105,7 +105,7 @@ impl AutomaticIncidentDetector {
             res_json["predictions"].as_array().and_then(|predictions| {
                 predictions.iter().find_map(|prediction| {
                     let tag = self.properties.get_inc_tag();
-                    if prediction["tagName"].as_str() == Some(tag) {
+                    if prediction["tagName"].as_str() == Some(tag.as_str()) {
                         prediction["probability"].as_f64()
                     } else {
                         None
@@ -116,8 +116,7 @@ impl AutomaticIncidentDetector {
         if let Some(incident_probability) = incident_probability_option {
             Ok(incident_probability)
         } else {
-            self.logger
-                .log(format!("Response raw recibida: {}.", res_json));
+            self.logger.log(format!("Response raw recibida: {}.", res_json));
             Err(Box::new(std::io::Error::new(
                 ErrorKind::Other,
                 "Error al obtener la incident_probability.",
@@ -249,16 +248,13 @@ fn create_client_and_headers(
 #[cfg(test)]
 mod test {
     use std::{collections::HashMap, sync::{mpsc, Arc, Mutex}};
-
     use crate::{apps::{incident_data::incident::Incident, sist_camaras::ai_detection::properties::DetectorProperties}, logging::string_logger::StringLogger};
-
     use super::AutomaticIncidentDetector;
 
-    
-    // Devuelve un json de prueba, como una String.
-    fn create_json() -> String {
+    // Devuelve un json de prueba, como una str.
+    fn create_json_str() -> &'static str {
         r#"{
-            "id": "c141546d-619c-4e1a-99ff-5898f5bf9cef",
+            "id": "a355738d-f52b-437f-a3ed-4098a1b93044",
             "project": "ee406da4-a7f3-4022-9316-f63d2fef1a20",
             "iteration": "9c02f50d-9e3e-42d9-9f70-e787dc71adb7",
             "created": "2024-08-13T11:14:06.633Z",
@@ -274,10 +270,18 @@ mod test {
                     "tagName": "Negative"
                 }
             ]
-        }"#.to_string()      
+        }"#      
+    }
+
+    // Devuelve un json de prueba, como una str.
+    fn _create_json_str_aux() -> &'static str {
+        r#"{"id": "a355738d-f52b-437f-a3ed-4098a1b93044", "project": "ee406da4-a7f3-4022-9316-f63d2fef1a20", "iteration": "9c02f50d-9e3e-42d9-9f70-e787dc71adb7", "created": "2024-08-13T11:14:06.633Z", "predictions": [{"probability": 0.9992791, "tagId": "6649b3d8-896b-486d-bbc1-c46aff462304", "tagName": "incidente"}, {
+                    "probability": 0.0007209157, "tagId": "9b3e603a-592c-4811-9e04-44207959f4be", "tagName": "Negative"}]}"#      
     }
 
     fn create_detector() -> AutomaticIncidentDetector {
+        const PROPERTIES_FILE: &str = "./src/apps/sist_camaras/ai_detection/properties.txt";
+        let properties = DetectorProperties::new(PROPERTIES_FILE).unwrap();
         let (inc_tx, _rx) = mpsc::channel::<Incident>();
         let (string_tx, _rx) = mpsc::channel::<String>();
         let logger = StringLogger::new(string_tx);
@@ -286,21 +290,19 @@ mod test {
         AutomaticIncidentDetector::new(
             Arc::new(Mutex::new(HashMap::new())),
             inc_tx,
-            DetectorProperties::new_for_testing(),
+            properties,
             logger,
         )    
     }
 
     #[test]
-    fn test_process_ressponse() {
+    fn test_process_response() {
         // Creamos un json para emular una respuesta de la api
-        let json_response_str = create_json();
+        let json_response_str = create_json_str();
         let detector = create_detector();
         
-        // Procesamos la response como la que contesta el llamado a la api
-        let res = detector.process_response(&json_response_str);
-        println!("Probando: res: {:?}", res);
-
+        // Procesamos la response como la que contesta el llamado a la api, para obtener la probability
+        let res = detector.process_response(json_response_str);
 
         assert!(res.is_ok());
     }
