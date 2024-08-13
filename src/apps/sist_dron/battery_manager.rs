@@ -87,8 +87,8 @@ impl BatteryManager {
             current_pos = self.current_data.increment_current_position_in(dir, flag_maintanance)?;
 
             // Simular el vuelo, el dron se desplaza
-            let a = 300; // aux
-            sleep(Duration::from_micros(a));
+            let a = 4/5; // aux
+            sleep(Duration::from_secs(a));
             self.logger.log(format!(
                 "   incrementada la posición actual: {:?}",
                 self.current_data.get_current_position()
