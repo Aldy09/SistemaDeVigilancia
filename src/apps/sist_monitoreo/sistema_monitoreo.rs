@@ -102,16 +102,13 @@ impl SistemaMonitoreo {
         self.qos
     }
 
+    /// Hilo encargado de lanzar la UI.
     fn spawn_ui_thread(
         &self,
         incident_tx: MpscSender<Incident>,
         publish_message_rx: CrossbeamReceiver<PublishMessage>,
         exit_tx: MpscSender<bool>,
     ) {
-        // -> JoinHandle<()> {
-
-        // let self_clone = self.clone_ref();
-        // thread::spawn(move || {
         if let Err(e) = eframe::run_native(
             "Sistema Monitoreo",
             Default::default(),
@@ -126,9 +123,7 @@ impl SistemaMonitoreo {
         ) {
             self.logger.log(format!("Error en hilo para UI: {:?}.", e));
         }
-        // })
         println!("Saliendo de ui.");
-        //drop(exit_tx);
     }
 
     /// Recibe incidente desde la UI, y lo publica por MQTT.
@@ -167,28 +162,32 @@ impl SistemaMonitoreo {
     ) -> JoinHandle<()> {
         let mut self_clone = self.clone_ref();
         thread::spawn(move || {
-            self_clone.subscribe_to_topics(mqtt_client);
-            if let Err(e) = self_clone.receive_messages_from_subscribed_topics(mqtt_rx, egui_tx) {
+            if let Err(e) = self_clone.subscribe_and_receive_msgs(&mqtt_client, mqtt_rx, egui_tx) {
                 self_clone.logger.log(format!(
-                    "Error en hilo para recibir mensajes de MQTT: {:?}.",
+                    "Error en hilo para suscribir y recibir mensajes de MQTT: {:?}.",
                     e
                 ));
             }
         })
     }
 
-    /// Se suscribe a los topics.
-    fn subscribe_to_topics(&self, mqtt_client: Arc<Mutex<MQTTClient>>) {
-        let _ = self.subscribe_to_topics_vec(&mqtt_client);
+    /// Se suscribe a los topics de interés y permanece escuchando mensajes recibidos de los mismos.
+    fn subscribe_and_receive_msgs(
+        &mut self,
+        mqtt_client: &Arc<Mutex<MQTTClient>>,
+        mqtt_rx: MpscReceiver<PublishMessage>,
+        egui_tx: CrossbeamSender<PublishMessage>,
+    ) -> Result<(), Error> {
+        self.subscribe_to_topics(mqtt_client)?;
+        self.logger.log(format!("Suscripto a {:?}", &self.topics));
+        self.receive_messages_from_subscribed_topics(mqtt_rx, egui_tx);
+        Ok(())
     }
 
-    fn subscribe_to_topics_vec(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
+    /// Utiliza la librería MQTT para subscribirse a los topics.
+    fn subscribe_to_topics(&self, mqtt_client: &Arc<Mutex<MQTTClient>>) -> Result<(), Error> {
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
             mqtt_client.mqtt_subscribe(self.topics.clone())?;
-            self.logger.log(format!(
-                "Sistema-Monitoreo: subscripto a topics {:?}",
-                &self.topics
-            ));
             Ok(())
         } else {
             Err(Error::new(
@@ -204,22 +203,21 @@ impl SistemaMonitoreo {
         &mut self,
         mqtt_rx: MpscReceiver<PublishMessage>,
         egui_tx: CrossbeamSender<PublishMessage>,
-    ) -> Result<(), Error> {
+    ) {
         let mut time_order_checker = OrderChecker::new();
 
-        for publish_msg in mqtt_rx {
-            self.logger.log(format!(
-                "Sistema-Monitoreo: recibió mensaje: {:?}",
-                publish_msg
-            ));
+        for pub_msg in mqtt_rx {
+            self.logger.log(format!("Publish recibido: {:?}", pub_msg));
             // Chequeo el timestamp del publish_msg, si es nuevo, lo mando a la ui
-            if time_order_checker.is_newest(&publish_msg)? {
-                self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
+            // Uso un match, no quiero retornar si fue error xq cortaría el loop, solo lo loggueo
+            match time_order_checker.is_newest(&pub_msg) {
+                Ok(true) => self.send_publish_message_to_ui(pub_msg, egui_tx.clone()),
+                Ok(false) => {}, // No se lo procesa porque no es el más nuevo
+                Err(e) => self.logger.log(format!("Error en OrderChecker: {:?}", e)),                
             }
         }
 
         there_are_no_more_publish_msgs(&self.logger);
-        Ok(())
     }
 
     fn send_publish_message_to_ui(
@@ -245,8 +243,10 @@ impl SistemaMonitoreo {
         })
     }
 
+    /// Utiliza la librería MQTT para publicar el `incident` al topic de incidentes.
     fn publish_incident(&self, incident: Incident, mqtt_client: &Arc<Mutex<MQTTClient>>) {
-        println!("Sistema-Monitoreo: Publicando incidente.");
+        println!("Publicando incidente...");
+        self.logger.log("Publicando incidente...".to_string());
 
         // Hago el publish
         if let Ok(mut mqtt_client) = mqtt_client.lock() {
@@ -256,14 +256,12 @@ impl SistemaMonitoreo {
                 self.get_qos(),
             );
             match res_publish {
-                Ok(publish_message) => {
-                    self.logger.log(format!(
-                        "Sistema-Monitoreo: envío mensaje: {:?}",
-                        publish_message
-                    ));
+                Ok(publish_msg) => {
+                    self.logger
+                        .log(format!("Publish enviado:{:?}", publish_msg));
                 }
                 Err(e) => {
-                    println!("Sistema-Monitoreo: Error al hacer el publish {:?}", e)
+                    self.logger.log(format!("Error al enviar publish {:?}", e));
                 }
             };
         }
