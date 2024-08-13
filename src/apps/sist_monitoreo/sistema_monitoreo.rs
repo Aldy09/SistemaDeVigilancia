@@ -1,24 +1,23 @@
 use std::{
-    collections::HashMap,
     io::{self, ErrorKind},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
 
+use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
 use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use std::sync::mpsc::{Receiver as MpscReceiver, Sender as MpscSender};
 
 use crate::{
     apps::{
-        apps_mqtt_topics::AppsMqttTopics, common_clients::there_are_no_more_publish_msgs, sist_camaras::camera::Camera, sist_dron::dron_current_info::DronCurrentInfo
+        apps_mqtt_topics::AppsMqttTopics,
+        common_clients::{exit_when_asked, there_are_no_more_publish_msgs},
+        incident_data::incident::Incident,
+        sist_monitoreo::{order_checker::OrderChecker, ui_sistema_monitoreo::UISistemaMonitoreo},
     },
     logging::string_logger::StringLogger,
 };
 
-use crate::mqtt::{client::mqtt_client::MQTTClient, messages::publish_message::PublishMessage};
-
-use super::ui_sistema_monitoreo::UISistemaMonitoreo;
-use crate::apps::{common_clients::exit_when_asked, incident_data::incident::Incident};
 use std::fs;
 use std::io::Error;
 
@@ -28,7 +27,6 @@ pub struct SistemaMonitoreo {
     qos: u8,
     logger: StringLogger,
     topics: Vec<(String, u8)>,
-    timestamp_by_topic: HashMap<(String, u8), u128>, // ((Topic, id), timestamp)
 }
 
 fn leer_qos_desde_archivo(ruta_archivo: &str) -> Result<u8, io::Error> {
@@ -65,7 +63,6 @@ impl SistemaMonitoreo {
             qos,
             logger,
             topics,
-            timestamp_by_topic: HashMap::new(),
         };
 
         sistema_monitoreo
@@ -157,7 +154,6 @@ impl SistemaMonitoreo {
             qos: self.qos,
             logger: self.logger.clone_ref(),
             topics: self.topics.clone(),
-            timestamp_by_topic: self.timestamp_by_topic.clone(),
         }
     }
 
@@ -208,66 +204,22 @@ impl SistemaMonitoreo {
         &mut self,
         mqtt_rx: MpscReceiver<PublishMessage>,
         egui_tx: CrossbeamSender<PublishMessage>,
-    ) -> Result<(), Error>{
+    ) -> Result<(), Error> {
+        let mut time_order_checker = OrderChecker::new();
+
         for publish_msg in mqtt_rx {
             self.logger.log(format!(
                 "Sistema-Monitoreo: recibió mensaje: {:?}",
                 publish_msg
             ));
             // Chequeo el timestamp del publish_msg, si es nuevo, lo mando a la ui
-            if self.is_newer(&publish_msg)? {
+            if time_order_checker.is_newest(&publish_msg)? {
                 self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
             }
         }
-        
+
         there_are_no_more_publish_msgs(&self.logger);
         Ok(())
-    }
-
-    /// Verifica y devuelve si el timestamp del `publish_msg` recibido es más nuevo que el último procesado.
-    fn is_newer(&mut self, publish_msg: &PublishMessage) -> Result<bool, Error> {
-        let msg_topic = publish_msg.get_topic();
-        let payload = publish_msg.get_payload();
-        let recvd_timestamp = publish_msg.get_timestamp();
-
-        match AppsMqttTopics::topic_from_str(&msg_topic)? {
-            AppsMqttTopics::DronTopic => {
-                let current_info = DronCurrentInfo::from_bytes(payload)?;
-                let id: u8 = current_info.get_id();
-                self.update_timestamp_if_newer(msg_topic, id, recvd_timestamp)
-            }, 
-            AppsMqttTopics::CameraTopic => {
-                let camera = Camera::from_bytes(&payload);
-                let id: u8 = camera.get_id();
-                self.update_timestamp_if_newer(msg_topic, id, recvd_timestamp)
-            },
-            _ => Ok(true),
-        }        
-    }
-
-    /// Si el timestamp recibido es más nuevo que el almacenado para ese topic y id, entonces actualiza el
-    /// almacenado con el nuevo. y devuelve true. Caso contrario devuelve false.
-    fn update_timestamp_if_newer(&mut self, msg_topic: String, id: u8, rcvd_timestamp: u128) -> Result<bool, Error> {
-        // Genera la clave a partir del topic y el id
-        let key = (msg_topic, id);
-        // Intenta obtener el último timestamp para la clave dada, o lo inserta si no existe
-        if let Some(last_timestamp) = self.timestamp_by_topic.get_mut(&key) {
-            // Ya se había recibido mensajes de ese emisor
-            println!("Timestamp recibido: {}, Timestamp guardado: {} , con ID {} ", rcvd_timestamp, *last_timestamp, id);
-            
-            // Si el timestamp recibido es más nuevo, actualiza el valor y devuelve true
-            if rcvd_timestamp > *last_timestamp {
-                println!("Se actualiza el timestamp");
-                *last_timestamp = rcvd_timestamp;
-                return Ok(true);
-            }
-            // Si el mensaje recibido para un mismo ID es más viejo, devuelve false
-            Ok(false)
-        } else {
-            // No se encontró, por lo que es el primer mensaje de ese emisor
-            self.timestamp_by_topic.insert(key, rcvd_timestamp);
-            Ok(true)
-        }
     }
 
     fn send_publish_message_to_ui(
@@ -316,8 +268,4 @@ impl SistemaMonitoreo {
             };
         }
     }
-
-    
 }
-
-

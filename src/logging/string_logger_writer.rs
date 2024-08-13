@@ -1,6 +1,6 @@
 use std::{
     io::{Error, Write},
-    sync::mpsc::Receiver, thread::{self, JoinHandle}, time::SystemTime,
+    sync::mpsc::Receiver, thread::{self, JoinHandle},
 };
 
 use super::time::Time;
