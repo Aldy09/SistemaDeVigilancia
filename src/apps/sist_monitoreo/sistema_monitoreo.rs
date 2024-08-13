@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    hash::Hash,
     io::{self, ErrorKind},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -203,7 +202,8 @@ impl SistemaMonitoreo {
         }
     }
 
-    /// Envía a otra parte del sistema de monitoreo, para ser procesado, cada mensaje recibido por MQTT.
+    /// Si el mensaje publish recibido por MQTT es más nuevo que el último procesado, entonces
+    /// envía a otra parte del sistema de monitoreo, para ser procesado.
     fn receive_messages_from_subscribed_topics(
         &mut self,
         mqtt_rx: MpscReceiver<PublishMessage>,
@@ -214,7 +214,7 @@ impl SistemaMonitoreo {
                 "Sistema-Monitoreo: recibió mensaje: {:?}",
                 publish_msg
             ));
-            //chequeo el timestamp del publish_msg , si es nuevo, lo mando a la ui
+            // Chequeo el timestamp del publish_msg, si es nuevo, lo mando a la ui
             if self.is_newer(&publish_msg)? {
                 self.send_publish_message_to_ui(publish_msg, egui_tx.clone())
             }
@@ -224,41 +224,50 @@ impl SistemaMonitoreo {
         Ok(())
     }
 
+    /// Verifica y devuelve si el timestamp del `publish_msg` recibido es más nuevo que el último procesado.
     fn is_newer(&mut self, publish_msg: &PublishMessage) -> Result<bool, Error> {
         let msg_topic = publish_msg.get_topic();
+        let payload = publish_msg.get_payload();
+        let recvd_timestamp = publish_msg.get_timestamp();
 
         match AppsMqttTopics::topic_from_str(&msg_topic)? {
             AppsMqttTopics::DronTopic => {
-                let current_info = DronCurrentInfo::from_bytes(publish_msg.get_payload())?;
+                let current_info = DronCurrentInfo::from_bytes(payload)?;
                 let id: u8 = current_info.get_id();
-                self.update_timestamp_if_newer(msg_topic, id, publish_msg.get_timestamp())?
+                self.update_timestamp_if_newer(msg_topic, id, recvd_timestamp)
             }, 
             AppsMqttTopics::CameraTopic => {
-                let camera = Camera::from_bytes(&publish_msg.get_payload());
+                let camera = Camera::from_bytes(&payload);
                 let id: u8 = camera.get_id();
-                self.update_timestamp_if_newer(msg_topic, id, publish_msg.get_timestamp())?
+                self.update_timestamp_if_newer(msg_topic, id, recvd_timestamp)
             },
             _ => return Ok(true),
-        };
-        Ok(true)
+        }        
     }
 
-    // Función para actualizar el timestamp si el recibido es más nuevo
-    fn update_timestamp_if_newer(&mut self, msg_topic: String, id: u8, rcv_timestamp: u128) -> Result<bool, Error> {
+    /// Si el timestamp recibido es más nuevo que el almacenado para ese topic y id, entonces actualiza el
+    /// almacenado con el nuevo. y devuelve true. Caso contrario devuelve false.
+    fn update_timestamp_if_newer(&mut self, msg_topic: String, id: u8, rcvd_timestamp: u128) -> Result<bool, Error> {
         // Genera la clave a partir del topic y el id
         let key = (msg_topic, id);
         // Intenta obtener el último timestamp para la clave dada, o lo inserta si no existe
-        let last_timestamp = self.timestamp_by_topic.entry(key).or_insert(rcv_timestamp);
-        println!("Timestamp recibido: {}, Timestamp guardado: {} , con ID {} ", rcv_timestamp, *last_timestamp, id);
-        
-        // Si el timestamp recibido es más nuevo, actualiza el valor y devuelve true
-        if rcv_timestamp >= *last_timestamp {
-            println!("Se actualiza el timestamp");
-            *last_timestamp = rcv_timestamp;
-            return Ok(true);
+        if let Some(last_timestamp) = self.timestamp_by_topic.get_mut(&key) {
+            // Ya se había recibido mensajes de ese emisor
+            println!("Timestamp recibido: {}, Timestamp guardado: {} , con ID {} ", rcvd_timestamp, *last_timestamp, id);
+            
+            // Si el timestamp recibido es más nuevo, actualiza el valor y devuelve true
+            if rcvd_timestamp > *last_timestamp {
+                println!("Se actualiza el timestamp");
+                *last_timestamp = rcvd_timestamp;
+                return Ok(true);
+            }
+            // Si el mensaje recibido para un mismo ID es más viejo, devuelve false
+            return Ok(false);
+        } else {
+            // No se encontró, por lo que es el primer mensaje de ese emisor
+            self.timestamp_by_topic.insert(key, rcvd_timestamp);
+            Ok(true)
         }
-        // Si el mensaje recibido para un mismo ID es más viejo, devuelve false
-        return Ok(false);
     }
 
     fn send_publish_message_to_ui(

@@ -125,7 +125,7 @@ impl<'a> PublishMessage {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_millis();
+            .as_nanos();
 
         let mut publish_message = PublishMessage {
             fixed_header,

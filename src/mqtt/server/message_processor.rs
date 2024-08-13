@@ -32,6 +32,7 @@ impl MessageProcessor {
 
     pub fn handle_packets(&mut self, rx_1: Receiver<Packet>) -> Result<(), Error> {
 
+        // Con threadpool sería:
         match create_thread_pool_with(20) {
             Ok(thread_pool) => {
                 for packet in rx_1 {
@@ -49,11 +50,10 @@ impl MessageProcessor {
             }
         }
 
-        /* // Sin threadpool era:
-        for packet in rx_1 {
+        // Sin threadpool era:
+        /*for packet in rx_1 {
             self.process_packet(packet); // Ejecuta en el hilo actual
-        }
-         */
+        }*/     
 
         Ok(())
     }
