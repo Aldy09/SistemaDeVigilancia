@@ -241,7 +241,7 @@ impl SistemaMonitoreo {
                 let id: u8 = camera.get_id();
                 self.update_timestamp_if_newer(msg_topic, id, recvd_timestamp)
             },
-            _ => return Ok(true),
+            _ => Ok(true),
         }        
     }
 
@@ -262,7 +262,7 @@ impl SistemaMonitoreo {
                 return Ok(true);
             }
             // Si el mensaje recibido para un mismo ID es más viejo, devuelve false
-            return Ok(false);
+            Ok(false)
         } else {
             // No se encontró, por lo que es el primer mensaje de ese emisor
             self.timestamp_by_topic.insert(key, rcvd_timestamp);

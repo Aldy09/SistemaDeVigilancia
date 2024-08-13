@@ -1,7 +1,9 @@
 use std::{
     io::{Error, Write},
-    sync::mpsc::Receiver, thread::{self, JoinHandle},
+    sync::mpsc::Receiver, thread::{self, JoinHandle}, time::SystemTime,
 };
+
+use super::time::Time;
 
 #[derive(Debug)]
 pub struct StringLoggerWriter {
@@ -20,9 +22,11 @@ impl StringLoggerWriter {
     fn write_to_file(&self, message: String) -> Result<(), Error> {
         
         let filename = format!("s_log_{}.txt", self.id);
+
         let mut file = std::fs::OpenOptions::new().create(true).append(true).open(filename)?;
 
-        writeln!(file, "{}", message)?;
+        let string_timestamp = Time::now_as_string();
+        writeln!(file, "{} {}",string_timestamp, message)?;
 
         Ok(())
     }
