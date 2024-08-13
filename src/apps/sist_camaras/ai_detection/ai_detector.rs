@@ -65,37 +65,55 @@ impl AutomaticIncidentDetector {
         if incident_probability > self.properties.get_inc_threshold() {
             self.process_incident(cam_id)?;
         }
-
+        
         Ok(())
     }
-
+    
     /// Interpreta el res_text recibido como json y devuelve la probabilidad con que el mismo afirma que
     /// se trata de un incidente.
     fn process_response(&self, res_text: &str) -> Result<f64, Box<dyn Error>> {
         let res_json: serde_json::Value = serde_json::from_str(res_text)?;
+        
+        // Analizamos primero si la respuesta fue un error
+        self.process_error_response(&res_json)?;
 
+        // Si no lo fue, buscamos la probability
         let incident_probability_option  = res_json["predictions"]
-            .as_array()
-            .and_then(|predictions| {
-                predictions.iter().find_map(|prediction| {
-                    let tag = self.properties.get_inc_tag();
-                    if prediction["tagName"].as_str() == Some(tag) {
-                        prediction["probability"].as_f64()
-                    } else {
-                        None
-                    }
+        .as_array()
+        .and_then(|predictions| {
+            predictions.iter().find_map(|prediction| {
+                let tag = self.properties.get_inc_tag();
+                if prediction["tagName"].as_str() == Some(tag) {
+                    prediction["probability"].as_f64()
+                } else {
+                    None
+                }
                 })
             });
-        
+            
         if let Some(incident_probability) = incident_probability_option {
-            Ok(incident_probability)
-        } else {
-            println!("Response raw recibida: {:?}.", res_json);
-            self.logger.log(format!("Response raw recibida: {:?}.", res_json));
+                Ok(incident_probability)
+        }        
+        else {
+            println!("Response raw recibida: {}.", res_json);
+            self.logger.log(format!("Response raw recibida: {}.", res_json));
             Err(Box::new(std::io::Error::new(ErrorKind::Other, "Error al obtener la incident_probability.")))
         }
     }
 
+    /// Analiza si la respuesta de la api informa de un error.
+    /// Si es un error, lo devuelve. Caso contrario devuelve Ok.
+    fn process_error_response(&self, res_json: &serde_json::Value) -> Result<(), Box<std::io::Error>> {
+
+        if let Some((error_code, error_msg)) = self.get_error_code_and_msg_from_error_response(res_json) {
+            // Devolver el error
+            let displayable_error = format!("Response API es error: code {}, message: {}.", error_code, error_msg);
+            return Err(Box::new(std::io::Error::new(ErrorKind::Other, displayable_error)));
+        }
+        
+        Ok(())
+    }
+    
     /// Recibe el image_path de la imagen en la que se detectó un incidente, crea el Incident y lo envía internamente para
     /// ser publicado por MQTT.
     fn process_incident(&mut self, cam_id: u8) -> Result<(), Box<dyn Error>>{
@@ -147,6 +165,28 @@ impl AutomaticIncidentDetector {
         }
         Err(std::io::Error::new(ErrorKind::Other, "Detector: Error al tomar el lock"))
     }
+    
+    /// Parsea la response en busca de `code` y `message` de una respuesta de la api de tipo error.
+    /// Si la respuesta de la api informa que hubo un error, devuelve Some de `code` y `message`.
+    /// Caso contrario devuelve None.
+    fn get_error_code_and_msg_from_error_response(&self, res_json: &serde_json::Value) -> Option<(String, String)> {
+        if let Some(error) = res_json.get("error") {
+            // Errores con formato { "error": {"code": ..., "message": ... } }
+            let code = error.get("code").and_then(|c| c.as_str());
+            let message = error.get("message").and_then(|m| m.as_str());
+
+            if let (Some(cod), Some(msg)) = (code, message) {
+                return Some((cod.to_string(), msg.to_string()));
+            }
+        } else if let Some(code) = res_json.get("code").and_then(|c| c.as_str()) {
+            // Errores con formato { "code": "...", "message": "..." }
+            if let Some(message) = res_json.get("message").and_then(|c| c.as_str()) {
+                return Some((code.to_string(), message.to_string()));
+            }
+        }
+        None
+    }
+    
 
 }
 
