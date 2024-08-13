@@ -132,4 +132,10 @@ impl DetectorProperties {
     pub fn get_img_valid_extensions(&self) -> Vec<&str> {
         vec![self.img_valid_extension1.as_str(), self.img_valid_extension2.as_str()]
     }
+
+    /// Función utilizada únicamente para testing.
+    pub fn new_for_testing() -> Self {
+        let s = String::from("");
+        Self { base_dir: s.to_string(), api_credentials_file_path: s.to_string(), inc_tag: s.to_string(), inc_threshold: 0.7, img_valid_extension1: s.to_string(), img_valid_extension2: s.to_string() }
+    }
 }
