@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     io::{Error, ErrorKind},
-    sync::{mpsc::Sender, Arc, Mutex}, thread::{self, sleep}, time::Duration,
+    sync::{mpsc::{self, Sender}, Arc, Mutex}, thread::{self, sleep}, time::Duration,
 };
 
 use crate::{
@@ -67,11 +67,12 @@ impl DronLogic {
     pub fn process_recvd_msg(
         &mut self,
         msg: PublishMessage,
+        process_inc_tx: mpsc::Sender<()>,
     ) -> Result<(), Error> {
         let topic = msg.get_topic();
         let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
         match enum_topic {
-            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload()),
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), process_inc_tx),
             AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.current_data.get_id()? != received_ci.get_id();
@@ -106,10 +107,28 @@ impl DronLogic {
         }
     }
 
+    pub fn listen_for_and_process_new_active_incident(&mut self, rx: mpsc::Receiver<()>) -> Result<(), Error> {
+        for _ in rx {
+            // Desencolo un incidente activo para procesarlo
+            // Escucha por rx, for escucha algo por rx, hace esto:
+            if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
+                if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
+                    println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
+                    self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
+                    // Manda a ejecutar
+                    self.manage_and_check_incident(&inc);
+                }
+            }
+        }
+
+        Ok(())        
+    }
+
     /// Recibe un incidente, analiza si está o no resuelto y actúa acorde.
     fn process_valid_inc(
         &mut self,
         payload: Vec<u8>,
+        process_inc_tx: mpsc::Sender<()>,
     ) -> Result<(), Error> {
         let inc = Incident::from_bytes(payload)?;
 
@@ -117,15 +136,17 @@ impl DronLogic {
             IncidentState::ActiveIncident => {
                 // Encolo el inc activo recibido
                 self.push_to_active_incs(inc)?;
+                let _ = process_inc_tx.send(());
 
-                // Desencolo un incidente activo para procesarlo
-                if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
-                    if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
-                        println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
-                        self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
-                        return self.manage_and_check_incident(&inc)
-                    }
-                }
+                // // Desencolo un incidente activo para procesarlo
+                // // Escucha por rx, for escucha algo por rx, hace esto:
+                // if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
+                //     if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
+                //         println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
+                //         self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
+                //         return self.manage_and_check_incident(&inc)
+                //     }
+                // }
                 
             }
             IncidentState::ResolvedIncident => {
