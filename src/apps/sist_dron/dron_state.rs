@@ -16,10 +16,11 @@ impl DronState {
         match self {
             DronState::ExpectingToRecvIncident => 1_u8.to_be_bytes(),
             DronState::RespondingToIncident => 2_u8.to_be_bytes(),
-            DronState::Flying => 3_u8.to_be_bytes(),
-            DronState::Mantainance => 4_u8.to_be_bytes(),
-            DronState::ManagingIncident => 5_u8.to_be_bytes(),
-            DronState::IncidentResolved => 6_u8.to_be_bytes(),
+            DronState::MustRespondToIncident => 3_u8.to_be_bytes(),
+            DronState::Flying => 4_u8.to_be_bytes(),
+            DronState::Mantainance => 5_u8.to_be_bytes(),
+            DronState::ManagingIncident => 6_u8.to_be_bytes(),
+            DronState::IncidentResolved => 7_u8.to_be_bytes(),
         }
     }
 
@@ -27,10 +28,11 @@ impl DronState {
         match u8::from_be_bytes(bytes) {
             1 => Ok(DronState::ExpectingToRecvIncident),
             2 => Ok(DronState::RespondingToIncident),
-            3 => Ok(DronState::Flying),
-            4 => Ok(DronState::Mantainance),
-            5 => Ok(DronState::ManagingIncident),
-            6 => Ok(DronState::IncidentResolved),
+            3 => Ok(DronState::MustRespondToIncident),
+            4 => Ok(DronState::Flying),
+            5 => Ok(DronState::Mantainance),
+            6 => Ok(DronState::ManagingIncident),
+            7 => Ok(DronState::IncidentResolved),
             _ => Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Estado de dron no válido",

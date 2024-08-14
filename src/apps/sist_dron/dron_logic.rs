@@ -93,7 +93,7 @@ impl DronLogic {
                     }
 
                   } else if recvd_dron_must_move {
-                    self.remove_from_active_incs_if_two_drones_already_flying(received_ci);
+                    self.remove_from_active_incs_if_two_drones_already_flying(received_ci)?;
                   }                                
 
                 }
@@ -117,22 +117,25 @@ impl DronLogic {
             IncidentState::ActiveIncident => {
                 // Encolo el inc activo recibido
                 self.push_to_active_incs(inc)?;
-                
+
                 // Desencolo un incidente activo para procesarlo
                 if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
                     if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
+                        println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
+                        self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
                         return self.manage_and_check_incident(&inc)
                     }
                 }
-                Ok(())                
+                
             }
             IncidentState::ResolvedIncident => {
                 self.go_back_if_my_inc_was_resolved(&inc)?;
                 // Remuevo de el incidente resuelto de la queue de incs a procesar
                 self.remove_from_active_incs(inc.get_info())?;
-                Ok(())
             }
         }
+
+        Ok(())
     }
 
     fn manage_and_check_incident(&mut self, inc: &Incident) -> Result<(), Error> {
@@ -339,7 +342,7 @@ impl DronLogic {
                 ));
                 if should_move {
                     // Setea estado y avisa que quedó como ganador y se moverá al incidente
-                    self.current_data.set_state(DronState::MustRespondToIncident, false);
+                    self.current_data.set_state(DronState::MustRespondToIncident, false)?;
                     self.publish_current_info()?;
 
                     // Volar hasta la posición del incidente
