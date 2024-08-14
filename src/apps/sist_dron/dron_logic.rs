@@ -79,11 +79,23 @@ impl DronLogic {
                 let recvd_dron_is_not_managing_incident =
                     received_ci.get_state() != DronState::ManagingIncident;
 
+                let recvd_dron_is_analyzing_if_should_move = received_ci.get_state() == DronState::RespondingToIncident;
+                let recvd_dron_must_move = received_ci.get_state() == DronState::MustRespondToIncident;
+                
                 // Si la current_info recibida es de mi propio publish, no me interesa compararme conmigo mismo.
                 // Si el current_info recibida es de un dron que está volando, tampoco me interesa, esos publish serán para sistema de moniteo.
                 // Si el current_info recibida es de un dron que está en la ubicación de un incidente, tampoco me interesa, esos publish serán para sistema de moniteo.
-                if not_myself && recvd_dron_is_not_flying && recvd_dron_is_not_managing_incident {
-                    self.process_valid_dron(received_ci)?;
+                if not_myself {
+                  
+                  if recvd_dron_is_not_flying && recvd_dron_is_not_managing_incident {
+                    if recvd_dron_is_analyzing_if_should_move {
+                        self.process_valid_dron(received_ci)?;
+                    }
+
+                  } else if recvd_dron_must_move {
+                    self.remove_from_active_incs_if_two_drones_already_flying(received_ci);
+                  }                                
+
                 }
                 Ok(())
             }
@@ -183,12 +195,35 @@ impl DronLogic {
         ))        
     }
 
-    fn aux_get_by_key(&mut self, queue: &mut VecDeque<(IncidentInfo, Incident)>, inc_info: IncidentInfo) -> Option<Incident> {
-        if let Some(pos) = queue.iter().position(|(info, _)| *info == inc_info) {
-            Some(queue.remove(pos).unwrap().1)
-        } else {
-            None
+    /// Actualiza el contador de drones que ya están volando hacia el incidente del `ci` del dron recibido,
+    /// y si el mismo ya vale 2, elimina el incidente de los `active_incs` para que luego ya no sea procesado.
+    fn remove_from_active_incs_if_two_drones_already_flying(&mut self, ci: DronCurrentInfo) -> Result<(), Error> {
+        // Obtiene el inc al que el dron recibido va a volar.
+        if let Some(inc_info) = ci.get_inc_id_to_resolve() {
+            if let Ok(mut queue) = self.active_incs.lock(){
+                // Encuentra la posición del elemento (incidente) en la queue, y obtiene el elemento
+                if let Some(pos) = queue.iter().position(|(info, _, _)| *info == inc_info) {
+                    if let Some((_, _, mut amount_of_flying_drones)) = queue.get_mut(pos) {
+                        // Suma uno al contador de drones que ya están volando hacia el inc
+                        amount_of_flying_drones += 1;
+                        // Si la cantidad vale 2, lo remuevo
+                        if amount_of_flying_drones == 2 {
+                            queue.remove(pos);
+                        }
+                    }
+                }
+                return Ok(());
+            }
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de active_incs.",
+            ));
         }
+
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error current_info recibido con estado e inc_info inválidos.",
+        ))        
     }
 
     /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
@@ -303,6 +338,10 @@ impl DronLogic {
                     should_move
                 ));
                 if should_move {
+                    // Setea estado y avisa que quedó como ganador y se moverá al incidente
+                    self.current_data.set_state(DronState::MustRespondToIncident, false);
+                    self.publish_current_info()?;
+
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
                     self.fly_to(destination)?;

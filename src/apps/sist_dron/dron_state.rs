@@ -3,10 +3,11 @@ use std::io::{Error, ErrorKind};
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum DronState {
     ExpectingToRecvIncident,
-    RespondingToIncident,
+    RespondingToIncident, // analizando si se va a mover (se evalúa la condición de los dos más cercanos)
+    MustRespondToIncident, // confirmado que se va a mover al incidente
     Flying,
     Mantainance,
-    ManagingIncident,
+    ManagingIncident, // llegó al incidente
     IncidentResolved,
 }
 
