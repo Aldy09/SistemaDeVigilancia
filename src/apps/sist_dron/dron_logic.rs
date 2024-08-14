@@ -1,7 +1,7 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::{Error, ErrorKind},
-    sync::{mpsc::Sender, Arc, Mutex}, thread::{self, sleep}, time::Duration,
+    sync::{mpsc::{self, Sender}, Arc, Mutex}, thread::{self, sleep}, time::Duration,
 };
 
 use crate::{
@@ -28,6 +28,7 @@ pub struct DronLogic {
     logger: StringLogger,
     drone_distances_by_incident: DistancesType, // ya es arc mutex.
     ci_tx: Sender<DronCurrentInfo>,
+    active_incs: Arc<Mutex<VecDeque<(IncidentInfo, Incident, u8)>>>, // el u8 es un contador de cuántos drones recibí que ya están yendo hacia ese inc.
 }
 
 type DistancesType = Arc<Mutex<HashMap<IncidentInfo, ((f64, f64), Vec<(u8, f64)>)>>>; // (inc_info, ( (inc_pos),(dron_id, distance_to_incident)) )
@@ -47,6 +48,7 @@ impl DronLogic {
             logger,
             drone_distances_by_incident: distances,
             ci_tx,
+            active_incs: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -57,6 +59,7 @@ impl DronLogic {
             logger: self.logger.clone_ref(),
             drone_distances_by_incident: self.drone_distances_by_incident.clone(),
             ci_tx: self.ci_tx.clone(),
+            active_incs: self.active_incs.clone(),
         }
     }
 
@@ -64,11 +67,12 @@ impl DronLogic {
     pub fn process_recvd_msg(
         &mut self,
         msg: PublishMessage,
+        process_inc_tx: mpsc::Sender<()>,
     ) -> Result<(), Error> {
         let topic = msg.get_topic();
         let enum_topic = AppsMqttTopics::topic_from_str(topic.as_str())?;
         match enum_topic {
-            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload()),
+            AppsMqttTopics::IncidentTopic => self.process_valid_inc(msg.get_payload(), process_inc_tx),
             AppsMqttTopics::DronTopic => {
                 let received_ci = DronCurrentInfo::from_bytes(msg.get_payload())?;
                 let not_myself = self.current_data.get_id()? != received_ci.get_id();
@@ -76,11 +80,23 @@ impl DronLogic {
                 let recvd_dron_is_not_managing_incident =
                     received_ci.get_state() != DronState::ManagingIncident;
 
+                let recvd_dron_is_analyzing_if_should_move = received_ci.get_state() == DronState::RespondingToIncident;
+                let recvd_dron_must_move = received_ci.get_state() == DronState::MustRespondToIncident;
+                
                 // Si la current_info recibida es de mi propio publish, no me interesa compararme conmigo mismo.
                 // Si el current_info recibida es de un dron que está volando, tampoco me interesa, esos publish serán para sistema de moniteo.
                 // Si el current_info recibida es de un dron que está en la ubicación de un incidente, tampoco me interesa, esos publish serán para sistema de moniteo.
-                if not_myself && recvd_dron_is_not_flying && recvd_dron_is_not_managing_incident {
-                    self.process_valid_dron(received_ci)?;
+                if not_myself {
+                  
+                  if recvd_dron_is_not_flying && recvd_dron_is_not_managing_incident {
+                    if recvd_dron_is_analyzing_if_should_move {
+                        self.process_valid_dron(received_ci)?;
+                    }
+
+                  } else if recvd_dron_must_move {
+                    self.remove_from_active_incs_if_two_drones_already_flying(received_ci)?;
+                  }                                
+
                 }
                 Ok(())
             }
@@ -91,42 +107,153 @@ impl DronLogic {
         }
     }
 
+    pub fn listen_for_and_process_new_active_incident(&mut self, rx: mpsc::Receiver<()>) -> Result<(), Error> {        
+        for _ in rx {
+            // Desencolo un incidente activo para procesarlo
+            // Escucha por rx, for escucha algo por rx, hace esto:
+            if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
+                if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
+                    println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
+                    self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
+                    // Manda a ejecutar. Si falla no quiero cortar el loop, solo lo loggueo.
+                    if let Err(e) = self.manage_and_check_incident(&inc) {
+                        println!("DEBUG QUEUE: error en manage para inc: {:?}, {:?}", inc.get_source(), e);
+                        self.logger.log(format!("DEBUG QUEUE: error en manage para inc: {:?}, {:?}", inc.get_source(), e));
+                    }
+                }
+            }
+        }
+
+        Ok(())        
+    }
+
     /// Recibe un incidente, analiza si está o no resuelto y actúa acorde.
     fn process_valid_inc(
         &mut self,
         payload: Vec<u8>,
+        process_inc_tx: mpsc::Sender<()>,
     ) -> Result<(), Error> {
         let inc = Incident::from_bytes(payload)?;
-        let inc_id = inc.get_id();
 
         match *inc.get_state() {
             IncidentState::ActiveIncident => {
-                match self.manage_incident(inc) {
-                    // Si la función termina con éxito, se devuelve ok.
-                    Ok(_) => Ok(()),
-                    // Si la función termina de procesar el incidente con error, hay que ver de qué tipo es el eroor
-                    Err(e) => {
-                        // Si fue de este tipo, éste es el caso en que la función dejó de procesar el incidente e hizo
-                        // return por ser interrumpida por poca batería y tener que volar a mantenimiento.
-                        // No es un error real, solo es una interrupción en el flujo de ejecución por ir a mantenimiento.
-                        if e.kind() == ErrorKind::InvalidData {
-                            self.logger.log(format!(
-                                "Se interrumpe procesamiento de inc {} para ir a mantenimiento.",
-                                inc_id
-                            ));
-                            Ok(())
-                        // Caso contrario sí fue un error real, y se devuelve.
-                        } else {
-                            Err(e)
+                // Encolo el inc activo recibido
+                self.push_to_active_incs(&inc)?;
+                // Se agrega la info del inc encolado, al distances, para que se haga el cálculo de las distancias para él tambiém
+                self.add_incident_to_hashmap(&inc)?;
+                // Al incio, y si recibe un inc estando en su pos inicial, va a estar en estado Expecting
+                // Aviso al otro hilo que se puede desacolar y procesar el incidente activo
+                let _ = process_inc_tx.send(());
+                println!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source());
+                self.logger.log(format!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source()));
+                
+            }
+            IncidentState::ResolvedIncident => {
+                // Primero remuevo el incidente resuelto de la queue de incs a procesar, para no procesarlo luego
+                self.remove_from_active_incs(inc.get_info())?;
+                // Vuelvo a la posición inicial
+                self.go_back_if_my_inc_was_resolved(&inc)?;
+                // Aviso que ya se puede procesar el siguiente incidente activo encolado
+                let _ = process_inc_tx.send(());
+                println!("DEBUG QUEUE: se resolvió el inc: {:?}, enviando señal", inc.get_source());
+                self.logger.log(format!("DEBUG QUEUE: se resolvió el inc: {:?}, enviando señal", inc.get_source()));
+
+
+            }
+        }
+
+        Ok(())
+    }
+
+    fn manage_and_check_incident(&mut self, inc: &Incident) -> Result<(), Error> {
+        match self.manage_incident(inc) {
+            // Si la función termina con éxito, se devuelve ok.
+            Ok(_) => Ok(()),
+            // Si la función termina de procesar el incidente con error, hay que ver de qué tipo es el eroor
+            Err(e) => {
+                // Si fue de este tipo, éste es el caso en que la función dejó de procesar el incidente e hizo
+                // return por ser interrumpida por poca batería y tener que volar a mantenimiento.
+                // No es un error real, solo es una interrupción en el flujo de ejecución por ir a mantenimiento.
+                if e.kind() == ErrorKind::InvalidData {
+                    self.logger.log(format!(
+                        "Se interrumpe procesamiento de inc {:?} para ir a mantenimiento.",
+                        inc.get_info()
+                    ));
+                    Ok(())
+                // Caso contrario sí fue un error real, y se devuelve.
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    fn push_to_active_incs(&mut self, inc: &Incident) -> Result<(), Error> {
+        if let Ok(mut queue) = self.active_incs.lock(){
+            queue.push_back((inc.get_info(), inc.clone(), 0));
+            return Ok(());
+        } 
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de active_incs.",
+        ))
+
+    }
+
+    /// Hace pop de la estructure de incidentes activos a manejar, si la misma está vacía devuelve Ok(None).
+    /// Y devuelve error si no se pudo tomar el lock.
+    fn pop_from_active_incs(&mut self) -> Result<Option<(IncidentInfo, Incident, u8)>, Error>   {
+        if let Ok(mut queue) = self.active_incs.lock(){
+            return Ok(queue.pop_front());
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de active_incs.",
+        ))
+    }
+
+    fn remove_from_active_incs(&mut self, inc_info: IncidentInfo) -> Result<(), Error> {
+        if let Ok(mut queue) = self.active_incs.lock(){
+            if let Some(pos) = queue.iter().position(|(info, _, _)| *info == inc_info) {
+                queue.remove(pos);
+            }
+            return Ok(());
+        } 
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error al tomar lock de active_incs.",
+        ))        
+    }
+
+    /// Actualiza el contador de drones que ya están volando hacia el incidente del `ci` del dron recibido,
+    /// y si el mismo ya vale 2, elimina el incidente de los `active_incs` para que luego ya no sea procesado.
+    fn remove_from_active_incs_if_two_drones_already_flying(&mut self, ci: DronCurrentInfo) -> Result<(), Error> {
+        // Obtiene el inc al que el dron recibido va a volar.
+        if let Some(inc_info) = ci.get_inc_id_to_resolve() {
+            if let Ok(mut queue) = self.active_incs.lock(){
+                // Encuentra la posición del elemento (incidente) en la queue, y obtiene el elemento
+                if let Some(pos) = queue.iter().position(|(info, _, _)| *info == inc_info) {
+                    if let Some((_, _, mut amount_of_flying_drones)) = queue.get_mut(pos) {
+                        // Suma uno al contador de drones que ya están volando hacia el inc
+                        amount_of_flying_drones += 1;
+                        // Si la cantidad vale 2, lo remuevo
+                        if amount_of_flying_drones == 2 {
+                            queue.remove(pos);
                         }
                     }
                 }
+                return Ok(());
             }
-            IncidentState::ResolvedIncident => {
-                self.go_back_if_my_inc_was_resolved(inc)?;
-                Ok(())
-            }
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Error al tomar lock de active_incs.",
+            ));
         }
+
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error current_info recibido con estado e inc_info inválidos.",
+        ))        
     }
 
     /// Por cada dron recibido si tenemos un incidente en comun se actualiza el hashmap con la menor distancia al incidente entre los drones (self_distance y recibido_distance).
@@ -198,7 +325,7 @@ impl DronLogic {
     /// Publica su estado, y analiza condiciones para desplazarse.
     fn manage_incident(
         &mut self,
-        inc_id: Incident,
+        inc_id: &Incident,
     ) -> Result<(), Error> {
         let event = format!("Recibido inc activo de id: {}", inc_id.get_id()); // se puede borrar
         println!("{:?}", event); // se puede borrar
@@ -225,7 +352,7 @@ impl DronLogic {
                     inc_id.get_id()
                 ));
                 self.current_data.set_inc_id_to_resolve(inc_id.get_info())?; //
-                self.add_incident_to_hashmap(&inc_id)?;
+                self.add_incident_to_hashmap(inc_id)?;
 
                 self.current_data
                     .set_state(DronState::RespondingToIncident, false)?;
@@ -234,17 +361,21 @@ impl DronLogic {
                 self.publish_current_info()?;
 
                 let should_move =
-                    self.decide_if_should_move_to_incident(&inc_id)?;
+                    self.decide_if_should_move_to_incident(inc_id)?;
                 println!("   debería ir al incidente según cercanía: {}", should_move); // se puede borrar
                 self.logger.log(format!(
                     "   debería ir al incidente según cercanía: {}",
                     should_move
                 ));
                 if should_move {
+                    // Setea estado y avisa que quedó como ganador y se moverá al incidente
+                    self.current_data.set_state(DronState::MustRespondToIncident, false)?;
+                    self.publish_current_info()?;
+
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
                     self.fly_to(destination)?;
-                    self.remove_incident_from_hashmap(&inc_id)?;
+                    self.remove_incident_from_hashmap(inc_id)?;
                 }
             } else {
                 println!("   el inc No está en mi rango."); // se puede borrar
@@ -282,25 +413,21 @@ impl DronLogic {
     /// Si no, lo ignoro porque no era el incidente que este dron estaba atendiendo.
     fn go_back_if_my_inc_was_resolved(
         &mut self,
-        inc: Incident,
+        inc: &Incident,
     ) -> Result<(), Error> {
         self.logger
             .log(format!("Recibido inc resuelto de id: {}", inc.get_id()));
 
         if let Some(my_inc_id) = self.current_data.get_inc_id_to_resolve()? {
             if inc.get_info() == my_inc_id {
-                let event = format!(
-                    "Recibido inc resuelto de id: {}, volviendo a posición inicial.",
-                    inc.get_id()
-                ); // se puede borrar
-                println!("{:?}", event); // se puede borrar
 
                 self.logger.log(format!(
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial",
                     inc.get_id()
                 ));
+                self.current_data.unset_inc_id_to_resolve()?; // [lo he subido una línea] [] aux
                 self.go_back_to_range_center_position()?;
-                self.current_data.unset_inc_id_to_resolve()?;
+                
             }
         }
 

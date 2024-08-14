@@ -1,9 +1,5 @@
 use std::{
-    collections::HashMap,
-    fs,
-    io::{self, Error, ErrorKind},
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
+    collections::HashMap, fs, io::{self, Error, ErrorKind}, sync::{mpsc, Arc, Mutex}, thread::{self, JoinHandle}
 };
 
 use std::sync::mpsc::Receiver as MpscReceiver;
@@ -73,17 +69,18 @@ impl Dron {
         self.publish_current_info(ci, &mqtt_client_sh.clone())?;
 
         // Lanza hilos
+        let (process_inc_tx, process_inc_rx) = mpsc::channel::<()>();
         let (ci_tx, ci_rx) = mpsc::channel::<DronCurrentInfo>();
-        children.push(self.spawn_for_update_battery(ci_tx.clone()));
+        children.push(self.spawn_for_update_battery(ci_tx.clone(), process_inc_tx.clone()));
 
         children.push(self.spawn_recv_ci_and_publish(ci_rx, mqtt_client_sh.clone()));
-        self.subscribe_to_topics(mqtt_client_sh.clone(), mqtt_rx, ci_tx)?;
+        self.subscribe_to_topics(mqtt_client_sh.clone(), mqtt_rx, ci_tx, process_inc_tx, process_inc_rx)?;
 
         Ok(children)
     }
 
     /// Hilo que se encarga de actualizar la batería del dron.
-    fn spawn_for_update_battery(&self, ci_tx: mpsc::Sender<DronCurrentInfo>) -> JoinHandle<()> {
+    fn spawn_for_update_battery(&self, ci_tx: mpsc::Sender<DronCurrentInfo>, process_inc_tx: mpsc::Sender<()>) -> JoinHandle<()> {
         let self_clone = self.clone_ref();
         thread::spawn(move || {
             let mut battery_manager = BatteryManager::new(
@@ -91,6 +88,7 @@ impl Dron {
                 self_clone.dron_properties,
                 self_clone.logger,
                 ci_tx,
+                process_inc_tx
             );
             battery_manager.run();
         })
@@ -146,10 +144,12 @@ impl Dron {
         mqtt_client: Arc<Mutex<MQTTClient>>,
         mqtt_rx: MpscReceiver<PublishMessage>,
         ci_tx: mpsc::Sender<DronCurrentInfo>,
+        process_inc_tx: mpsc::Sender<()>,
+        process_inc_rx: mpsc::Receiver<()>,
     ) -> Result<(), Error> {
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::IncidentTopic.to_str())?;
         self.subscribe_to_topic(&mqtt_client, AppsMqttTopics::DronTopic.to_str())?;
-        self.receive_messages_from_subscribed_topics(mqtt_rx, ci_tx);
+        self.receive_messages_from_subscribed_topics(mqtt_rx, ci_tx, process_inc_tx, process_inc_rx);
 
         Ok(())
     }
@@ -175,6 +175,8 @@ impl Dron {
         &mut self,
         mqtt_rx: MpscReceiver<PublishMessage>,
         ci_tx: mpsc::Sender<DronCurrentInfo>,
+        process_inc_tx: mpsc::Sender<()>,
+        process_inc_rx: mpsc::Receiver<()>,
     ) {
         // Módulo encargado de la lógica del dron al recibir PublishMessage'self_clone.
         let self_clone = self.clone_ref();
@@ -186,6 +188,20 @@ impl Dron {
             ci_tx,
         );
 
+        //let (process_inc_tx, process_inc_rx) = mpsc::channel::<()>();
+
+        // Hilo para controlar el vuelo del dron para ir a los incidentes [] aux: hilo nuevo
+        let mut logic_clone = dron_logic.clone_ref();
+        let logger_c = self.logger.clone_ref();
+        thread::spawn(move || {
+            if let Err(e) = logic_clone.listen_for_and_process_new_active_incident(process_inc_rx) {
+                logger_c.log(format!(
+                    "Error al procesar mensage recibido, process_rcvd_msg: {:?}.",
+                    e
+                ));
+            }
+        });
+
         // Recibe de mqtt
         let mut children = vec![];
         for publish_msg in mqtt_rx {
@@ -194,7 +210,7 @@ impl Dron {
 
             // Lanza un hilo para procesar el mensaje, y luego lo espera correctamente
             let handle_thread =
-                self.spawn_process_recvd_msg_thread(publish_msg, dron_logic.clone_ref());
+                self.spawn_process_recvd_msg_thread(publish_msg, dron_logic.clone_ref(), process_inc_tx.clone());
             children.push(handle_thread);
         }
         there_are_no_more_publish_msgs(&self.logger);
@@ -207,11 +223,12 @@ impl Dron {
         &self,
         msg: PublishMessage,
         dron_logic: DronLogic,
+        process_inc_tx: mpsc::Sender<()>,
     ) -> JoinHandle<()> {
         let mut logic_clone = dron_logic.clone_ref();
         let logger_c = self.logger.clone_ref();
         thread::spawn(move || {
-            if let Err(e) = logic_clone.process_recvd_msg(msg) {
+            if let Err(e) = logic_clone.process_recvd_msg(msg, process_inc_tx.clone()) {
                 logger_c.log(format!(
                     "Error al procesar mensage recibido, process_rcvd_msg: {:?}.",
                     e
