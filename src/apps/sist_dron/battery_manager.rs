@@ -1,4 +1,4 @@
-use std::{io::Error, sync::mpsc::Sender, thread::sleep, time::Duration};
+use std::{io::Error, sync::mpsc::{self, Sender}, thread::sleep, time::Duration};
 
 use crate::{apps::sist_dron::calculations::{calculate_direction, calculate_distance}, logging::string_logger::StringLogger};
 
@@ -10,12 +10,13 @@ pub struct BatteryManager {
     dron_properties: SistDronProperties,
     logger: StringLogger,
     ci_tx: Sender<DronCurrentInfo>,
+    process_inc_tx: mpsc::Sender<()>
 }
 
 impl BatteryManager {
 
-    pub fn new(current_data: Data, dron_properties: SistDronProperties, logger: StringLogger, ci_tx: Sender<DronCurrentInfo>) -> Self {
-        Self { current_data, dron_properties, logger, ci_tx }
+    pub fn new(current_data: Data, dron_properties: SistDronProperties, logger: StringLogger, ci_tx: Sender<DronCurrentInfo>, process_inc_tx: mpsc::Sender<()>) -> Self {
+        Self { current_data, dron_properties, logger, ci_tx, process_inc_tx }
     }
 
     pub fn run(&mut self) {
@@ -60,6 +61,9 @@ impl BatteryManager {
             // Vuelve a la posición correspondiente
             self.fly_to_mantainance(position_to_go, true)?;
             self.current_data.set_state(state_to_set, true)?;
+            if let Err(e) = self.process_inc_tx.send(()) {
+                self.logger.log(format!("Error al enviar señal desde mantenimiento: {:?}.", e));
+            }
         }
         Ok(())
     }
