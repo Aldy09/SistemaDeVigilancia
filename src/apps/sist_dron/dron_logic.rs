@@ -107,7 +107,7 @@ impl DronLogic {
         }
     }
 
-    pub fn listen_for_and_process_new_active_incident(&mut self, rx: mpsc::Receiver<()>) -> Result<(), Error> {
+    pub fn listen_for_and_process_new_active_incident(&mut self, rx: mpsc::Receiver<()>) -> Result<(), Error> {        
         for _ in rx {
             // Desencolo un incidente activo para procesarlo
             // Escucha por rx, for escucha algo por rx, hace esto:
@@ -115,8 +115,11 @@ impl DronLogic {
                 if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
                     println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
                     self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
-                    // Manda a ejecutar
-                    self.manage_and_check_incident(&inc);
+                    // Manda a ejecutar. Si falla no quiero cortar el loop, solo lo loggueo.
+                    if let Err(e) = self.manage_and_check_incident(&inc) {
+                        println!("DEBUG QUEUE: error en manage para inc: {:?}, {:?}", inc.get_source(), e);
+                        self.logger.log(format!("DEBUG QUEUE: error en manage para inc: {:?}, {:?}", inc.get_source(), e));
+                    }
                 }
             }
         }
@@ -135,8 +138,14 @@ impl DronLogic {
         match *inc.get_state() {
             IncidentState::ActiveIncident => {
                 // Encolo el inc activo recibido
-                self.push_to_active_incs(inc)?;
+                self.push_to_active_incs(&inc)?;
+                // Se agrega la info del inc encolado, al distances, para que se haga el cálculo de las distancias para él tambiém
+                self.add_incident_to_hashmap(&inc)?;
+                // Al incio, y si recibe un inc estando en su pos inicial, va a estar en estado Expecting
+                // Aviso al otro hilo que se puede desacolar y procesar el incidente activo
                 let _ = process_inc_tx.send(());
+                println!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source());
+                self.logger.log(format!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source()));
 
                 // // Desencolo un incidente activo para procesarlo
                 // // Escucha por rx, for escucha algo por rx, hace esto:
@@ -153,6 +162,12 @@ impl DronLogic {
                 self.go_back_if_my_inc_was_resolved(&inc)?;
                 // Remuevo de el incidente resuelto de la queue de incs a procesar
                 self.remove_from_active_incs(inc.get_info())?;
+                // Aviso que ya se puede procesar el siguiente incidente activo encolado
+                let _ = process_inc_tx.send(());
+                println!("DEBUG QUEUE: se resolvió el inc: {:?}, enviando señal", inc.get_source());
+                self.logger.log(format!("DEBUG QUEUE: se resolvió el inc: {:?}, enviando señal", inc.get_source()));
+
+
             }
         }
 
@@ -182,7 +197,7 @@ impl DronLogic {
         }
     }
 
-    fn push_to_active_incs(&mut self, inc: Incident) -> Result<(), Error> {
+    fn push_to_active_incs(&mut self, inc: &Incident) -> Result<(), Error> {
         if let Ok(mut queue) = self.active_incs.lock(){
             queue.push_back((inc.get_info(), inc.clone(), 0));
             return Ok(());
@@ -424,8 +439,9 @@ impl DronLogic {
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial",
                     inc.get_id()
                 ));
+                self.current_data.unset_inc_id_to_resolve()?; // [lo he subido una línea] [] aux
                 self.go_back_to_range_center_position()?;
-                self.current_data.unset_inc_id_to_resolve()?;
+                
             }
         }
 
