@@ -146,22 +146,13 @@ impl DronLogic {
                 let _ = process_inc_tx.send(());
                 println!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source());
                 self.logger.log(format!("DEBUG QUEUE: encolado el inc: {:?}", inc.get_source()));
-
-                // // Desencolo un incidente activo para procesarlo
-                // // Escucha por rx, for escucha algo por rx, hace esto:
-                // if self.current_data.get_state()? == DronState::ExpectingToRecvIncident {
-                //     if let Some((_inc_info, inc, _dron_amount)) = self.pop_from_active_incs()? {
-                //         println!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source());
-                //         self.logger.log(format!("DEBUG QUEUE: desacolé, voy a procesar el inc: {:?}", inc.get_source()));
-                //         return self.manage_and_check_incident(&inc)
-                //     }
-                // }
                 
             }
             IncidentState::ResolvedIncident => {
-                self.go_back_if_my_inc_was_resolved(&inc)?;
-                // Remuevo de el incidente resuelto de la queue de incs a procesar
+                // Primero remuevo el incidente resuelto de la queue de incs a procesar, para no procesarlo luego
                 self.remove_from_active_incs(inc.get_info())?;
+                // Vuelvo a la posición inicial
+                self.go_back_if_my_inc_was_resolved(&inc)?;
                 // Aviso que ya se puede procesar el siguiente incidente activo encolado
                 let _ = process_inc_tx.send(());
                 println!("DEBUG QUEUE: se resolvió el inc: {:?}, enviando señal", inc.get_source());
@@ -361,7 +352,7 @@ impl DronLogic {
                     inc_id.get_id()
                 ));
                 self.current_data.set_inc_id_to_resolve(inc_id.get_info())?; //
-                self.add_incident_to_hashmap(&inc_id)?;
+                self.add_incident_to_hashmap(inc_id)?;
 
                 self.current_data
                     .set_state(DronState::RespondingToIncident, false)?;
@@ -370,7 +361,7 @@ impl DronLogic {
                 self.publish_current_info()?;
 
                 let should_move =
-                    self.decide_if_should_move_to_incident(&inc_id)?;
+                    self.decide_if_should_move_to_incident(inc_id)?;
                 println!("   debería ir al incidente según cercanía: {}", should_move); // se puede borrar
                 self.logger.log(format!(
                     "   debería ir al incidente según cercanía: {}",
@@ -384,7 +375,7 @@ impl DronLogic {
                     // Volar hasta la posición del incidente
                     let destination = inc_id.get_position();
                     self.fly_to(destination)?;
-                    self.remove_incident_from_hashmap(&inc_id)?;
+                    self.remove_incident_from_hashmap(inc_id)?;
                 }
             } else {
                 println!("   el inc No está en mi rango."); // se puede borrar
@@ -429,11 +420,6 @@ impl DronLogic {
 
         if let Some(my_inc_id) = self.current_data.get_inc_id_to_resolve()? {
             if inc.get_info() == my_inc_id {
-                let event = format!(
-                    "Recibido inc resuelto de id: {}, volviendo a posición inicial.",
-                    inc.get_id()
-                ); // se puede borrar
-                println!("{:?}", event); // se puede borrar
 
                 self.logger.log(format!(
                     "Recibido inc resuelto de id: {}, volviendo a posición inicial",
